@@ -104,13 +104,8 @@ function App() {
     setActiveTab('review')
 
     try {
-      // 根据框架类型选择生成方式
-      let response
-      if (frameworkType === 'three-circles' || classification?.type === 'application') {
-        response = await api.generateThreeCirclesReview(topic)
-      } else {
-        response = await api.generateReview(topic)
-      }
+      // 使用智能生成接口（会基于分析结果进行聚焦搜索）
+      const response = await api.smartGenerate(topic)
 
       if (response.success && response.data) {
         setReview(response.data.review)

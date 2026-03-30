@@ -41,6 +41,24 @@ export const api = {
     return response.data;
   },
 
+  // 智能生成综述（推荐）
+  async smartGenerate(
+    topic: string,
+    options: {
+      targetCount?: number;
+      recentYearsRatio?: number;
+      englishRatio?: number;
+    } = {}
+  ): Promise<GenerateResponse> {
+    const response = await axios.post(`${API_BASE}/smart-generate`, {
+      topic,
+      target_count: options.targetCount ?? 50,
+      recent_years_ratio: options.recentYearsRatio ?? 0.5,
+      english_ratio: options.englishRatio ?? 0.3
+    });
+    return response.data;
+  },
+
   // 三圈分析
   async analyzeThreeCircles(topic: string): Promise<ThreeCirclesResponse> {
     const response = await axios.post(`${API_BASE}/analyze-three-circles`, { topic });
