@@ -33,6 +33,10 @@ app.add_middleware(
 
 
 # 请求模型
+class TopicRequest(BaseModel):
+    topic: str = Field(..., description="论文题目", min_length=1)
+
+
 class GenerateRequest(BaseModel):
     topic: str = Field(..., description="论文主题", min_length=1)
     target_count: int = Field(50, description="目标文献数量", ge=10, le=100)
@@ -243,7 +247,7 @@ async def health_check():
 # ==================== 三圈文献分析接口 ====================
 
 @app.post("/api/classify-topic")
-async def classify_topic(topic: str):
+async def classify_topic(request: TopicRequest):
     """
     题目分类接口（使用大模型）
 
@@ -253,14 +257,14 @@ async def classify_topic(topic: str):
     import sys
     import time
 
-    print(f"[API] 收到分类请求: {topic}")
+    print(f"[API] 收到分类请求: {request.topic}")
     start = time.time()
 
     try:
         from services.hybrid_classifier import FrameworkGenerator
 
         gen = FrameworkGenerator()
-        result = await gen.generate_framework(topic)
+        result = await gen.generate_framework(request.topic)
 
         elapsed = time.time() - start
         print(f"[API] 大模型分类成功，耗时 {elapsed:.2f}秒，类型: {result['type']}")
@@ -278,7 +282,7 @@ async def classify_topic(topic: str):
         # 出错时使用规则引擎回退
         from services.topic_classifier import FrameworkGenerator as FallbackGenerator
         fallback = FallbackGenerator()
-        result = fallback.generate_framework(topic)
+        result = fallback.generate_framework(request.topic)
         result['classification_reason'] += f'（大模型错误，使用规则引擎）'
         return {
             "success": True,
@@ -288,7 +292,7 @@ async def classify_topic(topic: str):
 
 
 @app.post("/api/smart-analyze")
-async def smart_analyze(topic: str):
+async def smart_analyze(request: TopicRequest):
     """
     智能分析接口（使用大模型）
 
@@ -300,12 +304,12 @@ async def smart_analyze(topic: str):
     try:
         from services.hybrid_classifier import FrameworkGenerator
         gen = FrameworkGenerator()
-        framework = await gen.generate_framework(topic)
+        framework = await gen.generate_framework(request.topic)
 
         # 根据类型选择分析方法
         if framework['type'] == 'application':
             # 应用型使用三圈分析
-            result = await three_circles_generator.generate(topic)
+            result = await three_circles_generator.generate(request.topic)
             result['framework_type'] = 'three-circles'
         elif framework['type'] == 'evaluation':
             # 评价型使用金字塔式分析
@@ -336,14 +340,14 @@ async def smart_analyze(topic: str):
 # ==================== 三圈文献分析接口（保留原有功能） ====================
 
 @app.post("/api/analyze-three-circles")
-async def analyze_three_circles(topic: str):
+async def analyze_three_circles(request: TopicRequest):
     """
     三圈文献分析接口
 
     分析论文题目，构建"研究对象+优化目标+方法论"三圈文献体系
     """
     try:
-        result = await three_circles_generator.generate(topic)
+        result = await three_circles_generator.generate(request.topic)
 
         return {
             "success": True,

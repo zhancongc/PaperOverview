@@ -13,17 +13,13 @@ const API_BASE = '/api';
 export const api = {
   // 智能分析（推荐）
   async smartAnalyze(topic: string): Promise<SmartAnalyzeResponse> {
-    const response = await axios.post(`${API_BASE}/smart-analyze`, null, {
-      params: { topic }
-    });
+    const response = await axios.post(`${API_BASE}/smart-analyze`, { topic });
     return response.data;
   },
 
   // 题目分类
   async classifyTopic(topic: string): Promise<ClassifyTopicResponse> {
-    const response = await axios.post(`${API_BASE}/classify-topic`, null, {
-      params: { topic }
-    });
+    const response = await axios.post(`${API_BASE}/classify-topic`, { topic });
     return response.data;
   },
 
@@ -47,9 +43,7 @@ export const api = {
 
   // 三圈分析
   async analyzeThreeCircles(topic: string): Promise<ThreeCirclesResponse> {
-    const response = await axios.post(`${API_BASE}/analyze-three-circles`, null, {
-      params: { topic }
-    });
+    const response = await axios.post(`${API_BASE}/analyze-three-circles`, { topic });
     return response.data;
   },
 
