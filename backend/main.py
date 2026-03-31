@@ -19,6 +19,8 @@ from services.review_generator import ReviewGeneratorService
 from services.topic_analyzer import ThreeCirclesReviewGenerator
 from services.hybrid_classifier import FrameworkGenerator
 from services.docx_generator import DocxGenerator
+from services.reference_validator import ReferenceValidator
+from services.review_record_service import ReviewRecordService
 
 load_dotenv()
 
@@ -55,6 +57,7 @@ class ExportRequest(BaseModel):
 search_service = ScholarFlux()
 filter_service = PaperFilterService()
 three_circles_generator = ThreeCirclesReviewGenerator()
+record_service = ReviewRecordService()
 
 @app.on_event("startup")
 async def startup_event():
@@ -94,14 +97,12 @@ async def get_records(
     db_session: Session = Depends(get_db)
 ):
     """获取生成记录列表"""
-    records = db_session.query(ReviewRecord).order_by(
-        ReviewRecord.created_at.desc()
-    ).offset(skip).limit(limit).all()
+    records = record_service.list_records(db_session, skip, limit)
 
     return {
         "success": True,
         "count": len(records),
-        "records": [r.to_dict() for r in records]
+        "records": [record_service.record_to_dict(r) for r in records]
     }
 
 @app.get("/api/records/{record_id}")
@@ -110,16 +111,14 @@ async def get_record(
     db_session: Session = Depends(get_db)
 ):
     """获取单条记录详情"""
-    record = db_session.query(ReviewRecord).filter(
-        ReviewRecord.id == record_id
-    ).first()
+    record = record_service.get_record(db_session, record_id)
 
     if not record:
         raise HTTPException(status_code=404, detail="记录不存在")
 
     return {
         "success": True,
-        "record": record.to_dict()
+        "record": record_service.record_to_dict(record)
     }
 
 @app.delete("/api/records/{record_id}")
@@ -128,15 +127,10 @@ async def delete_record(
     db_session: Session = Depends(get_db)
 ):
     """删除记录"""
-    record = db_session.query(ReviewRecord).filter(
-        ReviewRecord.id == record_id
-    ).first()
+    deleted = record_service.delete_record(db_session, record_id)
 
-    if not record:
+    if not deleted:
         raise HTTPException(status_code=404, detail="记录不存在")
-
-    db_session.delete(record)
-    db_session.commit()
 
     return {"success": True, "message": "删除成功"}
 
@@ -150,9 +144,7 @@ async def export_review_docx(
 
     接收 record_id，从数据库获取数据并返回 .docx 文件
     """
-    record = db_session.query(ReviewRecord).filter(
-        ReviewRecord.id == request.record_id
-    ).first()
+    record = record_service.get_record(db_session, request.record_id)
 
     if not record:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -267,7 +259,7 @@ async def smart_analyze(request: TopicRequest):
     try:
         from services.hybrid_classifier import FrameworkGenerator
         gen = FrameworkGenerator()
-        framework = await gen.generate_framework(request.topic)
+        framework = await gen.generate_framework(request.topic, enable_llm_validation=True)
 
         # 根据类型选择分析方法
         if framework['type'] == 'application':
@@ -348,28 +340,25 @@ async def smart_generate_review(
     """
     智能生成文献综述（基于智能分析结果进行聚焦搜索）
     """
-    record = ReviewRecord(
+    # 创建记录
+    record = record_service.create_record(
+        db_session=db_session,
         topic=request.topic,
-        review="",
-        papers=[],
-        statistics={},
         target_count=request.target_count,
         recent_years_ratio=request.recent_years_ratio,
-        english_ratio=request.english_ratio,
-        status="processing"
+        english_ratio=request.english_ratio
     )
-    db_session.add(record)
-    db_session.commit()
 
     try:
         # 1. 智能分析题目，获取搜索策略
         from services.hybrid_classifier import FrameworkGenerator
         gen = FrameworkGenerator()
-        framework = await gen.generate_framework(request.topic)
+        framework = await gen.generate_framework(request.topic, enable_llm_validation=True)
 
         # 2. 根据分析结果生成搜索关键词
         all_papers = []
         search_queries = []
+        search_queries_results = []  # 记录每个查询的搜索结果
 
         if framework.get('search_queries'):
             # 使用智能分析生成的搜索查询
@@ -379,12 +368,22 @@ async def smart_generate_review(
             # 并发搜索
             for query_info in search_queries[:5]:  # 最多搜索 5 个查询
                 query = query_info.get('query', request.topic)
+                section = query_info.get('section', '通用')
                 papers = await search_service.search_papers(
                     query=query,
                     years_ago=10,
                     limit=50  # 每个查询最多 50 篇
                 )
                 print(f"[SmartGenerate] 查询 '{query}' 找到 {len(papers)} 篇")
+
+                # 记录每个查询的搜索结果
+                search_queries_results.append({
+                    'query': query,
+                    'section': section,
+                    'papers': papers,
+                    'citedCount': 0  # 稍后更新
+                })
+
                 all_papers.extend(papers)
 
         # 如果搜索到的文献太少，使用主题进行补充搜索
@@ -410,25 +409,18 @@ async def smart_generate_review(
         print(f"[SmartGenerate] 去重后共 {len(all_papers)} 篇文献")
 
         if not all_papers:
-            record.status = "failed"
-            record.error_message = f'未找到关于「{request.topic}」的相关文献'
-            db_session.commit()
+            record = record_service.update_failure(
+                db_session=db_session,
+                record=record,
+                error_message=f'未找到关于「{request.topic}」的相关文献'
+            )
             return GenerateResponse(
                 success=False,
                 message=record.error_message
             )
 
         # 3. 提取主题关键词用于相关性评分
-        topic_keywords = []
-        key_elements = framework.get('key_elements', {})
-        for key, value in key_elements.items():
-            if value and isinstance(value, str):
-                topic_keywords.extend(value.split())
-                if value == key_elements.get('methodology'):
-                    # 处理缩写
-                    for kw in ['QFD', 'FMEA', 'DMAIC', 'AHP']:
-                        if kw in value:
-                            topic_keywords.append(kw)
+        topic_keywords = gen.extract_relevance_keywords(framework)
 
         # 4. 筛选文献（使用关键词进行相关性评分）
         # 搜索更多文献以确保有足够的引用
@@ -455,12 +447,30 @@ async def smart_generate_review(
         # 6. 基于实际被引用的文献计算统计信息
         stats = filter_service.get_statistics(cited_papers)
 
+        # 计算每个搜索查询的被引用论文数量
+        cited_paper_ids = {p.get('id') for p in cited_papers}
+        for query_result in search_queries_results:
+            cited_count = sum(1 for p in query_result['papers'] if p.get('id') in cited_paper_ids)
+            query_result['citedCount'] = cited_count
+            # 标记每篇论文是否被引用
+            for paper in query_result['papers']:
+                paper['cited'] = paper.get('id') in cited_paper_ids
+
         # 7. 保存记录
-        record.review = review
-        record.papers = cited_papers  # 只保存被引用的文献
-        record.statistics = stats
-        record.status = "success"
-        db_session.commit()
+        record = record_service.update_success(
+            db_session=db_session,
+            record=record,
+            review=review,
+            papers=cited_papers,
+            statistics=stats
+        )
+
+        # 8. 验证参考文献质量
+        validator = ReferenceValidator()
+        validation_result = validator.validate_review(
+            review=review,
+            papers=cited_papers
+        )
 
         return GenerateResponse(
             success=True,
@@ -472,55 +482,54 @@ async def smart_generate_review(
                 "papers": filtered_papers,
                 "statistics": stats,
                 "analysis": framework,
+                "search_queries_results": search_queries_results,
+                "validation": validation_result,
                 "created_at": record.created_at.isoformat()
             }
         )
 
     except Exception as e:
-        record.status = "failed"
-        record.error_message = str(e)
-        db_session.commit()
+        record = record_service.update_failure(
+            db_session=db_session,
+            record=record,
+            error_message=str(e)
+        )
         return GenerateResponse(
             success=False,
             message=f"生成失败: {str(e)}"
         )
 
-def _extract_relevance_keywords(framework: dict) -> List[str]:
+# ==================== 参考文献验证接口 ====================
+
+class ValidateRequest(BaseModel):
+    review: str = Field(..., description="综述内容")
+    papers: List[Dict] = Field(..., description="参考文献列表")
+
+@app.post("/api/validate-review")
+async def validate_review(request: ValidateRequest):
     """
-    从框架分析中提取相关性关键词
+    验证参考文献质量
 
-    Args:
-        framework: 智能分析生成的框架
-
-    Returns:
-        相关性关键词列表
+    检查：
+    1. 引用数量是否>=50篇
+    2. 近5年文献占比是否>=50%
+    3. 英文文献占比是否>=30%
+    4. 引用顺序是否正确（连续编号）
     """
-    keywords = []
-
-    # 从 key_elements 中提取
-    key_elements = framework.get('key_elements', {})
-    for key, value in key_elements.items():
-        if value and isinstance(value, str):
-            # 添加原始值
-            keywords.append(value)
-            # 添加拆分后的关键词
-            keywords.extend(value.split())
-
-    # 从 variables 中提取（实证型）
-    variables = key_elements.get('variables', {})
-    if variables:
-        iv = variables.get('independent')
-        dv = variables.get('dependent')
-        if iv:
-            keywords.append(iv)
-            keywords.extend(iv.split('、'))  # 处理中文顿号
-        if dv:
-            keywords.append(dv)
-
-    # 移除空值和重复
-    keywords = list(set(k for k in keywords if k and k.strip()))
-
-    return keywords
+    try:
+        validator = ReferenceValidator()
+        result = validator.validate_review(
+            review=request.review,
+            papers=request.papers
+        )
+        return {
+            "success": True,
+            "data": result
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

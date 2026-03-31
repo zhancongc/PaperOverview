@@ -1,16 +1,30 @@
 """
-混合分类器：模式识别 + 大模型
-- 先用模式识别强制判定混血题目
-- 再用大模型智能分类其他题目
+混合分类器：模式识别 + 大模型验证
+- 先用模式识别提取关键词
+- 再用大模型判断是否合理，不合理则优化
 """
 import re
-from services.llm_classifier import LLTopicClassifier, TopicType
+import os
+from enum import Enum
+from dotenv import load_dotenv
+from openai import AsyncOpenAI
+
+load_dotenv()
+
+
+class TopicType(Enum):
+    """题目类型枚举"""
+    APPLICATION = "application"  # 应用型/解决方案型 - 三圈交集
+    EVALUATION = "evaluation"    # 评价型/体系构建型 - 金字塔式
+    THEORETICAL = "theoretical"  # 理论型/研究型 - 溯源式
+    EMPIRICAL = "empirical"      # 实证型 - 问题-方案式
+    GENERAL = "general"          # 通用型
 
 
 class HybridTopicClassifier:
-    """混合分类器：模式识别 + 大模型"""
+    """基于规则的题目分类器"""
 
-    # ==================== 模式识别规则（强制判定） ====================
+    # ==================== 模式识别规则（强制判定混血题目） ====================
 
     # 规则1：应用型+实证型 → 实证型（基于XX模型的影响研究）
     EMPIRICAL_WITH_MODEL_PATTERN = re.compile(
@@ -33,11 +47,17 @@ class HybridTopicClassifier:
     )
 
     def __init__(self):
-        self.llm_classifier = LLTopicClassifier()
+        self.client = None
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if api_key:
+            base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+            self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        else:
+            print("[HybridClassifier] DEEPSEEK_API_KEY not configured, LLM validation disabled")
 
-    async def classify(self, title: str):
+    def classify(self, title: str):
         """
-        混合分类：先模式识别，再大模型
+        混合分类：使用规则引擎
 
         Args:
             title: 论文题目
@@ -45,18 +65,225 @@ class HybridTopicClassifier:
         Returns:
             (题目类型, 判定理由, 判定详情)
         """
-        # 第一步：模式识别（强制判定）
+        # 使用规则引擎进行分类和关键元素提取
+        return self._rule_based_classify(title)
+
+    async def classify(self, title: str, enable_llm_validation: bool = False):
+        """
+        混合分类：规则提取 + LLM验证优化
+
+        Args:
+            title: 论文题目
+
+        Returns:
+            (题目类型, 判定理由, 判定详情)
+        """
+        # 第一步：规则引擎提取
+        topic_type, reason, details = self._rule_based_classify(title)
+
+        # 第二步：LLM验证和优化（如果启用）
+        if enable_llm_validation and self.client and details.get('key_elements', {}).get('research_object'):
+            try:
+                optimized = await self._validate_and_optimize_keywords(title, details)
+                if optimized:
+                    # 合并优化结果
+                    details['key_elements'].update(optimized.get('key_elements', {}))
+                    details['llm_validated'] = True
+                    details['llm_optimized'] = True
+                    reason += "（已通过LLM验证并优化）"
+                else:
+                    # 没有返回优化建议，说明验证通过
+                    details['llm_validated'] = True
+                    reason += "（已通过LLM验证）"
+            except Exception as e:
+                print(f"[HybridClassifier] LLM验证失败: {e}，使用规则提取结果")
+
+        return topic_type, reason, details
+
+    async def _validate_and_optimize_keywords(self, title: str, details: dict) -> dict:
+        """
+        让LLM验证提取的关键词是否合理，不合理则给出优化建议
+
+        Args:
+            title: 论文题目
+            details: 规则提取的详情
+
+        Returns:
+            优化后的关键元素，如果验证通过返回None
+        """
+        elements = details.get('key_elements', {})
+        obj = elements.get('research_object', '')
+        goal = elements.get('optimization_goal', '')
+        method = elements.get('methodology', '')
+
+        # 简化prompt，降低token消耗
+        prompt = f"""题目：{title}
+
+提取结果：
+- 研究对象：{obj}
+- 优化目标：{goal}
+- 方法论：{method}
+
+判断以上提取是否准确。如果不准确，请说明应该怎么改。
+
+格式要求：
+- 如果准确，只回答"准确"
+- 如果不准确，按格式回答："研究对象应该改为XXX；优化目标应该改为YYY；方法论应该改为ZZZ"
+"""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "你是一个学术研究助手。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=200
+            )
+
+            result = response.choices[0].message.content.strip()
+            print(f"[HybridClassifier] LLM验证结果: {result}")
+
+            # 判断是否准确
+            if result == "准确":
+                return None
+
+            # 解析LLM的修改建议
+            optimized = {}
+
+            if "研究对象应该改为" in result:
+                obj_match = re.search(r'研究对象应该改为(.+?)(?:；|$)', result)
+                if obj_match:
+                    optimized['research_object'] = obj_match.group(1).strip()
+                    print(f"[HybridClassifier] 优化研究对象: {obj_match.group(1)}")
+
+            if "优化目标应该改为" in result:
+                goal_match = re.search(r'优化目标应该改为(.+?)(?:；|$)', result)
+                if goal_match:
+                    optimized['optimization_goal'] = goal_match.group(1).strip()
+                    print(f"[HybridClassifier] 优化优化目标: {goal_match.group(1)}")
+
+            if "方法论应该改为" in result:
+                method_match = re.search(r'方法论应该改为(.+?)(?:；|$)', result)
+                if method_match:
+                    optimized['methodology'] = method_match.group(1).strip()
+                    print(f"[HybridClassifier] 优化方法论: {method_match.group(1)}")
+
+            return {'key_elements': optimized} if optimized else None
+
+        except Exception as e:
+            print(f"[HybridClassifier] LLM验证出错: {e}，使用规则提取结果")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def _rule_based_classify(self, title: str) -> tuple:
+        """
+        基于规则的分类器
+
+        Args:
+            title: 论文题目
+
+        Returns:
+            (题目类型, 判定理由, 判定详情)
+        """
+        # 第一步：模式识别（强制判定混血题目）
         pattern_result = self._pattern_classify(title)
         if pattern_result:
             return pattern_result
 
-        # 第二步：大模型分类
-        try:
-            return await self.llm_classifier.classify(title)
-        except Exception as e:
-            print(f"[HybridClassifier] 大模型分类失败: {e}")
-            # 使用规则引擎作为回退
-            return self._fallback_classification(title)
+        # 第二步：基于关键词的分类
+        title_lower = title.lower()
+
+        # 评价型关键词（优先检查）
+        if any(kw in title for kw in ['成熟度', '评价', '评估', '指标体系']):
+            # 提取评价对象
+            obj_match = re.search(r'(.+?)(?:成熟度|评价|评估|指标体系)', title)
+            obj = obj_match.group(1) if obj_match else title.split('成熟度')[0].split('评价')[0].strip()
+            return (
+                TopicType.EVALUATION,
+                '识别到评价型关键词',
+                {
+                    'method': 'rule',
+                    'confidence': 'high',
+                    'key_elements': {
+                        'research_object': obj,
+                        'optimization_goal': None,
+                        'methodology': None
+                    }
+                }
+            )
+
+        # 应用型关键词
+        if any(kw in title for kw in ['基于', '优化', '改进', '应用']):
+            # 提取应用型元素
+            elements = self._extract_application_elements(title)
+            return (
+                TopicType.APPLICATION,
+                '识别到应用型关键词',
+                {
+                    'method': 'rule',
+                    'confidence': 'high',
+                    'key_elements': elements
+                }
+            )
+
+        # 实证型关键词
+        if any(kw in title for kw in ['影响', '效应', '关系', '相关']):
+            # 提取自变量和因变量
+            influence_match = re.search(r'(.+?)对(.+?)(?:的影响|效应|作用|关系|相关性)', title)
+            if influence_match:
+                iv = influence_match.group(1).strip()
+                dv = influence_match.group(2).strip()
+                return (
+                    TopicType.EMPIRICAL,
+                    '识别到实证型关键词',
+                    {
+                        'method': 'rule',
+                        'confidence': 'high',
+                        'key_elements': {
+                            'research_object': iv,
+                            'optimization_goal': dv,
+                            'methodology': None
+                        },
+                        'variables': {
+                            'independent': iv,
+                            'dependent': dv
+                        }
+                    }
+                )
+
+        # 理论型关键词
+        if any(kw in title for kw in ['理论', '机理', '综述', '进展', '演进']):
+            return (
+                TopicType.THEORETICAL,
+                '识别到理论型关键词',
+                {
+                    'method': 'rule',
+                    'confidence': 'medium',
+                    'key_elements': {
+                        'research_object': None,
+                        'optimization_goal': None,
+                        'methodology': None
+                    }
+                }
+            )
+
+        # 默认返回通用型
+        return (
+            TopicType.GENERAL,
+            '无法明确归类，使用通用类型',
+            {
+                'method': 'rule',
+                'confidence': 'low',
+                'key_elements': {
+                    'research_object': None,
+                    'optimization_goal': None,
+                    'methodology': None
+                }
+            }
+        )
 
     def _fallback_classification(self, title: str):
         """回退分类：使用简单规则"""
@@ -236,7 +463,8 @@ class HybridTopicClassifier:
 
         # 模式1：基于XX方法的YY对象的ZZ优化
         # 例如：基于QFD和FMEA的软件外包项目质量管理
-        based_match = re.search(r'基于(.+?)的(.+?)(?:优化|改进|管理|控制|提升|研究)?$', title)
+        # 支持以"研究"结尾的题目
+        based_match = re.search(r'基于(.+?)的(.+?)(?:研究|优化|改进|管理|控制|提升)?$', title)
         if based_match:
             methodology_part = based_match.group(1).strip()
             rest = based_match.group(2).strip()
@@ -245,16 +473,41 @@ class HybridTopicClassifier:
             elements['methodology'] = methodology_part
 
             # 从剩余部分提取研究对象和优化目标
-            # 通常是"对象的优化"格式
-            goal_keywords = ['优化', '改进', '管理', '控制', '提升', '质量', '效率', '性能', '安全']
-            for kw in goal_keywords:
-                if kw in rest:
-                    parts = rest.split(kw)
-                    if len(parts) >= 2:
+            # 优先匹配组合词（如"质量管理"、"流程优化"等）
+            compound_patterns = [
+                ('质量管理', '质量'),
+                ('流程管理', '流程'),
+                ('质量控制', '控制'),
+                ('流程优化', '优化'),
+                ('持续交付', '交付'),
+                ('效率提升', '效率'),
+                ('性能优化', '性能'),
+                ('安全改进', '安全'),
+            ]
+
+            matched = False
+            for compound, single in compound_patterns:
+                if compound in rest:
+                    parts = rest.split(compound)
+                    if len(parts) >= 1:
                         elements['research_object'] = parts[0].strip()
-                        elements['optimization_goal'] = f"{kw}{parts[1]}" if len(parts) > 1 else kw
+                        elements['optimization_goal'] = compound
+                        matched = True
                         break
-            else:
+
+            if not matched:
+                # 如果没有匹配到组合词，尝试单个关键词
+                goal_keywords = ['优化', '改进', '管理', '控制', '提升', '效率', '性能', '安全']
+                for kw in goal_keywords:
+                    if kw in rest:
+                        parts = rest.split(kw)
+                        if len(parts) >= 1:
+                            elements['research_object'] = parts[0].strip()
+                            elements['optimization_goal'] = kw
+                            matched = True
+                        break
+
+            if not matched:
                 # 没有找到优化关键词，整个都是研究对象
                 elements['research_object'] = rest
 
@@ -290,17 +543,18 @@ class FrameworkGenerator:
     def __init__(self):
         self.classifier = HybridTopicClassifier()
 
-    async def generate_framework(self, title: str) -> dict:
+    async def generate_framework(self, title: str, enable_llm_validation: bool = False) -> dict:
         """
         根据题目类型生成综述框架
 
         Args:
             title: 论文题目
+            enable_llm_validation: 是否启用LLM验证（默认False）
 
         Returns:
             综述框架
         """
-        topic_type, reason, details = await self.classifier.classify(title)
+        topic_type, reason, details = await self.classifier.classify(title, enable_llm_validation)
 
         framework = {
             'title': title,
@@ -310,6 +564,8 @@ class FrameworkGenerator:
             'confidence': 'high' if details.get('method') == 'pattern' else details.get('confidence', 'medium'),
             'key_elements': details.get('key_elements', {}),
             'reasoning': details.get('reasoning', {}),
+            'llm_validated': details.get('llm_validated', False),
+            'llm_optimized': details.get('llm_optimized', False),
             'framework': None,
             'search_queries': []
         }
@@ -388,20 +644,113 @@ class FrameworkGenerator:
         }
 
     def _application_queries(self, title: str, elements: dict) -> list:
-        """应用型检索查询"""
+        """应用型检索查询 - 生成更精准的搜索关键词"""
         obj = elements.get("research_object", "")
         goal = elements.get("optimization_goal", "")
         method = elements.get("methodology", "")
 
         queries = []
+
+        # 判断研究对象类型，生成相应的关键词
+        obj_type = self._classify_object_type(obj)
+
+        # 1. 研究对象分析 - 根据对象类型生成不同的关键词
         if obj:
-            queries.append({'query': f'{obj} 特点 挑战', 'section': '研究对象分析'})
-        if goal:
-            queries.append({'query': f'{goal} 现状 问题', 'section': '优化目标现状'})
-        if method:
-            queries.append({'query': f'{method} 应用 案例', 'section': '方法论应用'})
+            keywords = self._get_object_analysis_keywords(obj, obj_type)
+            queries.append({
+                'query': f'{obj} {keywords}',
+                'section': '研究对象分析'
+            })
+
+        # 2. 优化目标现状 - 结合对象和优化目标
+        if obj and goal:
+            queries.append({
+                'query': f'{obj} {goal} 研究进展 问题',
+                'section': '优化目标现状'
+            })
+        elif goal:
+            queries.append({
+                'query': f'{goal} 研究进展 问题',
+                'section': '优化目标现状'
+            })
+
+        # 3. 方法论应用 - 方法论+对象+应用场景
+        if method and obj:
+            method_clean = self._clean_methodology_name(method)
+            app_keywords = self._get_application_keywords(obj_type)
+            queries.append({
+                'query': f'{method_clean} {obj} {app_keywords}',
+                'section': '方法论应用'
+            })
+        elif method:
+            method_clean = self._clean_methodology_name(method)
+            queries.append({
+                'query': f'{method_clean} 应用 质量改进',
+                'section': '方法论应用'
+            })
 
         return queries
+
+    def _classify_object_type(self, obj: str) -> str:
+        """
+        判断研究对象类型
+
+        Returns:
+            'software' | 'hardware' | 'process' | 'general'
+        """
+        software_keywords = ['软件', '软件系统', '平台', '算法', '数据', '网络', '智能座舱', '代码', 'APP', '系统', '信息化']
+        process_keywords = ['流程', '工艺', '过程', '管理', '服务', '交付', '供应链', '生产']
+
+        obj_lower = obj.lower()
+        for kw in software_keywords:
+            if kw in obj:
+                return 'software'
+
+        for kw in process_keywords:
+            if kw in obj:
+                return 'process'
+
+        return 'hardware'  # 默认为硬件/产品
+
+    def _get_object_analysis_keywords(self, obj: str, obj_type: str) -> str:
+        """根据对象类型返回分析关键词"""
+        if obj_type == 'software':
+            return '开发 质量 测试 难点'
+        elif obj_type == 'process':
+            return '流程 工艺 瓶颈 问题'
+        else:  # hardware
+            return '制造工艺 质量特性 质量控制难点'
+
+    def _get_application_keywords(self, obj_type: str) -> str:
+        """根据对象类型返回应用关键词"""
+        if obj_type == 'software':
+            return '应用 开发改进'
+        elif obj_type == 'process':
+            return '应用 优化改进'
+        else:  # hardware
+            return '应用 质量改进'
+
+    def _clean_methodology_name(self, method: str) -> str:
+        """
+        清理方法论名称，去掉冗长的全称和括号
+
+        例如：
+        - QFD（质量功能展开） -> QFD
+        - PFMEA（过程失效模式与影响分析） -> PFMEA
+        - QFD和PFMEA -> QFD PFMEA
+        """
+        import re
+
+        # 去掉括号及其内容
+        method = re.sub(r'\([^)]+\)', '', method)
+
+        # 将连接词替换为空格
+        method = re.sub(r'[和与及]', ' ', method)
+
+        # 去除多余空格
+        method = ' '.join(method.split())
+
+        return method
 
     def _evaluation_framework(self, title: str, elements: dict) -> dict:
         """评价型综述框架 - 金字塔式"""
@@ -679,3 +1028,40 @@ class FrameworkGenerator:
             {'query': f'{title} 综述', 'section': '研究现状'},
             {'query': f'{title} 发展趋势', 'section': '发展趋势'}
         ]
+
+    def extract_relevance_keywords(self, framework: dict) -> list:
+        """
+        从框架分析中提取相关性关键词（用于文献相关性评分）
+
+        Args:
+            framework: 智能分析生成的框架
+
+        Returns:
+            相关性关键词列表
+        """
+        keywords = []
+
+        # 从 key_elements 中提取
+        key_elements = framework.get('key_elements', {})
+        for key, value in key_elements.items():
+            if value and isinstance(value, str):
+                # 添加原始值
+                keywords.append(value)
+                # 添加拆分后的关键词
+                keywords.extend(value.split())
+
+        # 从 variables 中提取（实证型）
+        variables = key_elements.get('variables', {})
+        if variables:
+            iv = variables.get('independent')
+            dv = variables.get('dependent')
+            if iv:
+                keywords.append(iv)
+                keywords.extend(iv.split('、'))  # 处理中文顿号
+            if dv:
+                keywords.append(dv)
+
+        # 移除空值和重复
+        keywords = list(set(k for k in keywords if k and k.strip()))
+
+        return keywords
