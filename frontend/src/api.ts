@@ -101,26 +101,10 @@ export const api = {
     return response.data;
   },
 
-  // 导出记录为 Word
-  async exportRecord(id: number): Promise<Blob> {
-    const response = await axios.post(`${API_BASE}/records/${id}/export`, {}, {
-      responseType: 'blob'
-    });
-    return response.data;
-  },
-
   // 导出综述为 Word
-  async exportReview(
-    topic: string,
-    review: string,
-    papers: Paper[],
-    statistics: Statistics | null
-  ): Promise<Blob> {
-    const response = await axios.post(`${API_BASE}/export`, {
-      topic,
-      review,
-      papers,
-      statistics
+  async exportReview(recordId: number): Promise<Blob> {
+    const response = await axios.post(`${API_BASE}/records/export`, {
+      record_id: recordId
     }, {
       responseType: 'blob'
     });

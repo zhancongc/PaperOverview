@@ -37,14 +37,15 @@ async def run_tests():
     # 生成综述
     print("\n正在生成综述...")
     generator = ReviewGeneratorService(api_key=api_key)
-    review = await generator.generate_review(
+    review, cited_papers = await generator.generate_review(
         topic="人工智能",
         papers=papers
     )
 
     print(f"\n✓ 综述生成成功！")
     print(f"  长度: {len(review)} 字符")
-    print(f"  使用文献: {len(papers)} 篇")
+    print(f"  提供文献: {len(papers)} 篇")
+    print(f"  引用文献: {len(cited_papers)} 篇")
 
     # 统计引用
     import re

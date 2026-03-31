@@ -63,6 +63,9 @@ class HybridTopicClassifier:
         title_lower = title.lower()
 
         if any(kw in title for kw in ['成熟度', '评价', '评估', '指标体系']):
+            # 提取评价对象
+            obj_match = re.search(r'(.+?)(?:成熟度|评价|评估|指标体系)', title)
+            obj = obj_match.group(1) if obj_match else title.split('成熟度')[0].split('评价')[0].strip()
             return (
                 TopicType.EVALUATION,
                 '识别到评价型关键词（规则回退）',
@@ -70,24 +73,22 @@ class HybridTopicClassifier:
                     'method': 'fallback',
                     'confidence': 'low',
                     'key_elements': {
-                        'research_object': title.split('成熟度')[0].split('评价')[0].strip(),
+                        'research_object': obj,
                         'optimization_goal': None,
                         'methodology': None
                     }
                 }
             )
         if any(kw in title for kw in ['基于', '优化', '改进', '应用']):
+            # 提取应用型元素：基于XX方法的YY对象的ZZ优化
+            elements = self._extract_application_elements(title)
             return (
                 TopicType.APPLICATION,
                 '识别到应用型关键词（规则回退）',
                 {
                     'method': 'fallback',
                     'confidence': 'low',
-                    'key_elements': {
-                        'research_object': None,
-                        'optimization_goal': None,
-                        'methodology': None
-                    }
+                    'key_elements': elements
                 }
             )
         if any(kw in title for kw in ['影响', '效应', '关系', '相关']):
@@ -211,6 +212,75 @@ class HybridTopicClassifier:
 
         # 没有匹配到模式，返回 None 让大模型处理
         return None
+
+    def _extract_application_elements(self, title: str) -> dict:
+        """
+        从应用型题目中提取关键元素
+
+        支持格式：
+        - 基于XX方法的YY对象的ZZ优化
+        - XX在YY中的应用
+        - 基于XX的YY优化研究
+
+        Returns:
+            {'research_object': str, 'optimization_goal': str, 'methodology': str}
+        """
+        import re
+
+        # 默认值
+        elements = {
+            'research_object': None,
+            'optimization_goal': None,
+            'methodology': None
+        }
+
+        # 模式1：基于XX方法的YY对象的ZZ优化
+        # 例如：基于QFD和FMEA的软件外包项目质量管理
+        based_match = re.search(r'基于(.+?)的(.+?)(?:优化|改进|管理|控制|提升|研究)?$', title)
+        if based_match:
+            methodology_part = based_match.group(1).strip()
+            rest = based_match.group(2).strip()
+
+            # 方法论可能包含多个（用和、与、及连接）
+            elements['methodology'] = methodology_part
+
+            # 从剩余部分提取研究对象和优化目标
+            # 通常是"对象的优化"格式
+            goal_keywords = ['优化', '改进', '管理', '控制', '提升', '质量', '效率', '性能', '安全']
+            for kw in goal_keywords:
+                if kw in rest:
+                    parts = rest.split(kw)
+                    if len(parts) >= 2:
+                        elements['research_object'] = parts[0].strip()
+                        elements['optimization_goal'] = f"{kw}{parts[1]}" if len(parts) > 1 else kw
+                        break
+            else:
+                # 没有找到优化关键词，整个都是研究对象
+                elements['research_object'] = rest
+
+            return elements
+
+        # 模式2：XX在YY中的应用
+        # 例如：QFD在软件外包质量管理中的应用
+        apply_match = re.search(r'(.+?)在(.+?)中的应用', title)
+        if apply_match:
+            elements['methodology'] = apply_match.group(1).strip()
+            elements['research_object'] = apply_match.group(2).strip()
+            elements['optimization_goal'] = '应用'
+            return elements
+
+        # 模式3：只有关键词匹配，尝试简单提取
+        if '基于' in title:
+            after_based = title.split('基于', 1)[1].strip()
+            # 找到第一个"的"之后的部分
+            if '的' in after_based:
+                parts = after_based.split('的', 1)
+                elements['methodology'] = parts[0].strip()
+                elements['research_object'] = parts[1].strip()
+            else:
+                elements['methodology'] = after_based
+
+        return elements
 
 
 # 为了兼容现有代码，导出混合分类器

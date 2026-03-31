@@ -156,32 +156,10 @@ function App() {
     }
   }
 
-  const handleExportDocx = async () => {
-    if (!review || !statistics) {
-      setError('请先生成综述')
-      return
-    }
-
-    try {
-      const blob = await api.exportReview(topic, review, papers, statistics)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${topic.replace(/[\/\\:]/g, '-')}.docx`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      setError('导出失败')
-      console.error('导出失败:', err)
-    }
-  }
-
   const handleExportRecord = async (id: number, event: React.MouseEvent) => {
     event.stopPropagation()
     try {
-      const blob = await api.exportRecord(id)
+      const blob = await api.exportReview(id)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -260,9 +238,9 @@ function App() {
           >
             {loading ? '生成中...' : '✨ 生成综述'}
           </button>
-          {review && statistics && (
+          {review && statistics && currentRecordId && (
             <button
-              onClick={handleExportDocx}
+              onClick={() => handleExportRecord(currentRecordId, { stopPropagation: () => {} } as React.MouseEvent)}
               className="export-btn"
             >
               📥 导出Word
