@@ -5,7 +5,6 @@ import type {
   Statistics,
   ReviewRecord,
   TopicClassification,
-  ReviewFramework,
   TabType
 } from './types'
 import { TopicInput } from './components/TopicInput'
@@ -14,6 +13,7 @@ import { AnalysisPanel } from './components/AnalysisPanel'
 import { ReviewPanel } from './components/ReviewPanel'
 import { PapersList } from './components/PapersList'
 import { HistoryList } from './components/HistoryList'
+import { SearchQueriesPanel } from './components/SearchQueriesPanel'
 import './App.css'
 
 function App() {
@@ -29,8 +29,10 @@ function App() {
 
   // 分析数据
   const [classification, setClassification] = useState<TopicClassification | null>(null)
-  const [framework, setFramework] = useState<ReviewFramework | null>(null)
   const [frameworkType, setFrameworkType] = useState<string>('')
+
+  // 搜索查询结果
+  const [searchQueries, setSearchQueries] = useState<any[]>([])
 
   // 历史记录
   const [records, setRecords] = useState<ReviewRecord[]>([])
@@ -65,7 +67,6 @@ function App() {
     setError('')
     setActiveTab('analysis')
     setClassification(null)
-    setFramework(null)
 
     try {
       const response = await api.smartAnalyze(topic)
@@ -75,10 +76,14 @@ function App() {
 
         if (data.analysis) {
           setClassification(data.analysis)
-        }
-
-        if (data.review_framework) {
-          setFramework(data.review_framework)
+          // 保存搜索查询
+          if (data.analysis.search_queries) {
+            setSearchQueries(data.analysis.search_queries.map((q: any) => ({
+              ...q,
+              papers: [],
+              citedCount: 0
+            })))
+          }
         }
       }
     } catch (err) {
@@ -112,6 +117,11 @@ function App() {
 
         if (data.id) {
           setCurrentRecordId(data.id)
+        }
+
+        // 更新搜索查询的被引用论文数量
+        if (data.search_queries_results) {
+          setSearchQueries(data.search_queries_results)
         }
 
         loadRecords()
@@ -210,6 +220,14 @@ function App() {
 
           {activeTab === 'papers' && (
             <PapersList papers={papers} />
+          )}
+
+          {activeTab === 'search' && (
+            <SearchQueriesPanel
+              searchQueries={searchQueries}
+              allPapersCount={papers.length}
+              citedPapersCount={statistics?.total || 0}
+            />
           )}
 
           {activeTab === 'analysis' && (

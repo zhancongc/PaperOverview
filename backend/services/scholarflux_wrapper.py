@@ -121,6 +121,33 @@ class ScholarFlux:
 
         print(f"[ScholarFlux] 初始化完成，已加载 {len(self.apis)} 个数据源")
 
+    async def search_papers(
+        self,
+        query: str,
+        years_ago: int = 5,
+        limit: int = 100,
+        min_citations: int = 0
+    ) -> List[Dict]:
+        """
+        搜索论文（兼容旧接口）
+
+        Args:
+            query: 搜索关键词
+            years_ago: 近N年
+            limit: 返回数量
+            min_citations: 最小被引量
+
+        Returns:
+            去重后的论文列表
+        """
+        return await self.search(
+            query=query,
+            years_ago=years_ago,
+            limit=limit,
+            min_citations=min_citations,
+            use_all_sources=True
+        )
+
     async def search(
         self,
         query: str,

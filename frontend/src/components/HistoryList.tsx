@@ -8,7 +8,7 @@ interface HistoryListProps {
   loading: boolean
   onLoadRecord: (id: number) => void
   onDeleteRecord: (id: number) => void
-  onExportRecord: (id: number) => void
+  onExportRecord: (id: number, event: React.MouseEvent) => Promise<void>
 }
 
 export function HistoryList({ records, loading, onLoadRecord, onDeleteRecord, onExportRecord }: HistoryListProps) {
@@ -19,9 +19,9 @@ export function HistoryList({ records, loading, onLoadRecord, onDeleteRecord, on
     }
   }
 
-  const handleExport = (id: number, event: React.MouseEvent) => {
+  const handleExport = async (id: number, event: React.MouseEvent) => {
     event.stopPropagation()
-    onExportRecord(id)
+    await onExportRecord(id, event)
   }
 
   const formatDate = (dateString: string) => {

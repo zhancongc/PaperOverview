@@ -1,7 +1,6 @@
 /**
  * 主题输入组件
  */
-import { useState } from 'react'
 
 interface TopicInputProps {
   value: string

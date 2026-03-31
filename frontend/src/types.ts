@@ -53,6 +53,8 @@ export interface GenerateResponse {
     gap_analysis?: GapAnalysis;
     // 框架类型
     framework_type?: string;
+    // 搜索查询结果
+    search_queries_results?: SearchQueryResult[];
   };
 }
 
@@ -117,7 +119,15 @@ export interface ThreeCirclesResponse {
 export type TopicType = 'application' | 'evaluation' | 'theoretical' | 'empirical' | 'general';
 
 // 标签页类型
-export type TabType = 'review' | 'papers' | 'history' | 'analysis';
+export type TabType = 'review' | 'papers' | 'history' | 'analysis' | 'search';
+
+// 搜索查询结果详情
+export interface SearchQueryResult {
+  query: string;
+  section: string;
+  papers: Array<Paper & { cited?: boolean }>;
+  citedCount: number;
+}
 
 export interface TopicClassification {
   title: string;

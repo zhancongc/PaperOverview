@@ -48,8 +48,9 @@ class ReviewGeneratorService:
 - 使用学术化语言
 - 每个重要观点、研究结论或数据引用，都必须在句末添加对应的参考文献序号
 - 引用格式：[序号]，例如，"这一观点得到了多项研究的支持[1][2][3]"
+- **引用顺序要求：必须从[1]开始按顺序引用，不要跳过前面的编号直接引用后面的文献**
 - 引用要求：至少引用 50 篇不同的文献，尽量覆盖更多文献，不要只引用少数几篇
-- 引用分布：避免重复引用同一篇文献，每篇文献引用次数最好不超过2次
+- 引用分布：避免重复引用同一篇文献，**每篇文献引用次数严格不超过2次**
 - 分析要深入，不能简单罗列
 - 字数：3000-5000字
 
@@ -73,16 +74,37 @@ class ReviewGeneratorService:
 
             # 提取正文中实际引用的文献编号
             cited_indices = self._extract_cited_indices(content)
+            print(f"[DEBUG] cited_indices: {sorted(cited_indices)[:20]}")
 
             if cited_indices:
                 # 只保留被引用的文献
                 cited_papers = [papers[i - 1] for i in cited_indices if i <= len(papers)]
+                print(f"[DEBUG] cited_papers count: {len(cited_papers)}")
 
-                # 创建旧编号到新编号的映射
-                old_to_new = {old: new for new, old in enumerate(sorted(cited_indices), 1)}
+                # 按照引用在文中首次出现的顺序重新编号
+                print(f"[DEBUG] Before renumbering, first citation in content: ", end="")
+                import re
+                first_match = re.search(r'\[(\d+)\]', content)
+                if first_match:
+                    print(f"[{first_match.group(1)}]")
+                else:
+                    print("none")
 
-                # 更新正文中的引用编号
-                content = self._update_citation_numbers(content, old_to_new)
+                content, cited_papers = self._renumber_citations_by_appearance(content, cited_papers, cited_indices)
+
+                first_match = re.search(r'\[(\d+)\]', content)
+                print(f"[DEBUG] After renumbering, first citation in content: ", end="")
+                if first_match:
+                    print(f"[{first_match.group(1)}]")
+                else:
+                    print("none")
+
+                # 限制每篇文献的引用次数（最多2次）
+                print(f"[DEBUG] Limiting citation count to max 2 per paper")
+                before_count = len(re.findall(r'\[(\d+)\]', content))
+                content = self._limit_citation_count_v2(content, cited_papers, max_count=2)
+                after_count = len(re.findall(r'\[(\d+)\]', content))
+                print(f"[DEBUG] Citation count: {before_count} -> {after_count}")
 
                 # 重新格式化参考文献
                 references = self._format_references(cited_papers)
@@ -226,10 +248,11 @@ class ReviewGeneratorService:
 {chr(10).join(additional_papers[:30])}
 
 要求：
-1. 在综述的适当位置添加这些文献的引用
-2. 保持原文结构和内容不变，只添加引用标记
-3. 每添加一个引用，在相关句子末尾加上 [序号]
-4. 请直接输出修改后的完整综述内容，不要解释
+1. **引用顺序：在现有引用的基础上继续按顺序编号，不要跳号，不要重复使用已使用的编号**
+2. 在综述的适当位置添加这些文献的引用
+3. 保持原文结构和内容不变，只添加引用标记
+4. 每添加一个引用，在相关句子末尾加上 [序号]
+5. 请直接输出修改后的完整综述内容，不要解释
 
 当前综述：
 {content}
@@ -396,6 +419,187 @@ class ReviewGeneratorService:
 
         # 替换所有 [数字] 格式的引用
         return re.sub(r'\[(\d+)\]', replace_citation, content)
+
+    def _renumber_citations_by_appearance(self, content: str, cited_papers: List[Dict], cited_indices: set) -> tuple:
+        """
+        按照引用在文中首次出现的顺序重新编号
+
+        Args:
+            content: 正文内容
+            cited_papers: 被引用的文献列表
+            cited_indices: 被引用的文献编号集合
+
+        Returns:
+            (重新编号后的正文, 重新排序后的文献列表)
+        """
+        import re
+
+        # 找出所有引用及其位置
+        citation_pattern = re.compile(r'\[(\d+)\]')
+        citations = []
+
+        for match in citation_pattern.finditer(content):
+            num = int(match.group(1))
+            if num in cited_indices:
+                citations.append((match.start(), num))
+
+        # 按照出现顺序排序，去重
+        seen = set()
+        ordered_old_nums = []
+        for _, num in citations:
+            if num not in seen:
+                seen.add(num)
+                ordered_old_nums.append(num)
+
+        # 创建旧编号到新编号的映射（按出现顺序）
+        old_to_new = {old: new for new, old in enumerate(ordered_old_nums, 1)}
+
+        # 重新排序文献列表
+        reordered_papers = [cited_papers[ordered_old_nums.index(i)] for i in ordered_old_nums]
+
+        # 更新正文中的引用编号
+        new_content = self._update_citation_numbers(content, old_to_new)
+
+        return new_content, reordered_papers
+
+    def _limit_citation_count(self, content: str, max_count: int = 2) -> str:
+        """
+        限制每篇文献的引用次数，删除超过限制的引用
+
+        Args:
+            content: 正文内容
+            max_count: 每篇文献最大引用次数（默认2次）
+
+        Returns:
+            删除多余引用后的正文
+        """
+        import re
+
+        # 找出所有引用及其位置
+        citation_pattern = re.compile(r'\[(\d+)\]')
+        citations = []
+
+        for match in citation_pattern.finditer(content):
+            num = int(match.group(1))
+            citations.append((match.start(), match.end(), num))
+
+        # 统计每个引用编号的出现次数
+        citation_count = {}
+        for _, _, num in citations:
+            citation_count[num] = citation_count.get(num, 0) + 1
+
+        # 找出需要删除的引用位置（保留前max_count次出现）
+        to_remove = []
+        for num, count in citation_count.items():
+            if count > max_count:
+                # 找出这个编号的所有出现位置
+                occurrences = [(start, end) for start, end, n in citations if n == num]
+                # 保留前max_count次，删除后面的
+                for start, end in occurrences[max_count:]:
+                    to_remove.append((start, end))
+
+        if not to_remove:
+            print(f"[DEBUG] No citations to remove, all papers cited <= {max_count} times")
+            return content
+
+        print(f"[DEBUG] Removing {len(to_remove)} excess citations")
+
+        # 从后往前删除，避免位置偏移
+        for start, end in sorted(to_remove, reverse=True):
+            # 检查引用前面的字符，决定如何删除
+            prefix = content[:start]
+            suffix = content[end:]
+
+            # 找到引用前的字符
+            if prefix.endswith('['):
+                # 删除整个 [数字]
+                content = prefix[:-1] + suffix
+            elif prefix.endswith(' ['):
+                content = prefix[:-2] + suffix
+            elif prefix.endswith(',['):
+                content = prefix[:-2] + suffix
+            elif re.search(r'\[\d+\]$', prefix[:-len(str(start))+len(prefix)-10]):
+                # 前面有其他引用，只删除当前引用
+                content = prefix + suffix
+            else:
+                # 简单删除
+                content = prefix + suffix
+
+        # 清理可能的多余方括号和标点
+        content = re.sub(r'\[\s*\]', '', content)  # 删除空方括号
+        content = re.sub(r',\s*,', ',', content)  # 删除重复逗号
+        content = re.sub(r'\s+', ' ', content)  # 合并多余空格
+
+        return content
+
+    def _limit_citation_count_v2(self, content: str, cited_papers: List[Dict], max_count: int = 2) -> str:
+        """
+        限制每篇文献的引用次数，删除超过限制的引用（简化版）
+
+        Args:
+            content: 正文内容（已经重新编号，从[1]开始连续）
+            cited_papers: 被引用的文献列表（按引用顺序排列）
+            max_count: 每篇文献最大引用次数
+
+        Returns:
+            删除多余引用后的正文
+        """
+        import re
+
+        # 统计每个引用编号的出现次数
+        citation_pattern = re.compile(r'\[(\d+)\]')
+        citations = []
+
+        for match in citation_pattern.finditer(content):
+            num = int(match.group(1))
+            citations.append((match.start(), match.end(), num))
+
+        # 统计每个编号的出现次数
+        citation_count = {}
+        for _, _, num in citations:
+            citation_count[num] = citation_count.get(num, 0) + 1
+
+        # 找出需要删除的引用
+        to_remove = []
+        for num, count in citation_count.items():
+            if count > max_count:
+                # 找出这个编号的所有出现位置
+                occurrences = [(start, end) for start, end, n in citations if n == num]
+                # 保留前max_count次，删除后面的
+                for start, end in occurrences[max_count:]:
+                    to_remove.append((start, end))
+
+        if not to_remove:
+            print(f"[DEBUG] No excess citations to remove")
+            return content
+
+        print(f"[DEBUG] Need to remove {len(to_remove)} citations from {len(citation_count)} papers")
+        print(f"[DEBUG] Before removal, counts: {[(n, citation_count[n]) for n in sorted(citation_count.keys())[:10]]}")
+
+        # 从后往前删除
+        result = list(content)
+        for start, end in sorted(to_remove, reverse=True):
+            # 删除这个引用
+            del result[start:end]
+
+        new_content = ''.join(result)
+
+        # 验证删除结果
+        new_citations = []
+        for match in citation_pattern.finditer(new_content):
+            num = int(match.group(1))
+            new_citations.append(num)
+
+        new_count = {}
+        for num in new_citations:
+            new_count[num] = new_count.get(num, 0) + 1
+
+        still_over = {k: v for k, v in new_count.items() if v > max_count}
+        if still_over:
+            print(f"[DEBUG] WARNING: After removal, still have {len(still_over)} papers over limit")
+            print(f"[DEBUG] Still over limit: {[(n, new_count[n]) for n in sorted(still_over.keys())[:5]]}")
+
+        return new_content
 
     async def close(self):
         await self.client.close()

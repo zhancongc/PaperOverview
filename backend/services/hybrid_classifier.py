@@ -26,6 +26,11 @@ class HybridTopicClassifier:
 
     # ==================== 模式识别规则（强制判定混血题目） ====================
 
+    # 规则0：基于XXX的实证研究 → 实证型（优先级最高）
+    EMPIRICAL_STUDY_PATTERN = re.compile(
+        r'基于(.+?)(?:的)?(?:实证研究|实证分析|实证检验|实证探讨)'
+    )
+
     # 规则1：应用型+实证型 → 实证型（基于XX模型的影响研究）
     EMPIRICAL_WITH_MODEL_PATTERN = re.compile(
         r'基于.+?(?:模型|方法|算法).+?(?:影响|效应|作用|关系|相关)'
@@ -354,6 +359,49 @@ class HybridTopicClassifier:
             如果匹配到模式，返回 (TopicType, 判定理由, 详情)
             否则返回 None
         """
+        # 规则0：基于XXX的实证研究 → 实证型（优先级最高）
+        if self.EMPIRICAL_STUDY_PATTERN.search(title):
+            # 提取理论/视角/方法
+            import re
+            theory_match = self.EMPIRICAL_STUDY_PATTERN.search(title)
+            theory = theory_match.group(1) if theory_match else '理论框架'
+            # 清理理论名称，去掉"的"、"学"等后缀
+            theory = theory.rstrip('的学').rstrip('的').strip()
+
+            # 提取研究对象（在"——"之前的部分）
+            research_object = title.split('——')[0].strip() if '——' in title else title
+
+            # 尝试提取自变量和因变量（格式：X、Y与Z——基于...）
+            variables = {'independent': None, 'dependent': None}
+            if '与' in research_object and '——' in title:
+                # 检查是否是"X、Y与Z"格式
+                parts = research_object.split('与')
+                if len(parts) >= 2:
+                    # 自变量是"与"之前的部分（可能有多个，用顿号分隔）
+                    independent = parts[0].strip()
+                    # 因变量是"与"之后的部分
+                    dependent = parts[1].strip()
+                    variables = {
+                        'independent': independent,
+                        'dependent': dependent
+                    }
+
+            return (
+                TopicType.EMPIRICAL,
+                f'【模式识别】题目包含「基于{theory}的实证研究」，判定为实证型（核心是检验变量间的影响关系）',
+                {
+                    'method': 'pattern',
+                    'pattern': 'empirical_study',
+                    'key_elements': {
+                        'research_object': research_object,
+                        'optimization_goal': f'探究变量间的影响关系（基于{theory}理论）',
+                        'methodology': f'基于{theory}的实证研究方法',
+                        'variables': variables
+                    },
+                    'variables': variables
+                }
+            )
+
         # 规则1：基于XX模型的影响研究 → 实证型
         if self.EMPIRICAL_WITH_MODEL_PATTERN.search(title):
             return (

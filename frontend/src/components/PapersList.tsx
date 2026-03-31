@@ -28,7 +28,7 @@ export function PapersList({ papers }: PapersListProps) {
             <div className="paper-number">[{index + 1}]</div>
             <div className="paper-title">
               <a
-                href={paper.doi ? `https://doi.org/${paper.doi}` : paper.url || '#'}
+                href={paper.doi ? `https://doi.org/${paper.doi}` : '#'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="paper-link"

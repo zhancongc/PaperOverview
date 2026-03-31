@@ -17,7 +17,7 @@ export function AnalysisPanel({ classification, frameworkType }: AnalysisPanelPr
     )
   }
 
-  const { type, type_name, classification_reason, key_elements } = classification
+  const { type_name, classification_reason } = classification
 
   return (
     <div className="analysis-panel">
@@ -34,29 +34,6 @@ export function AnalysisPanel({ classification, frameworkType }: AnalysisPanelPr
           <h4>判定依据：</h4>
           <p>{classification_reason}</p>
         </div>
-
-        {key_elements && Object.keys(key_elements).length > 0 && (
-          <div className="key-elements">
-            <h4>关键要素：</h4>
-            <ul>
-              {key_elements.variables && (
-                <>
-                  <li>自变量：{key_elements.variables.independent}</li>
-                  <li>因变量：{key_elements.variables.dependent}</li>
-                </>
-              )}
-              {key_elements.research_object && (
-                <li>研究对象：{key_elements.research_object}</li>
-              )}
-              {key_elements.optimization_goal && (
-                <li>优化目标：{key_elements.optimization_goal}</li>
-              )}
-              {key_elements.methodology && (
-                <li>方法论：{key_elements.methodology}</li>
-              )}
-            </ul>
-          </div>
-        )}
 
         <div className="framework-info">
           <h4>综述框架：</h4>
