@@ -706,6 +706,15 @@ async def smart_generate_review(
             query_result['citedCount'] = cited_count
             for paper in query_result['papers']:
                 paper['cited'] = paper.get('id') in cited_paper_ids
+                # 如果没有相关性得分，添加默认值0
+                if 'relevance_score' not in paper:
+                    paper['relevance_score'] = 0
+
+        # 为候选池中的论文添加相关性得分和引用状态
+        for paper in candidate_pool:
+            if 'relevance_score' not in paper:
+                paper['relevance_score'] = 0
+            paper['cited'] = paper.get('id') in cited_paper_ids
 
         # 9. 最终完整验证
         final_validation = validator.validate_review(

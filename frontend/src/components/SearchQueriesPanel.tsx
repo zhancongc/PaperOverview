@@ -2,7 +2,8 @@
  * 搜索查询面板组件
  * 展示关键词拆分和搜索结果
  */
-import { SearchQueryResult } from '../types'
+import { useState } from 'react'
+import { SearchQueryResult, Paper } from '../types'
 
 interface SearchQueriesPanelProps {
   searchQueries: SearchQueryResult[]
@@ -15,6 +16,8 @@ export function SearchQueriesPanel({
   allPapersCount,
   citedPapersCount
 }: SearchQueriesPanelProps) {
+  const [showAllPapers, setShowAllPapers] = useState(false)
+
   if (!searchQueries || searchQueries.length === 0) {
     return (
       <div className="search-queries-placeholder">
@@ -25,6 +28,27 @@ export function SearchQueriesPanel({
 
   // 计算总搜索到的论文数（去重前）
   const totalSearched = searchQueries.reduce((sum, q) => sum + q.papers.length, 0)
+
+  // 收集所有论文（去重）
+  const allPapersMap = new Map<string, Paper>()
+  searchQueries.forEach(queryResult => {
+    queryResult.papers.forEach(paper => {
+      if (!allPapersMap.has(paper.id)) {
+        allPapersMap.set(paper.id, paper)
+      }
+    })
+  })
+  const allPapers = Array.from(allPapersMap.values()).sort((a, b) => {
+    // 按相关性得分降序排序
+    const scoreA = a.relevance_score || 0
+    const scoreB = b.relevance_score || 0
+    return scoreB - scoreA
+  })
+
+  // 按相关性分组
+  const highRelevance = allPapers.filter(p => (p.relevance_score || 0) >= 70)
+  const mediumRelevance = allPapers.filter(p => (p.relevance_score || 0) >= 40 && (p.relevance_score || 0) < 70)
+  const lowRelevance = allPapers.filter(p => (p.relevance_score || 0) < 40)
 
   return (
     <div className="search-queries-panel">
@@ -48,6 +72,16 @@ export function SearchQueriesPanel({
         </div>
       </div>
 
+      {/* 所有文献卡片 */}
+      <AllPapersCard
+        allPapers={allPapers}
+        highRelevance={highRelevance}
+        mediumRelevance={mediumRelevance}
+        lowRelevance={lowRelevance}
+        showAllPapers={showAllPapers}
+        onToggle={() => setShowAllPapers(!showAllPapers)}
+      />
+
       {/* 搜索查询列表 */}
       <div className="search-queries-list">
         {searchQueries.map((queryResult, index) => (
@@ -56,6 +90,120 @@ export function SearchQueriesPanel({
       </div>
     </div>
   )
+}
+
+interface AllPapersCardProps {
+  allPapers: Paper[]
+  highRelevance: Paper[]
+  mediumRelevance: Paper[]
+  lowRelevance: Paper[]
+  showAllPapers: boolean
+  onToggle: () => void
+}
+
+function AllPapersCard({
+  allPapers,
+  highRelevance,
+  mediumRelevance,
+  lowRelevance,
+  showAllPapers,
+  onToggle
+}: AllPapersCardProps) {
+  const citedCount = allPapers.filter(p => p.cited).length
+  const uncitedCount = allPapers.length - citedCount
+
+  return (
+    <div className="all-papers-card">
+      <div className="card-header" onClick={onToggle}>
+        <h3>📚 所有文献列表</h3>
+        <button className="toggle-button">
+          {showAllPapers ? '▼ 收起' : '▶ 展开'}
+        </button>
+      </div>
+
+      <div className="card-stats">
+        <span className="stat-badge total">总计 {allPapers.length} 篇</span>
+        <span className="stat-badge cited">✓ 已引用 {citedCount} 篇</span>
+        <span className="stat-badge uncited">未引用 {uncitedCount} 篇</span>
+      </div>
+
+      {showAllPapers && (
+        <div className="all-papers-content">
+          {/* 高相关性 */}
+          {highRelevance.length > 0 && (
+            <div className="relevance-group high">
+              <h4>🔥 高相关性 (70+分) - {highRelevance.length} 篇</h4>
+              <PapersList papers={highRelevance} limit={20} />
+            </div>
+          )}
+
+          {/* 中等相关性 */}
+          {mediumRelevance.length > 0 && (
+            <div className="relevance-group medium">
+              <h4>⭐ 中等相关性 (40-70分) - {mediumRelevance.length} 篇</h4>
+              <PapersList papers={mediumRelevance} limit={15} />
+            </div>
+          )}
+
+          {/* 低相关性 */}
+          {lowRelevance.length > 0 && (
+            <div className="relevance-group low">
+              <h4>📄 低相关性 (&lt;40分) - {lowRelevance.length} 篇</h4>
+              <PapersList papers={lowRelevance} limit={10} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface PapersListProps {
+  papers: Paper[]
+  limit?: number
+}
+
+function PapersList({ papers, limit }: PapersListProps) {
+  const displayPapers = limit ? papers.slice(0, limit) : papers
+  const remainingCount = limit && papers.length > limit ? papers.length - limit : 0
+
+  return (
+    <div className="papers-list">
+      {displayPapers.map((paper, index) => (
+        <div key={paper.id} className={`paper-item ${paper.cited ? 'cited' : 'uncited'}`}>
+          <div className="paper-item-header">
+            <span className="paper-number">[{index + 1}]</span>
+            <span className={`paper-score ${getScoreClass(paper.relevance_score || 0)}`}>
+              {paper.relevance_score || 0}分
+            </span>
+            <span className={`paper-status ${paper.cited ? 'status-cited' : 'status-uncited'}`}>
+              {paper.cited ? '✓ 已引用' : '未引用'}
+            </span>
+          </div>
+          <div className="paper-title">{paper.title}</div>
+          <div className="paper-meta">
+            <span>{paper.authors?.slice(0, 2).join(', ')}</span>
+            {paper.authors && paper.authors.length > 2 && <span> 等</span>}
+            <span className="paper-year">({paper.year})</span>
+            <span className="paper-citations">
+              被引 {paper.cited_by_count || 0} 次
+            </span>
+          </div>
+        </div>
+      ))}
+      {remainingCount > 0 && (
+        <div className="papers-list-more">
+          还有 {remainingCount} 篇文献...
+        </div>
+      )}
+    </div>
+  )
+}
+
+function getScoreClass(score: number): string {
+  if (score >= 70) return 'score-high'
+  if (score >= 40) return 'score-medium'
+  return 'score-low'
 }
 
 interface SearchQueryCardProps {

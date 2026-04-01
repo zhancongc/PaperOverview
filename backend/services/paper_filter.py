@@ -101,9 +101,10 @@ class PaperFilterService:
                     if len(result) >= target_count:
                         break
 
-        # 移除临时评分字段
+        # 将 _relevance_score 转换为 relevance_score（返回给前端）
         for paper in result:
-            paper.pop('_relevance_score', None)
+            if '_relevance_score' in paper:
+                paper['relevance_score'] = paper.pop('_relevance_score')
 
         return result[:target_count]
 

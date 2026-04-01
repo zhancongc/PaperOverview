@@ -9,6 +9,8 @@ export interface Paper {
   type: string;
   doi: string;
   concepts: string[];
+  relevance_score?: number;  // 相关性得分
+  cited?: boolean;  // 是否被引用
 }
 
 export interface Statistics {
