@@ -14,6 +14,7 @@ from urllib.parse import quote
 from database import db, get_db
 from models import ReviewRecord
 from services.scholarflux_wrapper import ScholarFlux
+from services.smart_paper_search import SmartPaperSearchService
 from services.paper_filter import PaperFilterService
 from services.review_generator import ReviewGeneratorService
 from services.topic_analyzer import ThreeCirclesReviewGenerator
@@ -62,7 +63,8 @@ class ExportRequest(BaseModel):
     record_id: int
 
 # 全局服务实例
-search_service = ScholarFlux()
+scholarflux = ScholarFlux()
+search_service = SmartPaperSearchService(scholarflux, get_db)
 filter_service = PaperFilterService()
 three_circles_generator = ThreeCirclesReviewGenerator()
 record_service = ReviewRecordService()
@@ -71,6 +73,10 @@ record_service = ReviewRecordService()
 async def startup_event():
     """应用启动时初始化数据库连接"""
     db.connect()
+    # 创建数据库表
+    from models import Base
+    db.create_tables()
+    print("[Startup] 数据库表已创建/更新")
 
 @app.get("/")
 async def root():
@@ -205,6 +211,63 @@ async def health_check():
         "status": "ok",
         "deepseek_configured": bool(api_key)
     }
+
+
+@app.get("/api/papers/statistics")
+async def get_papers_statistics():
+    """获取论文库统计信息"""
+    try:
+        stats = search_service.get_statistics()
+        return {
+            "success": True,
+            "data": stats
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.get("/api/papers/recent")
+async def get_recent_papers(limit: int = 50):
+    """获取最近入库的论文"""
+    try:
+        with next(get_db()) as session:
+            from services.paper_metadata_dao import PaperMetadataDAO
+            dao = PaperMetadataDAO(session)
+            papers = dao.get_recent_papers(limit=limit)
+            return {
+                "success": True,
+                "count": len(papers),
+                "papers": [p.to_dict() for p in papers]
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.get("/api/papers/top-cited")
+async def get_top_cited_papers(limit: int = 50):
+    """获取被引次数最多的论文"""
+    try:
+        with next(get_db()) as session:
+            from services.paper_metadata_dao import PaperMetadataDAO
+            dao = PaperMetadataDAO(session)
+            papers = dao.get_top_cited_papers(limit=limit)
+            return {
+                "success": True,
+                "count": len(papers),
+                "papers": [p.to_dict() for p in papers]
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 
 
 # ==================== 配置接口 ====================

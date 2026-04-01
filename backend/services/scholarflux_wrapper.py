@@ -7,6 +7,7 @@ import os
 import time
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
+from contextlib import contextmanager
 from .paper_search import PaperSearchService
 from .semantic_scholar_search import SemanticScholarService
 from .aminer_search import AMinerSearchService
@@ -178,6 +179,34 @@ class ScholarFlux:
 
         print(f"[ScholarFlux] 初始化完成，已加载 {len(self.apis)} 个数据源")
 
+    @contextmanager
+    def _get_db_session(self):
+        """获取数据库会话"""
+        from database import db
+        session_gen = db.get_session()
+        session = next(session_gen)
+        try:
+            yield session
+        finally:
+            try:
+                next(session_gen)
+            except StopIteration:
+                pass
+
+    def _save_papers_to_db(self, papers: List[Dict], source: str = "unknown"):
+        """保存论文到数据库"""
+        if not papers:
+            return
+
+        try:
+            with self._get_db_session() as session:
+                from services.paper_metadata_dao import PaperMetadataDAO
+                dao = PaperMetadataDAO(session)
+                dao.save_papers(papers, source=source)
+        except Exception as e:
+            print(f"[ScholarFlux] 保存论文到数据库失败: {e}")
+
+
     async def search_papers(
         self,
         query: str,
@@ -295,10 +324,16 @@ class ScholarFlux:
 
         # 收集结果
         all_papers = []
+        source_mapping = {}  # 记录每篇论文的来源
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 print(f"[ScholarFlux] {active_apis[i].name} 搜索失败: {result}")
                 continue
+            source = active_apis[i].name
+            for paper in result:
+                paper_id = paper.get("id")
+                if paper_id and paper_id not in source_mapping:
+                    source_mapping[paper_id] = source
             all_papers.extend(result)
 
         # 质量过滤（移除低质量文献）
@@ -315,7 +350,20 @@ class ScholarFlux:
         # 按相关性排序（综合考虑被引量和年份）
         sorted_papers = self._sort_by_relevance(unique_papers)
 
-        return sorted_papers[:limit]
+        # 添加来源信息并保存到数据库
+        final_papers = sorted_papers[:limit]
+        for paper in final_papers:
+            paper_id = paper.get("id")
+            if paper_id and paper_id in source_mapping:
+                paper['source'] = source_mapping[paper_id]
+
+        # 异步保存到数据库（不阻塞搜索）
+        try:
+            self._save_papers_to_db(final_papers, source="mixed")
+        except Exception as e:
+            print(f"[ScholarFlux] 保存论文到数据库失败: {e}")
+
+        return final_papers
 
     async def _search_with_keywords_mode(
         self,

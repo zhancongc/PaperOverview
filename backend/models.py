@@ -1,11 +1,82 @@
 """
 数据库模型
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, JSON, Boolean, Index
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
 Base = declarative_base()
+
+
+class PaperMetadata(Base):
+    """论文元数据表"""
+    __tablename__ = "paper_metadata"
+
+    id = Column(String(100), primary_key=True, comment="论文ID（来自AMiner/OpenAlex等）")
+    title = Column(String(1000), nullable=False, comment="论文标题")
+    authors = Column(JSON, nullable=False, comment="作者列表JSON")
+    year = Column(Integer, nullable=True, comment="发表年份")
+    abstract = Column(Text, nullable=True, comment="摘要")
+    cited_by_count = Column(Integer, default=0, comment="被引次数")
+    is_english = Column(Boolean, default=True, comment="是否英文文献")
+    type = Column(String(50), nullable=True, comment="文献类型")
+    doi = Column(String(200), nullable=True, comment="DOI")
+    concepts = Column(JSON, nullable=True, comment="概念标签JSON")
+    venue_name = Column(String(500), nullable=True, comment="期刊/会议名称")
+    issue = Column(String(50), nullable=True, comment="卷号")
+    source = Column(String(50), nullable=False, comment="数据源（aminer/openalex/semantic_scholar）")
+    url = Column(String(1000), nullable=True, comment="论文链接")
+
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.now, comment="首次入库时间")
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
+
+    # 索引
+    __table_args__ = (
+        Index('idx_title', 'title'),
+        Index('idx_year', 'year'),
+        Index('idx_source', 'source'),
+        Index('idx_created_at', 'created_at'),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "authors": self.authors,
+            "year": self.year,
+            "abstract": self.abstract,
+            "cited_by_count": self.cited_by_count,
+            "is_english": self.is_english,
+            "type": self.type,
+            "doi": self.doi,
+            "concepts": self.concepts,
+            "venue_name": self.venue_name,
+            "issue": self.issue,
+            "source": self.source,
+            "url": self.url,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+
+    def to_paper_dict(self):
+        """转换为前端使用的Paper格式"""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "authors": self.authors if isinstance(self.authors, list) else [],
+            "year": self.year,
+            "abstract": self.abstract or "",
+            "cited_by_count": self.cited_by_count or 0,
+            "is_english": self.is_english if self.is_english is not None else True,
+            "type": self.type or "",
+            "doi": self.doi or "",
+            "concepts": self.concepts if isinstance(self.concepts, list) else [],
+            "venue_name": self.venue_name,
+            "issue": self.issue,
+            "source": self.source,
+            "url": self.url
+        }
 
 
 class ReviewRecord(Base):
