@@ -156,21 +156,6 @@ class SmartPaperSearchService:
         )
 
     def _sort_by_relevance(self, papers: List[Dict]) -> List[Dict]:
-
-            except Exception as e:
-                print(f"[SmartSearch] 外部API查询失败: {e}")
-
-        # 3. 合并结果
-        all_papers = db_papers + external_papers
-
-        # 4. 按相关性排序
-        all_papers = self._sort_by_relevance(all_papers)
-
-        print(f"[SmartSearch] 总共返回 {len(all_papers[:limit])} 篇论文 (数据库: {len(db_papers)}, 外部: {len(external_papers)})")
-
-        return all_papers[:limit]
-
-    def _sort_by_relevance(self, papers: List[Dict]) -> List[Dict]:
         """按相关性排序（综合考虑被引量和年份）"""
         current_year = datetime.now().year
 
