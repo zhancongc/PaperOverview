@@ -11,11 +11,13 @@
 | Service 类 | 文件 | 职责 |
 |-----------|------|------|
 | `FrameworkGenerator` | `services/hybrid_classifier.py` | 题目分析、关键词提取、搜索查询生成 |
+| `SmartPaperSearchService` | `services/smart_paper_search.py` | 智能搜索（先查数据库，再查外部API） |
 | `ScholarFlux` | `services/scholarflux_wrapper.py` | 统一文献搜索API（多数据源聚合、语言区分） |
 | `PaperQualityFilter` | `services/paper_quality_filter.py` | 文献质量过滤（过滤低质量文献） |
 | `PaperFilterService` | `services/paper_filter.py` | 文献筛选、相关性评分、统计计算 |
 | `ReviewGeneratorService` | `services/review_generator.py` | 综述生成、引用处理、编号管理 |
 | `AMinerPaperDetailService` | `services/aminer_paper_detail.py` | 论文详情补充（获取作者、DOI） |
+| `PaperMetadataDAO` | `services/paper_metadata_dao.py` | 论文元数据数据库操作 |
 | `ReferenceValidator` | `services/reference_validator.py` | 参考文献质量验证 |
 | `ReviewRecordService` | `services/review_record_service.py` | 综述记录数据库操作 |
 
@@ -49,9 +51,13 @@
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  2. 多数据源文献搜索（ScholarFlux）【语言区分】                     │
+│  2. 智能文献搜索（SmartPaperSearchService）【先数据库后外部】       │
 │                                                                     │
 │   对每个搜索查询（最多 max_search_queries 个）：                    │
+│     • 先从本地数据库搜索（paper_metadata表）                       │
+│     • 不足时再调用外部API                                          │
+│                                                                     │
+│   外部API语言区分：                                                 │
 │     • 中文查询（lang='zh'）→ 仅使用 AMiner                         │
 │     • 英文查询（lang='en'）→ 使用 OpenAlex + Semantic Scholar      │
 │     • 未指定语言 → 使用所有数据源                                  │
@@ -64,6 +70,7 @@
 │   补充搜索：如果总数 < 20，扩大年份范围继续搜索                    │
 │                                                                     │
 │   → 去重（基于 paper.id）                                          │
+│   → 自动保存到数据库（PaperMetadataDAO）【新增】                   │
 └────────────────────────┬────────────────────────────────────────────┘
                          │
                          ▼
@@ -159,7 +166,28 @@
 
 ## 核心设计决策
 
-### 1. 语言区分搜索
+### 1. 论文元数据数据库
+
+**问题**：每次搜索都调用外部API，效率低且消耗配额
+
+**解决方案**：
+- 创建 `paper_metadata` 表存储所有搜索到的论文
+- 搜索时优先查询本地数据库
+- 不足时再调用外部API
+- 自动保存新搜索到的论文到数据库
+
+**实现**：
+- `SmartPaperSearchService`：智能搜索服务
+- `PaperMetadataDAO`：数据库访问层
+- `ScholarFlux._save_papers_to_db()`：自动保存
+
+**优势**：
+- 避免重复搜索相同论文
+- 提高搜索速度
+- 减少API调用消耗
+- 积累论文资产
+
+### 2. 语言区分搜索
 
 **问题**：OpenAlex 对中文文献的支持质量较差
 
@@ -170,7 +198,7 @@
 
 **实现**：`ScholarFlux.search()` 方法根据 `lang` 参数选择数据源
 
-### 2. AMiner 双关键词组合搜索
+### 3. AMiner 双关键词组合搜索
 
 **问题**：单关键词搜索相关度不够
 
@@ -348,20 +376,56 @@ DB_NAME=paper
 | 组件 | 文件路径 |
 |------|----------|
 | API接口 | `backend/main.py` - `/api/smart-generate` |
-| 题目分析 | `backend/services/hybrid_classifier.py` |
+| 智能搜索 | `backend/services/smart_paper_search.py` |
 | 文献搜索 | `backend/services/scholarflux_wrapper.py` |
 | AMiner搜索 | `backend/services/aminer_search.py` |
+| 题目分析 | `backend/services/hybrid_classifier.py` |
 | 质量过滤 | `backend/services/paper_quality_filter.py` |
 | 论文筛选 | `backend/services/paper_filter.py` |
+| 论文DAO | `backend/services/paper_metadata_dao.py` |
 | 综述生成 | `backend/services/review_generator.py` |
 | 详情补充 | `backend/services/aminer_paper_detail.py` |
 | 引用验证 | `backend/services/reference_validator.py` |
 | 数据记录 | `backend/services/review_record_service.py` |
 
+## 数据库表
+
+### paper_metadata（论文元数据表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String(100) | 论文ID（主键） |
+| title | String(1000) | 论文标题 |
+| authors | JSON | 作者列表 |
+| year | Integer | 发表年份 |
+| abstract | Text | 摘要 |
+| cited_by_count | Integer | 被引次数 |
+| is_english | Boolean | 是否英文文献 |
+| type | String(50) | 文献类型 |
+| doi | String(200) | DOI |
+| concepts | JSON | 概念标签 |
+| venue_name | String(500) | 期刊/会议名称 |
+| issue | String(50) | 卷号 |
+| source | String(50) | 数据源（aminer/openalex/semantic_scholar） |
+| url | String(1000) | 论文链接 |
+| created_at | DateTime | 首次入库时间 |
+| updated_at | DateTime | 更新时间 |
+
+## 新增API接口
+
+### 论文库管理
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/papers/statistics` | GET | 获取论文库统计信息 |
+| `/api/papers/recent` | GET | 获取最近入库的论文 |
+| `/api/papers/top-cited` | GET | 获取高被引论文 |
+
 ## 更新历史
 
 | 日期 | 版本 | 更新内容 |
 |------|------|----------|
+| 2026-04-01 | 3.2 | 论文元数据数据库、智能搜索、论文库管理API |
 | 2026-04-01 | 3.1 | 文献占比限制：外文30%-70%，近5年不低于50%；强化对比分析撰写 |
 | 2026-04-01 | 3.0 | 语言区分搜索、质量过滤、论文详情补充、引用排序合并、佚名论文过滤 |
 | 2026-03-31 | 2.1 | 增加初始文献搜索数量：每个查询50篇，补充搜索确保至少150篇 |
