@@ -21,6 +21,7 @@ from services.hybrid_classifier import FrameworkGenerator
 from services.docx_generator import DocxGenerator
 from services.reference_validator import ReferenceValidator
 from services.review_record_service import ReviewRecordService
+from config import Config, UserConfig
 
 load_dotenv()
 
@@ -40,10 +41,17 @@ class TopicRequest(BaseModel):
     topic: str = Field(..., description="论文题目", min_length=1)
 
 class GenerateRequest(BaseModel):
+    # 必填参数
     topic: str = Field(..., description="论文主题", min_length=1)
+
+    # 基本配置（有默认值）
     target_count: int = Field(50, description="目标文献数量", ge=10, le=100)
     recent_years_ratio: float = Field(0.5, description="近5年占比", ge=0.1, le=1.0)
     english_ratio: float = Field(0.3, description="英文文献占比", ge=0.1, le=1.0)
+
+    # 高级配置（可选，有默认值）
+    search_years: int = Field(10, description="搜索年份范围", ge=5, le=30)
+    max_search_queries: int = Field(8, description="最多搜索查询数", ge=1, le=20)
 
 class GenerateResponse(BaseModel):
     success: bool
@@ -196,6 +204,44 @@ async def health_check():
     return {
         "status": "ok",
         "deepseek_configured": bool(api_key)
+    }
+
+
+# ==================== 配置接口 ====================
+
+@app.get("/api/config/schema")
+async def get_config_schema():
+    """
+    获取用户配置 Schema
+
+    返回前端表单配置，用于动态生成配置界面
+    """
+    return {
+        "success": True,
+        "data": UserConfig.get_schema()
+    }
+
+@app.get("/api/config/server")
+async def get_server_config():
+    """
+    获取服务端配置（只读）
+
+    用于显示当前服务端配置，便于调试
+    """
+    return {
+        "success": True,
+        "data": {
+            "max_retries": Config.MAX_RETRIES,
+            "min_papers_threshold": Config.MIN_PAPERS_THRESHOLD,
+            "candidate_pool_multiplier": Config.CANDIDATE_POOL_MULTIPLIER,
+            "papers_per_page": Config.PAPERS_PER_PAGE,
+            "aminer_rate_limit": Config.AMINER_RATE_LIMIT,
+            "openalex_rate_limit": Config.OPENALEX_RATE_LIMIT,
+            "semantic_scholar_rate_limit": Config.SEMANTIC_SCHOLAR_RATE_LIMIT,
+            "citation_weight": Config.CITATION_WEIGHT,
+            "recency_weight": Config.RECENCY_WEIGHT,
+            "relevance_weight": Config.RELEVANCE_WEIGHT,
+        }
     }
 
     # ==================== 题目分类接口 ====================
@@ -351,6 +397,7 @@ async def smart_generate_review(
 
     validator = ReferenceValidator()
     api_key = os.getenv("DEEPSEEK_API_KEY")
+    aminer_token = os.getenv("AMINER_API_TOKEN")
     if not api_key:
         record = record_service.update_failure(
             db_session=db_session,
@@ -375,14 +422,25 @@ async def smart_generate_review(
         search_queries = framework.get('search_queries', [])
         if search_queries:
             print(f"[SmartGenerate] 使用智能分析生成的搜索查询: {len(search_queries)} 个")
+            print(f"[SmartGenerate] 用户配置: search_years={request.search_years}, max_queries={request.max_search_queries}")
 
-            for query_info in search_queries[:5]:
+            for query_info in search_queries[:request.max_search_queries]:  # 使用用户配置的查询数量
                 query = query_info.get('query', request.topic)
                 section = query_info.get('section', '通用')
-                papers = await search_service.search_papers(
+                lang = query_info.get('lang', None)  # 获取语言标识
+                keywords = query_info.get('keywords', None)  # 获取关键词列表
+                search_mode = query_info.get('search_mode', None)  # 获取搜索模式
+
+                print(f"[SmartGenerate] 执行查询: {query}, 语言={lang}, 模式={search_mode}, 关键词={keywords}")
+
+                # 根据查询语言选择搜索方式
+                papers = await search_service.search(
                     query=query,
-                    years_ago=10,
-                    limit=100  # 增加到100篇
+                    years_ago=request.search_years,  # 使用用户配置的年份范围
+                    limit=50,  # 每个查询50篇
+                    lang=lang,  # 传递语言标识
+                    keywords=keywords,  # 传递关键词列表
+                    search_mode=search_mode  # 传递搜索模式
                 )
                 print(f"[SmartGenerate] 查询 '{query}' 找到 {len(papers)} 篇")
 
@@ -394,14 +452,17 @@ async def smart_generate_review(
                 })
                 all_papers.extend(papers)
 
-        # 补充搜索（确保至少有150篇文献）
-        if len(all_papers) < 150:
+        # 补充搜索（确保至少有一些文献）
+        if len(all_papers) < 20:
             print(f"[SmartGenerate] 文献数量不足（{len(all_papers)}篇），使用主题补充搜索")
-            additional_papers = await search_service.search_papers(
+            # 尝试更宽泛的搜索
+            additional_papers = await search_service.search(
                 query=request.topic,
-                years_ago=10,
-                limit=200  # 增加补充搜索的数量
+                years_ago=15,  # 扩大年份范围
+                limit=100,
+                use_all_sources=True  # 使用所有数据源
             )
+            print(f"[SmartGenerate] 补充搜索找到 {len(additional_papers)} 篇")
             all_papers.extend(additional_papers)
 
         # 去重
@@ -416,10 +477,33 @@ async def smart_generate_review(
         print(f"[SmartGenerate] 去重后共 {len(all_papers)} 篇文献")
 
         if not all_papers:
+            # 最后尝试：使用更宽泛的搜索
+            print(f"[SmartGenerate] 最后尝试：使用题目关键词进行宽泛搜索")
+            # 从题目中提取关键词进行搜索
+            topic_words = request.topic.replace('基于', '').replace('的研究', '').replace('研究', '')
+            topic_words = ' '.join([w for w in topic_words.split() if len(w) > 1])
+
+            if topic_words:
+                last_attempt_papers = await search_service.search(
+                    query=topic_words,
+                    years_ago=20,  # 扩大到20年
+                    limit=50,
+                    use_all_sources=True
+                )
+                # 去重后添加
+                for paper in last_attempt_papers:
+                    paper_id = paper.get("id")
+                    if paper_id not in seen_ids:
+                        seen_ids.add(paper_id)
+                        all_papers.append(paper)
+                print(f"[SmartGenerate] 宽泛搜索找到 {len(last_attempt_papers)} 篇（去重后新增）")
+
+        # 如果仍然没有找到任何文献，返回错误
+        if not all_papers:
             record = record_service.update_failure(
                 db_session=db_session,
                 record=record,
-                error_message=f'未找到关于「{request.topic}」的相关文献'
+                error_message=f'未找到关于「{request.topic}」的相关文献，请尝试更通用的题目描述'
             )
             return GenerateResponse(
                 success=False,
@@ -440,8 +524,26 @@ async def smart_generate_review(
         )
         print(f"[SmartGenerate] 筛选后候选池: {len(filtered_papers)} 篇")
 
+        # 如果筛选后文献太少，放宽条件重新筛选
+        if len(filtered_papers) < request.target_count:
+            print(f"[SmartGenerate] 筛选后文献不足（{len(filtered_papers)} < {request.target_count}），放宽条件")
+            # 放宽条件：降低年份和语言比例要求
+            filtered_papers = filter_service.filter_and_sort(
+                papers=all_papers,
+                target_count=search_count,
+                recent_years_ratio=0.0,  # 不限制年份
+                english_ratio=0.0,  # 不限制语言
+                topic_keywords=[]  # 不限制关键词
+            )
+            print(f"[SmartGenerate] 放宽条件后候选池: {len(filtered_papers)} 篇")
+
+        # 如果仍然太少，直接使用所有文献
+        if len(filtered_papers) < 10:
+            print(f"[SmartGenerate] 候选池仍然太少，使用所有去重后的文献")
+            filtered_papers = all_papers[:max(request.target_count, 50)]
+
         # 5-7. 生成综述并验证被引用文献（带重试循环）
-        generator = ReviewGeneratorService(api_key=api_key)
+        generator = ReviewGeneratorService(api_key=api_key, aminer_token=aminer_token)
         review = None
         cited_papers = None
         validation_passed = False
@@ -499,11 +601,12 @@ async def smart_generate_review(
             else:
                 if retry_count < max_retries:
                     print(f"[SmartGenerate] 被引用文献验证未通过，扩大候选池重试...")
-                    # 扩大候选池
-                    additional_papers = await search_service.search_papers(
+                    # 扩大候选池 - 使用 search 而不是 search_papers
+                    additional_papers = await search_service.search(
                         query=request.topic,
                         years_ago=15,  # 扩大年份范围
-                        limit=150
+                        limit=150,
+                        use_all_sources=True  # 使用所有数据源
                     )
                     # 去重并添加到候选池
                     for paper in additional_papers:
@@ -528,20 +631,57 @@ async def smart_generate_review(
                 retry_count += 1
 
         # 7. 验证并修正引用顺序（无论是否通过都要检查）
-        content, _ = validator._split_review_and_references(review)
-        cited_indices = validator._extract_cited_indices(content)
+        from services.citation_order_checker import CitationOrderChecker
 
-        if cited_indices:
-            order_validation = validator.validate_citation_order(content, cited_indices)
-            if not order_validation["passed"]:
-                print(f"[SmartGenerate] 引用顺序有问题，尝试修正: {order_validation['message']}")
-                renumbered_content, renumbered_papers = generator._renumber_citations_by_appearance(
-                    content, cited_papers, cited_indices
-                )
-                references = generator._format_references(renumbered_papers)
-                review = f"{renumbered_content}\n\n## 参考文献\n\n{references}"
-                cited_papers = renumbered_papers
-                print(f"[SmartGenerate] 引用顺序已修正")
+        print(f"[SmartGenerate] 检查引用序号顺序...")
+        citation_checker = CitationOrderChecker()
+
+        # 分离正文和参考文献
+        content, references_section = validator._split_review_and_references(review)
+
+        # 检查正文中的引用序号
+        citation_check_result = citation_checker.check_order(content)
+
+        if not citation_check_result['valid']:
+            print(f"[SmartGenerate] 引用序号有问题: {citation_check_result['message']}")
+
+            # 提取引用列表
+            citations = citation_checker.extract_citations(content)
+
+            if citations:
+                print(f"[SmartGenerate] 正在自动修复引用序号顺序...")
+
+                # 修复序号顺序
+                fixed_content, number_mapping = citation_checker.fix_citation_order(content, citations)
+
+                print(f"[SmartGenerate] 序号修复完成，映射: {number_mapping}")
+
+                # 需要根据序号映射重新排列 cited_papers
+                # number_mapping: [{'old': 1, 'new': 1}, {'old': 3, 'new': 2}, ...]
+                # 意思是：旧序号1变成新序号1，旧序号3变成新序号2，等等。
+
+                # 创建新序号到旧序号的反向映射
+                new_to_old = {}
+                for item in number_mapping:
+                    new_to_old[item['new']] = item['old']
+
+                # 重新排列 cited_papers
+                new_cited_papers = []
+                for new_index in sorted(new_to_old.keys()):
+                    old_index = new_to_old[new_index]
+                    # old_index 是 1-based，所以需要 -1
+                    if old_index <= len(cited_papers):
+                        new_cited_papers.append(cited_papers[old_index - 1])
+
+                cited_papers = new_cited_papers
+
+                # 重新生成参考文献部分
+                references = generator._format_references(cited_papers)
+                review = f"{fixed_content}\n\n## 参考文献\n\n{references}"
+
+                print(f"[SmartGenerate] 引用序号和参考文献已同步更新")
+        else:
+            print(f"[SmartGenerate] ✓ 引用序号顺序正确: {citation_check_result['message']}")
 
         # 8. 计算统计信息（基于最终被引用文献）
         stats = filter_service.get_statistics(cited_papers)
@@ -576,7 +716,8 @@ async def smart_generate_review(
                 "id": record.id,
                 "topic": request.topic,
                 "review": review,
-                "papers": candidate_pool,  # 返回最终使用的候选池
+                "papers": cited_papers,  # 返回实际被引用的论文
+                "candidate_pool": candidate_pool,  # 同时返回候选池供参考
                 "statistics": stats,
                 "analysis": framework,
                 "search_queries_results": search_queries_results,
@@ -631,6 +772,40 @@ async def validate_review(request: ValidateRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class CheckCitationOrderRequest(BaseModel):
+    text: str = Field(..., description="待检查的文本内容")
+
+
+@app.post("/api/check-citation-order")
+async def check_citation_order(request: CheckCitationOrderRequest):
+    """
+    检查正文中的引用序号顺序
+
+    检查：
+    1. 序号是否按顺序出现（不倒退）
+    2. 是否有缺失的序号
+    3. 是否有重复的序号
+    4. 序号格式是否正确
+
+    不使用大模型，纯正则表达式检查
+    """
+    try:
+        from services.citation_order_checker import CitationOrderChecker
+
+        checker = CitationOrderChecker()
+        result = checker.check_order(request.text)
+
+        return {
+            "success": True,
+            "data": result
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

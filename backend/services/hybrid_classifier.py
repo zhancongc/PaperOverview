@@ -702,42 +702,83 @@ class FrameworkGenerator:
         # 判断研究对象类型，生成相应的关键词
         obj_type = self._classify_object_type(obj)
 
+        # 通用关键词列表（不单独搜索）
+        generic_keywords = {'研究进展', '问题', '应用', '质量改进', '优化', '改进', '分析', '方法', '技术'}
+
         # 1. 研究对象分析 - 根据对象类型生成不同的关键词
         if obj:
-            keywords = self._get_object_analysis_keywords(obj, obj_type)
+            # 只搜索核心关键词，不添加通用词
             queries.append({
-                'query': f'{obj} {keywords}',
-                'section': '研究对象分析'
+                'query': obj,
+                'section': '研究对象分析',
+                'lang': 'zh'
             })
 
-        # 2. 优化目标现状 - 结合对象和优化目标
+            # 根据对象类型添加特定关键词
+            obj_keywords = self._get_object_analysis_keywords(obj, obj_type)
+            if obj_keywords:
+                queries.append({
+                    'query': f'{obj} {obj_keywords}',
+                    'section': '研究对象分析',
+                    'lang': 'zh'
+                })
+
+        # 2. 优化目标现状 - 只组合核心关键词
         if obj and goal:
-            queries.append({
-                'query': f'{obj} {goal} 研究进展 问题',
-                'section': '优化目标现状'
-            })
-        elif goal:
-            queries.append({
-                'query': f'{goal} 研究进展 问题',
-                'section': '优化目标现状'
-            })
+            # 检查 goal 是否为通用词
+            if goal not in generic_keywords:
+                queries.append({
+                    'query': f'{obj} {goal}',
+                    'section': '优化目标现状',
+                    'lang': 'zh'
+                })
+            else:
+                # goal 是通用词，只搜索 obj
+                queries.append({
+                    'query': obj,
+                    'section': '优化目标现状',
+                    'lang': 'zh'
+                })
 
-        # 3. 方法论应用 - 方法论+对象+应用场景
+        # 3. 方法论应用 - 根据方法类型处理
         if method and obj:
             method_clean = self._clean_methodology_name(method)
-            app_keywords = self._get_application_keywords(obj_type)
-            queries.append({
-                'query': f'{method_clean} {obj} {app_keywords}',
-                'section': '方法论应用'
-            })
-        elif method:
-            method_clean = self._clean_methodology_name(method)
-            queries.append({
-                'query': f'{method_clean} 应用 质量改进',
-                'section': '方法论应用'
-            })
+
+            # 检查方法是否为英文缩写
+            if self._is_english_acronym(method_clean):
+                # 英文缩写（如 QFD、FMEA）：使用组合搜索
+                # 传递两个关键词，让 AMiner Pro 同时使用 title + keyword
+                queries.append({
+                    'query': f'{method_clean} {obj}',
+                    'section': '方法论应用',
+                    'lang': 'zh',
+                    'keywords': [obj, method_clean],  # 传递两个关键词
+                    'search_mode': 'title_keyword'  # 标识使用组合搜索
+                })
+            else:
+                # 中文方法名
+                app_keywords = self._get_application_keywords(obj_type)
+                if app_keywords and app_keywords not in generic_keywords:
+                    queries.append({
+                        'query': f'{method_clean} {obj} {app_keywords}',
+                        'section': '方法论应用',
+                        'lang': 'zh'
+                    })
+                else:
+                    queries.append({
+                        'query': f'{method_clean} {obj}',
+                        'section': '方法论应用',
+                        'lang': 'zh'
+                    })
 
         return queries
+
+    def _is_english_acronym(self, text: str) -> bool:
+        """判断是否为英文缩写（全大写字母）"""
+        # 去除空格和括号
+        clean = text.replace(' ', '').replace('(', '').replace(')', '')
+        # 如果全是字母且长度较短（2-6个字符），可能是英文缩写
+        return bool(clean) and clean.isalpha() and clean.isupper() and 2 <= len(clean) <= 6
 
     def _classify_object_type(self, obj: str) -> str:
         """
@@ -889,42 +930,297 @@ class FrameworkGenerator:
         }
 
     def _empirical_queries(self, title: str, elements: dict) -> list:
-        """实证型检索查询"""
+        """
+        实证型检索查询 - 根据题目语言自动选择搜索策略
+
+        策略说明：
+        - 中文题目：生成中文搜索查询（用于 AMiner）
+        - 英文题目：生成英文搜索查询（用于 OpenAlex）
+        - 混合题目：同时生成中英文查询
+        """
         vars_info = elements.get("variables", {})
         iv = vars_info.get("independent", "")
         dv = vars_info.get("dependent", "")
 
         queries = []
+
+        # 检测题目语言
+        is_chinese_title = self._contains_chinese(title)
+
         if iv and dv:
-            # 中文查询
-            queries.append({'query': f'{iv} 测量 量表', 'section': f'{iv}的理论基础与测量'})
-            queries.append({'query': f'{dv} 测量 量表', 'section': f'{dv}的理论基础与测量'})
-            queries.append({'query': f'{iv} {dv} 影响', 'section': '影响机制'})
-            queries.append({'query': f'{iv} {dv} 中介 调节', 'section': '影响机制'})
+            # 拆分自变量中的复合关键词（处理顿号、逗号等分隔符）
+            iv_keywords = self._split_compound_keyword(iv)
+            dv_keywords = self._split_compound_keyword(dv)
 
-            # 英文查询（翻译关键词）
-            iv_en = self._translate_keyword(iv)
-            dv_en = self._translate_keyword(dv)
-
-            if iv_en or dv_en:
-                # 组合英文查询
-                en_parts = []
-                if iv_en:
-                    en_parts.extend([f'{iv_en} measurement', f'{iv_en} scale'])
-                if dv_en:
-                    en_parts.extend([f'{dv_en} measurement', f'{dv_en} scale'])
-                if iv_en and dv_en:
-                    en_parts.extend([
-                        f'{iv_en} {dv_en}',
-                        f'{iv_en} effect on {dv_en}',
-                        f'determinants of {dv_en}'
-                    ])
-
-                # 添加英文查询（每个查询单独一条）
-                for en_query in en_parts[:5]:  # 最多5个英文查询
-                    queries.append({'query': en_query, 'section': 'English literature search'})
+            if is_chinese_title:
+                # ========== 中文题目：生成中文搜索查询 ==========
+                queries = self._generate_chinese_empirical_queries(
+                    title, iv_keywords, dv_keywords, vars_info
+                )
+            else:
+                # ========== 英文题目：生成英文搜索查询 ==========
+                queries = self._generate_english_empirical_queries(
+                    title, iv_keywords, dv_keywords, vars_info
+                )
 
         return queries
+
+    def _contains_chinese(self, text: str) -> bool:
+        """检测文本是否包含中文"""
+        return bool(text and any('\u4e00' <= char <= '\u9fff' for char in text))
+
+    def _generate_chinese_empirical_queries(
+        self, title: str, iv_keywords: list, dv_keywords: list, vars_info: dict
+    ) -> list:
+        """
+        为中文实证型题目生成中文搜索查询
+
+        策略：
+        1. 核心关键词单独搜索（避免使用通用词如"测量"、"指标"）
+        2. 交叉搜索：自变量 x 因变量组合
+        3. 理论搜索：基于的理论/视角
+        """
+        queries = []
+
+        # 通用关键词列表（不单独搜索）
+        generic_keywords = {
+            '测量', '指标', '评价', '分析', '研究', '方法', '影响', '效应',
+            '对', '的', '与', '和', '及', '基于', '关系', '相关性', '作用'
+        }
+
+        # ========== 第一步：自变量相关查询 ==========
+        for iv_kw in iv_keywords:
+            # 单个关键词搜索（跳过通用词）
+            if iv_kw not in generic_keywords:
+                queries.append({
+                    'query': iv_kw,
+                    'section': f'{iv_kw}的理论基础与测量',
+                    'strategy': '拆分搜索',
+                    'lang': 'zh'
+                })
+
+        # ========== 第二步：因变量相关查询 ==========
+        for dv_kw in dv_keywords:
+            # 单个关键词搜索（跳过通用词）
+            if dv_kw not in generic_keywords:
+                queries.append({
+                    'query': dv_kw,
+                    'section': f'{dv_kw}的理论基础与测量',
+                    'strategy': '拆分搜索',
+                    'lang': 'zh'
+                })
+
+        # ========== 第三步：交叉搜索（变量关系） ==========
+        for iv_kw in iv_keywords:
+            for dv_kw in dv_keywords:
+                # 跳过通用词组合
+                if iv_kw in generic_keywords or dv_kw in generic_keywords:
+                    continue
+
+                # 简单组合
+                queries.append({
+                    'query': f'{iv_kw} {dv_kw}',
+                    'section': '影响机制',
+                    'strategy': '交叉筛选',
+                    'lang': 'zh'
+                })
+                # 影响关系
+                queries.append({
+                    'query': f'{iv_kw} 对 {dv_kw} 的影响',
+                    'section': '影响机制',
+                    'strategy': '影响关系',
+                    'lang': 'zh'
+                })
+                # 关系/相关性
+                queries.append({
+                    'query': f'{iv_kw} {dv_kw} 关系',
+                    'section': '影响机制',
+                    'strategy': '相关性',
+                    'lang': 'zh'
+                })
+
+        # ========== 第四步：理论基础/方法论查询 ==========
+        # 提取"基于XXX"中的理论
+        theory_match = re.search(r'基于(.+?)(?:的)?(?:实证研究|实证分析|视角)', title)
+        if theory_match:
+            theory = theory_match.group(1).strip()
+            queries.append({
+                'query': theory,
+                'section': '理论基础',
+                'strategy': '理论视角',
+                'lang': 'zh'
+            })
+            queries.append({
+                'query': f'{theory} 理论',
+                'section': '理论基础',
+                'strategy': '理论视角',
+                'lang': 'zh'
+            })
+
+        # 中介/调节效应
+        queries.append({
+            'query': '中介效应 调节效应',
+            'section': '影响机制',
+            'strategy': '方法论',
+            'lang': 'zh'
+        })
+
+        # 特定领域查询（行为金融学）
+        if '行为金融' in title:
+            queries.append({
+                'query': '行为金融学',
+                'section': '理论基础',
+                'strategy': '领域特定',
+                'lang': 'zh'
+            })
+            queries.append({
+                'query': '投资者情绪 行为金融学',
+                'section': '理论基础',
+                'strategy': '领域特定',
+                'lang': 'zh'
+            })
+
+        # 媒体关注度相关
+        if any('媒体' in kw for kw in iv_keywords + dv_keywords):
+            queries.append({
+                'query': '媒体关注',
+                'section': '理论基础',
+                'strategy': '领域特定',
+                'lang': 'zh'
+            })
+
+        return queries
+
+    def _generate_english_empirical_queries(
+        self, title: str, iv_keywords: list, dv_keywords: list, vars_info: dict
+    ) -> list:
+        """
+        为英文实证型题目生成英文搜索查询
+
+        策略（针对 OpenAlex 优化）：
+        1. 翻译关键词为英文
+        2. 拆分搜索：每个关键词单独生成英文查询
+        3. 交叉筛选：变量间影响关系查询
+        """
+        queries = []
+
+        # 翻译关键词
+        iv_en_list = []
+        dv_en_list = []
+
+        for iv_kw in iv_keywords:
+            iv_en = self._translate_keyword(iv_kw)
+            if iv_en:
+                iv_en_list.append((iv_kw, iv_en))
+            else:
+                iv_en_list.append((iv_kw, iv_kw))
+
+        for dv_kw in dv_keywords:
+            dv_en = self._translate_keyword(dv_kw)
+            if dv_en:
+                dv_en_list.append((dv_kw, dv_en))
+            else:
+                dv_en_list.append((dv_kw, dv_kw))
+
+        # ========== 第一步：自变量相关查询 ==========
+        for iv_kw, iv_en in iv_en_list:
+            queries.append({
+                'query': f'{iv_en} measurement scale',
+                'section': f'{iv_kw}的理论基础与测量',
+                'strategy': '拆分搜索',
+                'original_kw': iv_kw,
+                'lang': 'en'
+            })
+            queries.append({
+                'query': f'{iv_en} determinants metrics',
+                'section': f'{iv_kw}的理论基础与测量',
+                'strategy': '同义词扩展',
+                'original_kw': iv_kw,
+                'lang': 'en'
+            })
+
+        # ========== 第二步：因变量相关查询 ==========
+        for dv_kw, dv_en in dv_en_list:
+            queries.append({
+                'query': f'{dv_en} measurement scale',
+                'section': f'{dv_kw}的理论基础与测量',
+                'strategy': '拆分搜索',
+                'original_kw': dv_kw,
+                'lang': 'en'
+            })
+            if 'forecast' in dv_en.lower() or 'accuracy' in dv_en.lower():
+                queries.append({
+                    'query': f'analyst forecast accuracy',
+                    'section': f'{dv_kw}的理论基础与测量',
+                    'strategy': '领域特定',
+                    'original_kw': dv_kw,
+                    'lang': 'en'
+                })
+
+        # ========== 第三步：交叉筛选 ==========
+        for iv_kw, iv_en in iv_en_list:
+            for dv_kw, dv_en in dv_en_list:
+                queries.append({
+                    'query': f'{iv_en} {dv_en}',
+                    'section': '影响机制',
+                    'strategy': '交叉筛选',
+                    'original_kw': f'{iv_kw} -> {dv_kw}',
+                    'lang': 'en'
+                })
+                queries.append({
+                    'query': f'impact of {iv_en} on {dv_en}',
+                    'section': '影响机制',
+                    'strategy': '交叉筛选',
+                    'original_kw': f'{iv_kw} -> {dv_kw}',
+                    'lang': 'en'
+                })
+
+        # ========== 第四步：方法论查询 ==========
+        queries.append({
+            'query': 'mediation effect moderation effect empirical study',
+            'section': '影响机制',
+            'strategy': '方法论',
+            'lang': 'en'
+        })
+
+        return queries
+
+    def _split_compound_keyword(self, keyword: str) -> list:
+        """
+        拆分复合关键词
+
+        例如：
+        - "媒体关注度、投资者情绪" -> ["媒体关注度", "投资者情绪"]
+        - "分析师盈利预测准确性" -> ["分析师盈利预测准确性"]
+
+        Args:
+            keyword: 原始关键词
+
+        Returns:
+            拆分后的关键词列表
+        """
+        import re
+
+        # 按顿号、逗号、空格等分隔符拆分
+        separators = ['、', ',', '，', '和', '与', '及']
+        keywords = [keyword]
+
+        for sep in separators:
+            new_keywords = []
+            for kw in keywords:
+                parts = kw.split(sep)
+                new_keywords.extend([p.strip() for p in parts if p.strip()])
+            keywords = new_keywords
+
+        # 去重
+        seen = set()
+        result = []
+        for kw in keywords:
+            if kw not in seen:
+                seen.add(kw)
+                result.append(kw)
+
+        return result
 
     def _translate_keyword(self, chinese_keyword: str) -> str:
         """

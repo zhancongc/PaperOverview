@@ -5,14 +5,16 @@
 import os
 from openai import AsyncOpenAI
 from typing import List, Dict
+from .aminer_paper_detail import enrich_papers
 
 
 class ReviewGeneratorService:
-    def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com"):
+    def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com", aminer_token: str = None):
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url
         )
+        self.aminer_token = aminer_token or os.getenv('AMINER_API_TOKEN')
 
     async def generate_review(
         self,
@@ -99,12 +101,25 @@ class ReviewGeneratorService:
                 else:
                     print("none")
 
+                # 尝试补充论文详情（作者、DOI等）
+                if self.aminer_token:
+                    try:
+                        cited_papers = await enrich_papers(cited_papers, self.aminer_token)
+                    except Exception as e:
+                        print(f"[ReviewGenerator] 补充论文详情失败: {e}")
+
+                # 过滤掉佚名论文并更新引用编号
+                content, cited_papers = self._filter_anonymous_and_renumber(content, cited_papers)
+
                 # 限制每篇文献的引用次数（最多2次）
                 print(f"[DEBUG] Limiting citation count to max 2 per paper")
                 before_count = len(re.findall(r'\[(\d+)\]', content))
                 content = self._limit_citation_count_v2(content, cited_papers, max_count=2)
                 after_count = len(re.findall(r'\[(\d+)\]', content))
                 print(f"[DEBUG] Citation count: {before_count} -> {after_count}")
+
+                # 排序并合并正文中的连续引用
+                content = self._sort_and_merge_citations(content)
 
                 # 重新格式化参考文献
                 references = self._format_references(cited_papers)
@@ -115,6 +130,13 @@ class ReviewGeneratorService:
                 return full_review, cited_papers
             else:
                 # 如果没有引用，使用所有文献
+                # 尝试补充论文详情
+                if self.aminer_token:
+                    try:
+                        papers = await enrich_papers(papers, self.aminer_token)
+                    except Exception as e:
+                        print(f"[ReviewGenerator] 补充论文详情失败: {e}")
+
                 references = self._format_references(papers)
 
                 full_review = f"{content}\n\n## 参考文献\n\n{references}"
@@ -274,68 +296,88 @@ class ReviewGeneratorService:
             return content
 
     def _format_references(self, papers: List[Dict]) -> str:
-        """格式化参考文献列表（国标 GB/T 7714-2015）"""
-        references = []
-        for i, paper in enumerate(papers, 1):
-            # 作者：最多3位，超过用"等"
+        """
+        格式化参考文献列表（国标 GB/T 7714-2015）
+        每条参考文献单独一行
+        """
+        # 过滤掉没有作者的论文（佚名）- 双重检查
+        valid_papers = []
+        for paper in papers:
             authors_list = paper.get("authors", [])
-            if authors_list:
-                authors = ",".join(authors_list[:3])
-                if len(authors_list) > 3:
-                    authors += ",等"
+            if authors_list and authors_list[0] not in ['佚名', '匿名', '未知作者', '']:
+                valid_papers.append(paper)
             else:
-                authors = "佚名"
+                print(f"[ReviewGenerator] 跳过无作者论文: {paper.get('title', 'N/A')[:40]}")
 
-            title = paper.get('title', '')
-            year = paper.get('year', '')
+        if not valid_papers:
+            return "## 参考文献\n\n暂无参考文献"
 
-            # 确定文献类型标识
-            paper_type = paper.get('type', '')
-            type_map = {
-                'journal-article': 'J',
-                'article': 'J',
-                'book': 'M',
-                'chapter': 'M',
-                'dataset': 'DB',
-                'dissertation': 'D',
-                'report': 'R',
-                'patent': 'P'
-            }
-            type_code = type_map.get(paper_type, 'J')  # 默认为期刊 J
+        references = []
+        for i, paper in enumerate(valid_papers, 1):
+            references.append(self._format_single_reference(paper, i))
 
-            # 获取期刊信息（如果有）
-            primary_location = paper.get('primary_location', {})
-            source = primary_location.get('source', {}) or {}
-
-            # 构建期刊信息部分
-            journal_info = ""
-            journal_name = source.get('display_name', '')
-            volume = primary_location.get('volume', '')
-            issue = primary_location.get('issue', '')
-            pages = primary_location.get('pages', '')
-
-            if journal_name:
-                journal_parts = [journal_name]
-                if year:
-                    journal_parts.append(f"{year},")
-                if volume:
-                    journal_parts.append(f"{volume}")
-                if issue:
-                    journal_parts.append(f"({issue})")
-                if pages:
-                    journal_parts.append(f":{pages}")
-                journal_info = "".join(journal_parts)
-            elif year:
-                journal_info = f"{year}"
-
-            # DOI
-            doi = paper.get("doi", "")
-            doi_suffix = f".DOI:{doi}" if doi else ""
-
-            # 格式：[序号]作者.题名[类型].期刊名,年份,卷(期):页码.DOI:xxx
-            ref = f"[{i}]{authors}.{title}[{type_code}].{journal_info}{doi_suffix}."
-            references.append(ref)
         return "\n\n".join(references)
+
+    def _format_single_reference(self, paper: Dict, index: int) -> str:
+        """格式化单条参考文献"""
+        # 作者：最多3位，超过用"等"
+        authors_list = paper.get("authors", [])
+        if authors_list:
+            authors = ",".join(authors_list[:3])
+            if len(authors_list) > 3:
+                authors += ",等"
+        else:
+            # 这里的论文已经过滤过，不应该出现佚名
+            authors = "未知作者"
+
+        title = paper.get('title', '')
+        year = paper.get('year', '')
+
+        # 确定文献类型标识
+        paper_type = paper.get('type', '')
+        type_map = {
+            'journal-article': 'J',
+            'article': 'J',
+            'book': 'M',
+            'chapter': 'M',
+            'dataset': 'DB',
+            'dissertation': 'D',
+            'report': 'R',
+            'patent': 'P'
+        }
+        type_code = type_map.get(paper_type, 'J')  # 默认为期刊 J
+
+        # 获取期刊信息
+        primary_location = paper.get('primary_location', {})
+        source = primary_location.get('source', {}) or {}
+
+        # 构建期刊信息部分
+        journal_info = ""
+        journal_name = source.get('display_name', '')
+        volume = primary_location.get('volume', '')
+        issue = primary_location.get('issue', '')
+        pages = primary_location.get('pages', '')
+
+        if journal_name:
+            journal_parts = [journal_name]
+            if year:
+                journal_parts.append(f"{year},")
+            if volume:
+                journal_parts.append(f"{volume}")
+            if issue:
+                journal_parts.append(f"({issue})")
+            if pages:
+                journal_parts.append(f":{pages}")
+            journal_info = "".join(journal_parts)
+        elif year:
+            journal_info = f"{year}"
+
+        # DOI
+        doi = paper.get("doi", "")
+        doi_suffix = f".DOI:{doi}" if doi else ""
+
+        # 格式：[序号]作者.题名[类型].期刊名,年份,卷(期):页码.DOI:xxx
+        return f"[{index}]{authors}.{title}[{type_code}].{journal_info}{doi_suffix}."
 
     def _remove_existing_references(self, content: str) -> str:
         """移除 AI 可能已经生成的参考文献部分"""
@@ -600,6 +642,113 @@ class ReviewGeneratorService:
             print(f"[DEBUG] Still over limit: {[(n, new_count[n]) for n in sorted(still_over.keys())[:5]]}")
 
         return new_content
+
+    def _filter_anonymous_and_renumber(self, content: str, cited_papers: List[Dict]) -> tuple:
+        """
+        过滤掉佚名论文并重新编号引用
+
+        Args:
+            content: 正文内容
+            cited_papers: 被引用的文献列表
+
+        Returns:
+            (更新后的正文, 过滤后的文献列表)
+        """
+        # 找出需要保留的论文（非佚名）
+        valid_papers = []
+        old_to_new = {}  # 旧编号到新编号的映射
+
+        new_index = 1
+        for old_index, paper in enumerate(cited_papers, 1):
+            authors_list = paper.get("authors", [])
+            if authors_list and authors_list[0] not in ['佚名', '匿名', '未知作者', '']:
+                valid_papers.append(paper)
+                old_to_new[old_index] = new_index
+                new_index += 1
+            else:
+                print(f"[ReviewGenerator] 过滤掉佚名论文 [{old_index}]: {paper.get('title', 'N/A')[:40]}")
+
+        if old_to_new:
+            # 更新正文中的引用编号
+            import re
+            def replace_citation(match):
+                old_num = int(match.group(1))
+                new_num = old_to_new.get(old_num)
+                if new_num is None:
+                    # 这个论文被过滤掉了，删除引用
+                    return ''
+                return f"[{new_num}]"
+
+            content = re.sub(r'\[(\d+)\]', replace_citation, content)
+
+            # 清理多余的空格和标点（但保留换行符）
+            lines = content.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                # 清理每行内的多余空格
+                line = re.sub(r'\s+', ' ', line)
+                line = re.sub(r',\s*,', ',', line)  # 删除重复逗号
+                line = re.sub(r'\[\s*\]', '', line)  # 删除空方括号
+                cleaned_lines.append(line)
+            content = '\n'.join(cleaned_lines)
+
+            print(f"[ReviewGenerator] 过滤佚名论文: {len(cited_papers)} -> {len(valid_papers)}")
+
+        return content, valid_papers
+
+    def _sort_and_merge_citations(self, content: str) -> str:
+        """
+        对正文中的引用进行排序和合并
+
+        例如: [35][34][36][47] -> [34-36][47]
+
+        Args:
+            content: 正文内容
+
+        Returns:
+            处理后的正文
+        """
+        import re
+
+        # 找出所有连续的引用块（例如 "[35][34][36][47]"）
+        # 使用正则表达式匹配一个或多个连续的 [数字]
+        citation_block_pattern = re.compile(r'(\[\d+\])+')
+        citation_pattern = re.compile(r'\[(\d+)\]')
+
+        def process_citation_block(match):
+            block = match.group(0)
+            # 提取所有引用编号
+            citations = [int(c) for c in citation_pattern.findall(block)]
+            if not citations:
+                return block
+
+            # 去重并排序
+            citations = sorted(set(citations))
+
+            # 合并连续的引用
+            merged = []
+            i = 0
+            while i < len(citations):
+                start = citations[i]
+                end = start
+                while i + 1 < len(citations) and citations[i + 1] == end + 1:
+                    end = citations[i + 1]
+                    i += 1
+
+                if end - start >= 2:  # 连续3个或以上，使用范围格式
+                    merged.append(f"[{start}-{end}]")
+                else:
+                    # 单个或两个连续引用，分别列出
+                    for j in range(start, end + 1):
+                        merged.append(f"[{j}]")
+                i += 1
+
+            return ''.join(merged)
+
+        # 处理所有引用块
+        content = citation_block_pattern.sub(process_citation_block, content)
+
+        return content
 
     async def close(self):
         await self.client.close()

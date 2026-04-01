@@ -46,8 +46,8 @@ class PaperFilterService:
         recent_threshold = current_year - 5
 
         # 分类（基于评分排序后的论文）
-        recent_papers = [p for p in scored_papers if p.get("year", 0) >= recent_threshold]
-        old_papers = [p for p in scored_papers if p.get("year", 0) < recent_threshold]
+        recent_papers = [p for p in scored_papers if p.get("year") is not None and p.get("year") >= recent_threshold]
+        old_papers = [p for p in scored_papers if p.get("year") is not None and p.get("year") < recent_threshold]
 
         english_papers = [p for p in scored_papers if p.get("is_english", False)]
         non_english_papers = [p for p in scored_papers if not p.get("is_english", False)]
@@ -146,10 +146,10 @@ class PaperFilterService:
 
         # 新近论文加分
         current_year = datetime.now().year
-        paper_year = paper.get("year", 0)
-        if paper_year >= current_year - 5:
+        paper_year = paper.get("year")
+        if paper_year is not None and paper_year >= current_year - 5:
             score += 10  # 近5年加 10 分
-        elif paper_year >= current_year - 10:
+        elif paper_year is not None and paper_year >= current_year - 10:
             score += 5   # 5-10年前加 5 分
 
         # 英文论文加分（因为通常质量更好）
@@ -166,7 +166,7 @@ class PaperFilterService:
         current_year = datetime.now().year
         recent_threshold = current_year - 5
 
-        recent_count = sum(1 for p in papers if p.get("year", 0) >= recent_threshold)
+        recent_count = sum(1 for p in papers if p.get("year") is not None and p.get("year") >= recent_threshold)
         english_count = sum(1 for p in papers if p.get("is_english", False))
         total_citations = sum(p.get("cited_by_count", 0) for p in papers)
 

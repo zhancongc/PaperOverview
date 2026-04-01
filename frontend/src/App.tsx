@@ -8,6 +8,7 @@ import type {
   TabType
 } from './types'
 import { TopicInput } from './components/TopicInput'
+import { ConfigPanel } from './components/ConfigPanel'
 import { TabNavigation } from './components/TabNavigation'
 import { AnalysisPanel } from './components/AnalysisPanel'
 import { ReviewPanel } from './components/ReviewPanel'
@@ -26,6 +27,13 @@ function App() {
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('review')
   const [currentRecordId, setCurrentRecordId] = useState<number | null>(null)
+
+  // 配置参数
+  const [targetCount, setTargetCount] = useState(50)
+  const [recentYearsRatio, setRecentYearsRatio] = useState(0.5)
+  const [englishRatio, setEnglishRatio] = useState(0.3)
+  const [searchYears, setSearchYears] = useState(10)
+  const [maxSearchQueries, setMaxSearchQueries] = useState(8)
 
   // 分析数据
   const [classification, setClassification] = useState<TopicClassification | null>(null)
@@ -108,7 +116,13 @@ function App() {
     setStatistics(null)
 
     try {
-      const response = await api.smartGenerate(topic)
+      const response = await api.smartGenerate(topic, {
+      targetCount,
+      recentYearsRatio,
+      englishRatio,
+      searchYears,
+      maxSearchQueries
+    })
       if (response.success && response.data) {
         const data = response.data
         setReview(data.review)
@@ -199,6 +213,19 @@ function App() {
       </header>
 
       <main className="app-main">
+        <ConfigPanel
+          targetCount={targetCount}
+          recentYearsRatio={recentYearsRatio}
+          englishRatio={englishRatio}
+          searchYears={searchYears}
+          maxSearchQueries={maxSearchQueries}
+          onTargetCountChange={setTargetCount}
+          onRecentYearsRatioChange={setRecentYearsRatio}
+          onEnglishRatioChange={setEnglishRatio}
+          onSearchYearsChange={setSearchYears}
+          onMaxSearchQueriesChange={setMaxSearchQueries}
+          disabled={loading || analyzing}
+        />
         <TopicInput
           value={topic}
           onChange={setTopic}

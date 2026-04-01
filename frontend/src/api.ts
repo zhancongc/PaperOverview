@@ -48,13 +48,17 @@ export const api = {
       targetCount?: number;
       recentYearsRatio?: number;
       englishRatio?: number;
+      searchYears?: number;
+      maxSearchQueries?: number;
     } = {}
   ): Promise<GenerateResponse> {
     const response = await axios.post(`${API_BASE}/smart-generate`, {
       topic,
       target_count: options.targetCount ?? 50,
       recent_years_ratio: options.recentYearsRatio ?? 0.5,
-      english_ratio: options.englishRatio ?? 0.3
+      english_ratio: options.englishRatio ?? 0.3,
+      search_years: options.searchYears ?? 10,
+      max_search_queries: options.maxSearchQueries ?? 8
     });
     return response.data;
   },
