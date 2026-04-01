@@ -6,6 +6,7 @@
 import re
 import os
 from enum import Enum
+from typing import List, Dict, Optional, Any
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
@@ -278,7 +279,7 @@ class HybridTopicClassifier:
                 fix_prompt = f"""论文题目：{title}
 
 以下搜索关键词与论文主题不相关：
-{chr(10).join(f"- {q['query']}: {q['reason']}' for q in queries_to_fix)}
+{chr(10).join(f"- {q['query']}: {q['reason']}" for q in queries_to_fix)}
 
 请为每个不相关的关键词提供2-3个更合适的替代关键词，要求：
 1. 与论文主题高度相关
@@ -788,13 +789,13 @@ class FrameworkGenerator:
             framework['search_queries'] = await self._application_queries(title, details.get('key_elements', {}))
         elif topic_type == TopicType.EVALUATION:
             framework['framework'] = self._evaluation_framework(title, details.get('key_elements', {}))
-            framework['search_queries'] = await self._evaluation_queries(title, details.get('key_elements', {}))
+            framework['search_queries'] = self._evaluation_queries(title, details.get('key_elements', {}))
         elif topic_type == TopicType.THEORETICAL:
             framework['framework'] = self._theoretical_framework(title)
             framework['search_queries'] = self._theoretical_queries(title)
         elif topic_type == TopicType.EMPIRICAL:
             framework['framework'] = self._empirical_framework(title, details.get('key_elements', {}))
-            framework['search_queries'] = await self._empirical_queries(title, details.get('key_elements', {}))
+            framework['search_queries'] = self._empirical_queries(title, details)
         else:
             framework['framework'] = self._general_framework(title)
             framework['search_queries'] = self._general_queries(title)
@@ -1260,7 +1261,7 @@ class FrameworkGenerator:
                 'avoid_domains': []     # 需要避免的领域
             }
         """
-        if not self.client:
+        if not self.classifier.client:
             print("[HybridClassifier] LLM未配置，使用默认关键词")
             return self._get_default_keywords(title, research_object, optimization_goal, methodology)
 
@@ -1297,7 +1298,7 @@ class FrameworkGenerator:
 """
 
         try:
-            response = await self.client.chat.completions.create(
+            response = await self.classifier.client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[
                     {"role": "system", "content": "你是一个学术文献检索专家，擅长生成准确的搜索关键词。"},

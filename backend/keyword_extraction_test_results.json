@@ -1,0 +1,342 @@
+[
+  {
+    "title": "绿色制造工艺在船舶结构中的应用",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "绿色制造工艺",
+    "optimization_goal": "在船舶结构中的应用",
+    "methodology": "不适用或留空",
+    "query_count": 8,
+    "success": true
+  },
+  {
+    "title": "基于现代化机械设计制造工艺及精密加工技术分析",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": "现代化机械设计制造工艺及精密加工技术分析",
+    "query_count": 0,
+    "success": false
+  },
+  {
+    "title": "Open-access bacterial population genomics: BIGSdb software, the PubMLST.org website and their applications",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Estimates of the severity of coronavirus disease 2019: a model-based analysis",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Recent Advances in Electrocatalytic Hydrogen Evolution Using Nanoparticles",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "High-quality health systems in the Sustainable Development Goals era: time for a revolution",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "The Effect of Risk Management on Nursing Safety in Psychiatric Department",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "New Technology of Wire and Cable Manufacturing",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "构建高效的突发公共卫生事件预警机制",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Minimal information for studies of extracellular vesicles (MISEV2023): From basic to advanced approaches",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "探讨妇产科护理管理中风险管理理念的应用价值",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 0,
+    "success": false
+  },
+  {
+    "title": "现代化机械设计制造工艺及精密加工技术的思考",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Array programming with NumPy",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "The 5th edition of the World Health Organization Classification of Haematolymphoid Tumours: Lymphoid Neoplasms",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Management of Hyperglycemia in Type 2 Diabetes, 2018. A Consensus Report by the American Diabetes Association (ADA) and the European Association for the Study of Diabetes (EASD)",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Inflammatory responses and inflammation-associated diseases in organs",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "基于风险管理的中小企业内部控制问题与策略分析",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "中小企业内部控制",
+    "optimization_goal": "风险管理",
+    "methodology": "问题与策略分析",
+    "query_count": 7,
+    "success": true
+  },
+  {
+    "title": "Nursing risk management in emergency digestive endoscopy procedures",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Microbiota in health and diseases",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "Collaborative Design of General Quality Characteristics for Payloads in Space Station",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "基于FMEA法的Agent开发项目风险管理研究",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "Agent开发项目",
+    "optimization_goal": "风险管理",
+    "methodology": "FMEA法",
+    "query_count": 19,
+    "success": true
+  },
+  {
+    "title": "基于QFD的铝合金轮毂质量管理研究",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "铝合金轮毂",
+    "optimization_goal": "质量管理",
+    "methodology": "QFD",
+    "query_count": 6,
+    "success": true
+  },
+  {
+    "title": "基于深度学习的图像识别算法优化研究",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "图像识别算法",
+    "optimization_goal": "优化",
+    "methodology": "深度学习",
+    "query_count": 8,
+    "success": true
+  },
+  {
+    "title": "新能源汽车电池管理系统设计与实现",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "基于BIM的大型工程项目管理优化研究",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "大型工程项目管理",
+    "optimization_goal": "优化",
+    "methodology": "BIM",
+    "query_count": 9,
+    "success": true
+  },
+  {
+    "title": "基于区块链的供应链金融风险管理研究",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "供应链金融风险",
+    "optimization_goal": "管理",
+    "methodology": "区块链",
+    "query_count": 7,
+    "success": true
+  },
+  {
+    "title": "基于大数据的用户行为分析与推荐系统优化",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "用户行为分析与推荐系统",
+    "optimization_goal": null,
+    "methodology": "大数据",
+    "query_count": 8,
+    "success": true
+  },
+  {
+    "title": "人工智能在医疗诊断中的应用与挑战",
+    "type": "application",
+    "type_name": "应用型/解决方案型",
+    "research_object": "医疗诊断",
+    "optimization_goal": "应用",
+    "methodology": "人工智能",
+    "query_count": 7,
+    "success": true
+  },
+  {
+    "title": "深度学习理论框架研究进展",
+    "type": "theoretical",
+    "type_name": "理论型/研究型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 4,
+    "success": true
+  },
+  {
+    "title": "复杂网络演化动力学分析",
+    "type": "general",
+    "type_name": "通用型",
+    "research_object": null,
+    "optimization_goal": null,
+    "methodology": null,
+    "query_count": 3,
+    "success": true
+  },
+  {
+    "title": "社交媒体使用对青少年心理健康的影响研究",
+    "type": "empirical",
+    "type_name": "实证型",
+    "research_object": "社交媒体使用",
+    "optimization_goal": "青少年心理健康",
+    "methodology": "分析方法",
+    "query_count": 7,
+    "success": true
+  },
+  {
+    "title": "远程办公对员工工作效率的影响分析",
+    "type": "empirical",
+    "type_name": "实证型",
+    "research_object": "远程办公",
+    "optimization_goal": "员工工作效率",
+    "methodology": "分析方法",
+    "query_count": 6,
+    "success": true
+  },
+  {
+    "title": "软件系统成熟度评价指标体系构建",
+    "type": "evaluation",
+    "type_name": "评价型/体系构建型",
+    "research_object": "软件系统成熟度评价指标体系",
+    "optimization_goal": "构建评价指标体系",
+    "methodology": "指标体系构建方法",
+    "query_count": 5,
+    "success": true
+  },
+  {
+    "title": "城市可持续发展能力评估模型研究",
+    "type": "evaluation",
+    "type_name": "评价型/体系构建型",
+    "research_object": "城市可持续发展能力评估模型",
+    "optimization_goal": "构建科学、全面的评估模型",
+    "methodology": "模型研究（可具体为指标体系构建、模型构建与验证等方法）",
+    "query_count": 5,
+    "success": true
+  }
+]
