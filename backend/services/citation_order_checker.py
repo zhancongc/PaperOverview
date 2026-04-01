@@ -94,12 +94,13 @@ class CitationOrderChecker:
             return 'chinese_parenthesis'
         return 'unknown'
 
-    def check_order(self, text: str) -> Dict:
+    def check_order(self, text: str, papers_count: int = None) -> Dict:
         """
         检查引用序号顺序
 
         Args:
             text: 待检查的文本
+            papers_count: 参考文献列表的数量（用于验证引用编号不超出范围）
 
         Returns:
             检查结果字典：
@@ -109,6 +110,7 @@ class CitationOrderChecker:
             - missing_numbers: 缺失的序号
             - duplicate_numbers: 重复出现的序号
             - out_of_order: 顺序错误的序号
+            - exceeds_range: 引用编号是否超出参考文献数量
             - issues: 问题列表
         """
         citations = self.extract_citations(text)
@@ -121,6 +123,9 @@ class CitationOrderChecker:
                 'missing_numbers': [],
                 'duplicate_numbers': [],
                 'out_of_order': [],
+                'exceeds_range': False,
+                'max_citation': None,
+                'papers_count': papers_count,
                 'issues': [],
                 'message': '未检测到引用序号'
             }
@@ -134,6 +139,11 @@ class CitationOrderChecker:
         max_num = max(unique_numbers)
         expected_numbers = set(range(min_num, max_num + 1))
         missing_numbers = sorted(expected_numbers - unique_numbers)
+
+        # 【新增】检查引用编号是否超出参考文献数量
+        exceeds_range = False
+        if papers_count is not None and max_num > papers_count:
+            exceeds_range = True
 
         # 检查重复的序号
         number_count = defaultdict(list)
@@ -203,8 +213,16 @@ class CitationOrderChecker:
                 'message': f'检测到 {len(out_of_order)} 个顺序错误的引用'
             })
 
-        # 判断是否有效
-        valid = len(out_of_order) == 0
+        # 【新增】检查引用编号超出范围的问题
+        if exceeds_range:
+            issues.append({
+                'type': 'exceeds_range',
+                'severity': 'error',
+                'message': f'引用编号超出参考文献范围：正文中最大引用为[{max_num}]，但参考文献列表只有{papers_count}篇'
+            })
+
+        # 判断是否有效（不能有超出范围的问题）
+        valid = len(out_of_order) == 0 and not exceeds_range
 
         return {
             'valid': valid,
@@ -213,6 +231,9 @@ class CitationOrderChecker:
             'missing_numbers': missing_numbers,
             'duplicate_numbers': duplicate_numbers,
             'out_of_order': out_of_order,
+            'exceeds_range': exceeds_range,
+            'max_citation': max_num,
+            'papers_count': papers_count,
             'issues': issues,
             'message': self._generate_message(valid, issues, len(unique_numbers), max_num)
         }
@@ -299,6 +320,44 @@ class CitationOrderChecker:
             text = text[:start] + new_text + text[end:]
 
         return text, new_to_old
+
+    def remove_out_of_range_citations(self, text: str, papers_count: int) -> str:
+        """
+        去除超出参考文献数量的引用
+
+        例如：参考文献只有13篇，但正文中引用了[18]，则去除[14-18]的所有引用
+
+        Args:
+            text: 原始文本
+            papers_count: 参考文献数量
+
+        Returns:
+            去除超范围引用后的文本
+        """
+        if papers_count is None:
+            return text
+
+        # 从后往前替换，避免位置偏移
+        citations = self.extract_citations(text)
+        sorted_citations = sorted(citations, key=lambda x: x['position'], reverse=True)
+
+        removed_count = 0
+        for citation in sorted_citations:
+            if citation['number'] > papers_count:
+                # 去除这个引用
+                start = citation['position']
+                end = start + len(citation['text'])
+                text = text[:start] + text[end:]
+                removed_count += 1
+
+        # 清理可能的多余方括号和空格
+        import re
+        text = re.sub(r'\[\s*\]', '', text)  # 删除空方括号
+        text = re.sub(r'\s+', ' ', text)  # 合并多余空格
+
+        print(f"[CitationOrderChecker] 去除了 {removed_count} 个超出范围的引用")
+
+        return text
 
 
 # 全局实例

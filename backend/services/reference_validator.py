@@ -66,8 +66,8 @@ class ReferenceValidator:
             results["passed"] = False
             results["warnings"].append(english_ratio_result["message"])
 
-        # 4. 验证引用顺序
-        citation_order_result = self.validate_citation_order(content, cited_indices)
+        # 4. 验证引用顺序（包括检查引用编号是否超出参考文献数量）
+        citation_order_result = self.validate_citation_order(content, cited_indices, len(papers))
         results["details"]["citation_order"] = citation_order_result
         if not citation_order_result["passed"]:
             results["passed"] = False
@@ -214,14 +214,16 @@ class ReferenceValidator:
     def validate_citation_order(
         self,
         content: str,
-        cited_indices: set
+        cited_indices: set,
+        papers_count: int = None
     ) -> Dict:
         """
-        验证引用顺序是否正确（连续编号，不跳号）
+        验证引用顺序是否正确（连续编号，不跳号，不超过参考文献数量）
 
         Args:
             content: 综述正文内容
             cited_indices: 正文中引用的文献编号集合
+            papers_count: 参考文献列表的数量（用于验证引用编号不超出范围）
 
         Returns:
             验证结果
@@ -251,7 +253,9 @@ class ReferenceValidator:
                 "first_citation": None,
                 "last_citation": None,
                 "missing_numbers": [],
-                "duplicate_first_appearances": []
+                "exceeds_range": False,
+                "max_citation": None,
+                "papers_count": papers_count
             }
 
         # 检查是否从1开始
@@ -268,21 +272,33 @@ class ReferenceValidator:
                 if i not in cited_indices:
                     missing_numbers.append(i)
 
+        # 【新增】检查引用编号是否超过参考文献数量
+        exceeds_range = False
+        max_citation = max(ordered_nums) if ordered_nums else None
+
+        if papers_count is not None and max_citation is not None:
+            exceeds_range = max_citation > papers_count
+
         result = {
-            "passed": starts_from_one and is_continuous,
+            "passed": starts_from_one and is_continuous and not exceeds_range,
             "message": "",
             "first_citation": ordered_nums[0],
             "last_citation": ordered_nums[-1],
             "total_unique": len(ordered_nums),
             "missing_numbers": missing_numbers,
             "is_continuous": is_continuous,
-            "starts_from_one": starts_from_one
+            "starts_from_one": starts_from_one,
+            "exceeds_range": exceeds_range,
+            "max_citation": max_citation,
+            "papers_count": papers_count
         }
 
         if result["passed"]:
             result["message"] = f"引用顺序正确：从[{result['first_citation']}]到[{result['last_citation']}]，共{result['total_unique']}篇，连续编号"
         else:
             issues = []
+            if exceeds_range:
+                issues.append(f"引用编号超出参考文献范围：正文中最大引用为[{max_citation}]，但参考文献列表只有{papers_count}篇")
             if not starts_from_one:
                 issues.append(f"第一个引用不是[1]，而是[{result['first_citation']}]")
             if not is_continuous:

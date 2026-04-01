@@ -640,11 +640,23 @@ async def smart_generate_review(
         # 分离正文和参考文献
         content, references_section = validator._split_review_and_references(review)
 
-        # 检查正文中的引用序号
-        citation_check_result = citation_checker.check_order(content)
+        # 检查正文中的引用序号（传递参考文献数量以验证范围）
+        citation_check_result = citation_checker.check_order(content, papers_count=len(cited_papers))
 
         if not citation_check_result['valid']:
             print(f"[SmartGenerate] 引用序号有问题: {citation_check_result['message']}")
+
+            # 【特殊处理】如果引用超出范围，先去除超范围的引用
+            if citation_check_result.get('exceeds_range', False):
+                max_citation = citation_check_result.get('max_citation', 0)
+                papers_count = citation_check_result.get('papers_count', 0)
+                print(f"[SmartGenerate] 检测到引用超出范围：正文中最大引用为[{max_citation}]，但参考文献列表只有{papers_count}篇")
+                print(f"[SmartGenerate] 正在去除超出范围的引用 [{papers_count + 1}-{max_citation}]...")
+
+                # 去除超出范围的引用
+                content = citation_checker.remove_out_of_range_citations(content, papers_count)
+
+                print(f"[SmartGenerate] 超范围引用已去除")
 
             # 提取引用列表
             citations = citation_checker.extract_citations(content)
