@@ -696,13 +696,30 @@ async def smart_generate_review(
                     # 如果英文文献过少，专门搜索英文文献
                     elif actual_english_ratio < 0.3:
                         print(f"[SmartGenerate] 英文文献过少({english_validation['actual']}%)，专门搜索英文文献...")
-                        additional_papers = await search_service.search(
-                            query=request.topic,
-                            years_ago=15,
-                            limit=150,
-                            lang="en",  # 只搜索英文文献
-                            use_all_sources=True
-                        )
+
+                        # 检查是否有英文查询可用
+                        english_queries = [q for q in search_queries if q.get('lang') == 'en']
+                        if english_queries:
+                            print(f"[SmartGenerate] 使用框架中的英文查询 ({len(english_queries)}个)...")
+                            additional_papers = []
+                            for eq in english_queries[:5]:  # 最多使用5个英文查询
+                                papers = await search_service.search(
+                                    query=eq.get('query'),
+                                    years_ago=15,
+                                    limit=50,
+                                    lang="en",
+                                    use_all_sources=True
+                                )
+                                additional_papers.extend(papers)
+                        else:
+                            # 没有英文查询，尝试使用主题但去掉lang限制让系统自动判断
+                            print(f"[SmartGenerate] 没有英文查询，使用主题搜索（自动语言检测）...")
+                            additional_papers = await search_service.search(
+                                query=request.topic,
+                                years_ago=15,
+                                limit=150,
+                                use_all_sources=True  # 不指定lang，让系统自动判断
+                            )
                     else:
                         # 其他情况（数量不足或年份不足），扩大搜索范围
                         print(f"[SmartGenerate] 扩大搜索范围（更多年份和数据源）...")

@@ -1919,11 +1919,56 @@ class FrameworkGenerator:
 
     def _general_queries(self, title: str) -> list:
         """通用检索查询"""
-        return [
-            {'query': f'{title} 研究现状', 'section': '研究现状'},
-            {'query': f'{title} 综述', 'section': '研究现状'},
-            {'query': f'{title} 发展趋势', 'section': '发展趋势'}
-        ]
+        # 检测题目语言
+        is_chinese = bool(title and any('\u4e00' <= char <= '\u9fff' for char in title))
+
+        queries = []
+
+        if is_chinese:
+            # 中文查询
+            queries.extend([
+                {'query': f'{title} 研究现状', 'section': '研究现状', 'lang': 'zh'},
+                {'query': f'{title} 综述', 'section': '研究现状', 'lang': 'zh'},
+                {'query': f'{title} 发展趋势', 'section': '发展趋势', 'lang': 'zh'}
+            ])
+
+            # 尝试提取关键词生成英文查询
+            # 提取可能的英文关键词（如化学式、专业术语等）
+            import re
+
+            # 查找可能的化学式（如TiO2, Fe3O4等）
+            chemical_formulas = re.findall(r'[A-Z][a-z]?\d*(?:\.\d+)?', title)
+
+            # 查找可能的英文单词（大小写字母组合）
+            english_words = re.findall(r'[A-Za-z]{3,}', title)
+
+            if chemical_formulas or english_words:
+                # 构建英文查询
+                en_terms = chemical_formulas + english_words
+                if en_terms:
+                    # 去重
+                    en_terms = list(set(en_terms))
+                    # 生成1-2个英文查询
+                    for i, term in enumerate(en_terms[:2]):
+                        queries.append({
+                            'query': f'{term} review',
+                            'section': 'review',
+                            'lang': 'en'
+                        })
+                        queries.append({
+                            'query': f'{term} synthesis',
+                            'section': 'synthesis',
+                            'lang': 'en'
+                        })
+        else:
+            # 英文查询
+            queries.extend([
+                {'query': f'{title} review', 'section': 'review', 'lang': 'en'},
+                {'query': f'{title} survey', 'section': 'survey', 'lang': 'en'},
+                {'query': f'{title} recent advances', 'section': 'recent advances', 'lang': 'en'}
+            ])
+
+        return queries
 
     def extract_relevance_keywords(self, framework: dict) -> list:
         """
