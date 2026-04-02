@@ -5,28 +5,73 @@
 ## 功能特点
 
 - **智能文献检索**
-  - 多数据源聚合：AMiner（中文）、OpenAlex（英文）、Semantic Scholar（补充）
-  - 语言区分搜索：自动识别中英文，使用对应数据源
-  - 论文数据库：自动保存所有搜索到的论文，避免重复搜索
-- **智能筛选**
-  - 近5年占比 ≥50%，英文文献占比 30%-70%
-  - 按被引量排序，选取高质量文献
-  - 质量过滤：自动过滤低质量文献（会议通知、内部资料等）
+  - ScholarFlux 多数据源聚合：AMiner（中文）、OpenAlex（英文）、Semantic Scholar、Crossref、DataCite
+  - 论文元数据数据库：自动保存所有搜索到的论文，避免重复搜索
+  - 可配置数据源开关，灵活控制搜索策略
+
 - **AI 综述生成**
-  - 使用 DeepSeek API 生成学术综述
-  - 自动引用处理：排序、合并、去重
-  - 输出 Markdown 格式，含参考文献列表
+  - DeepSeek 大模型驱动，自动生成学术综述
+  - 混合分类器：规则引擎 + LLM 验证，准确识别题目类型
+  - 场景特异性综述框架：应用型、评价型、理论型、实证型
+  - 异步任务模式，支持长时间生成任务
+
+- **质量控制**
+  - 低质量文献过滤：自动过滤会议通知、内部资料等
+  - 引用数量和年份分布验证
+  - 引用顺序检查：确保正文引用连续无遗漏
+  - 按被引量排序，优先选择高质量文献
+
+- **高级功能**
+  - 自然数据嵌入：统计数据自然融入叙述，避免 AI 痕迹
+  - 深度对比分析：不仅列出对立观点，还分析分歧原因
+  - 综述润色：自动消除 AI 腔，让语言更干练
+  - 观点碰撞分析：结构化分析学术争议
+  - Word 文档导出：一键生成格式规范的 Word 文档
 
 ## 技术栈
 
-- **后端**: FastAPI (Python) + MySQL
+- **后端**: FastAPI (Python) + PostgreSQL
 - **前端**: React + TypeScript + Vite
-- **文献检索**: AMiner API（中文）、OpenAlex API（英文）、Semantic Scholar（补充）
+- **文献检索**: ScholarFlux（多数据源聚合：AMiner、OpenAlex、Semantic Scholar、Crossref、DataCite）
 - **AI 生成**: DeepSeek API
+- **容器化**: Docker Compose
 
 ## 快速开始
 
-### 1. 后端设置
+### 使用 Docker（推荐）
+
+```bash
+# 1. 启动 PostgreSQL 数据库
+docker-compose up -d
+
+# 2. 后端设置
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+# 编辑 .env，填入你的 DEEPSEEK_API_KEY
+python main.py
+
+# 3. 前端设置
+cd frontend
+npm install
+npm run dev
+```
+
+### 手动安装
+
+#### 1. 数据库设置
+
+```bash
+# 安装 PostgreSQL 16
+# macOS
+brew install postgresql@16
+brew services start postgresql@16
+
+# 创建数据库
+createdb -U postgres paper
+```
+
+#### 2. 后端设置
 
 ```bash
 cd backend
@@ -42,9 +87,7 @@ cp .env.example .env
 python main.py
 ```
 
-后端将在 `http://localhost:8000` 启动
-
-### 2. 前端设置
+#### 3. 前端设置
 
 ```bash
 cd frontend
@@ -56,13 +99,12 @@ npm install
 npm run dev
 ```
 
-前端将在 `http://localhost:3000` 启动
+#### 4. 使用系统
 
-### 3. 使用
-
-1. 在前端页面输入论文主题
-2. 点击"生成综述"
-3. 等待生成完成，查看综述和参考文献列表
+1. 打开浏览器访问 `http://localhost:3000`
+2. 输入论文主题
+3. 点击"生成综述"
+4. 等待生成完成，查看综述和参考文献列表
 
 ## 项目结构
 
@@ -70,27 +112,28 @@ npm run dev
 .
 ├── backend/               # 后端服务
 │   ├── services/         # 业务逻辑
-│   │   ├── scholarflux_wrapper.py    # 统一文献搜索API
-│   │   ├── smart_paper_search.py     # 智能搜索（数据库+外部API）
-│   │   ├── aminer_search.py          # AMiner搜索服务
-│   │   ├── paper_search.py           # OpenAlex搜索服务
-│   │   ├── paper_filter.py           # 文献筛选
-│   │   ├── paper_quality_filter.py   # 质量过滤
-│   │   ├── paper_metadata_dao.py     # 论文元数据DAO
+│   │   ├── scholarflux_wrapper.py    # ScholarFlux统一接口
+│   │   ├── smart_paper_search.py     # 智能搜索（数据库+API）
 │   │   ├── review_generator.py       # 综述生成
-│   │   ├── hybrid_classifier.py      # 题目分析
-│   │   └── reference_validator.py    # 引用验证
+│   │   ├── hybrid_classifier.py      # 混合分类器
+│   │   ├── paper_filter.py           # 文献筛选
+│   │   ├── reference_validator.py    # 引用验证
+│   │   ├── docx_generator.py         # Word文档生成
+│   │   └── ...                      # 其他服务模块
 │   ├── models.py          # 数据库模型
-│   ├── database.py        # 数据库配置
+│   ├── database.py        # 数据库管理（支持PostgreSQL/MySQL）
 │   ├── main.py            # FastAPI 应用
 │   └── requirements.txt   # Python 依赖
-└── frontend/             # 前端应用
-    ├── src/
-    │   ├── components/   # React组件
-    │   ├── App.tsx       # 主组件
-    │   ├── api.ts        # API 调用
-    │   └── types.ts      # 类型定义
-    └── package.json      # Node 依赖
+├── frontend/             # 前端应用
+│   ├── src/
+│   │   ├── components/   # React组件
+│   │   ├── App.tsx       # 主组件
+│   │   ├── api.ts        # API 调用
+│   │   └── types.ts      # 类型定义
+│   └── package.json      # Node 依赖
+├── docs/                 # 项目文档
+├── docker-compose.yml    # Docker Compose 配置
+└── README.md            # 项目说明
 ```
 
 ## API 文档
@@ -100,8 +143,12 @@ npm run dev
 ### 主要接口
 
 #### 综述生成
-- `POST /api/smart-generate` - 智能生成文献综述（推荐）
-- `POST /api/generate` - 生成文献综述（基础版）
+- `POST /api/smart-generate` - 智能生成文献综述（异步任务）
+- `GET /api/tasks/{task_id}` - 查询任务状态
+
+#### 题目分析
+- `POST /api/classify-topic` - 题目分类
+- `POST /api/smart-analyze` - 智能分析
 
 #### 文献搜索
 - `GET /api/search` - 搜索论文
@@ -113,6 +160,11 @@ npm run dev
 - `GET /api/records` - 获取生成记录列表
 - `GET /api/records/{record_id}` - 获取单条记录详情
 - `DELETE /api/records/{record_id}` - 删除记录
+- `POST /api/records/export` - 导出 Word 文档
+
+#### 验证工具
+- `POST /api/validate-review` - 验证综述质量
+- `POST /api/check-citation-order` - 检查引用顺序
 
 #### 其他
 - `GET /api/health` - 健康检查
@@ -129,12 +181,25 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 # AMiner API（用于中文文献搜索和详情补充）
 AMINER_API_TOKEN=eyJxxx
 
-# MySQL 数据库
+# Semantic Scholar API Key（可选，提高速率限制）
+SEMANTIC_SCHOLAR_API_KEY=your_key_here
+
+# 数据库配置
+DB_TYPE=postgresql
 DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=xxx
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=security
 DB_NAME=paper
+```
+
+### Docker 部署（推荐）
+
+```bash
+# 启动 PostgreSQL 数据库
+docker-compose up -d
+
+# 后续步骤...
 ```
 
 ## 数据库表
