@@ -687,7 +687,7 @@ class ReviewTaskExecutor:
 
         if citations:
             # 提取引用编号
-            cited_indices = [int(c) for c in citations]
+            cited_indices = [int(c['number']) for c in citations]
 
             # 检查是否有重复或跳跃
             unique_sorted = sorted(set(cited_indices))
