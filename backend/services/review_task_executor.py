@@ -141,46 +141,6 @@ class ReviewTaskExecutor:
             for section_title, papers in papers_by_section.items():
                 print(f"    - {section_title}: {len(papers)} 篇")
 
-            # 检查是否满足最低数量要求
-            if filter_stats['total'] < target_count:
-                print(f"[TaskExecutor] 筛选后文献数量不足（{filter_stats['total']}/{target_count}），尝试补充搜索")
-
-                # === 调用LLM调整章节主题和关键词，进行补充搜索 ===
-                try:
-                    task_manager.update_task_status(
-                        task_id,
-                        TaskStatus.PROCESSING,
-                        progress={"step": "adjusting", "message": "正在调整搜索策略..."}
-                    )
-
-                    # 调用LLM生成新的搜索关键词
-                    new_search_keywords = await self._llm_adjust_search_strategy(
-                        topic=topic,
-                        framework=framework,
-                        current_count=filter_stats['total'],
-                        target_count=target_count
-                    )
-
-                    # 使用新的关键词进行补充搜索
-                    for keyword in new_search_keywords[:5]:
-                        task_manager.update_task_status(
-                            task_id,
-                            TaskStatus.PROCESSING,
-                            progress={"step": "searching", "message": f"正在补充搜索: {keyword}..."}
-                        )
-
-                        additional_papers = await self.search_service.search(
-                            query=keyword,
-                            years_ago=params.get('search_years', 10) + 5,
-                            limit=30,
-                            use_all_sources=True
-                        )
-
-                        # 去重并添加到筛选结果
-                        existing_ids = {p.get('id') for p in filtered_papers}
-                        for paper in additional_papers:
-                            if paper.get('id') not in existing_ids:
-                                filtered_papers.append(paper)
             # === 阶段5: 分小节生成综述 ===
             api_key = os.getenv("DEEPSEEK_API_KEY")
             aminer_token = os.getenv("AMINER_API_TOKEN")
