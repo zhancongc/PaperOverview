@@ -96,7 +96,10 @@ class AMinerPaperDetailService:
                         return self._extract_detail_info(data['item'])
 
             except Exception as e:
-                print(f"[AMinerDetail] {method} {endpoint} 失败: {e}")
+                # 只在非404错误时打印日志（404是预期的，论文不在AMiner数据库中）
+                error_str = str(e)
+                if '404' not in error_str and 'Not Found' not in error_str:
+                    print(f"[AMinerDetail] {method} {endpoint} 失败: {e}")
                 continue
 
         return None
@@ -182,7 +185,10 @@ class AMinerPaperDetailService:
                         results[index] = {}
                     await asyncio.sleep(0.2)  # 避免过快请求
                 except Exception as e:
-                    print(f"[AMinerDetail] 论文 {paper.get('id', 'Unknown')} 补充失败: {e}")
+                    # 只在非404错误时打印日志
+                    error_str = str(e)
+                    if '404' not in error_str and 'Not Found' not in error_str:
+                        print(f"[AMinerDetail] 论文 {paper.get('id', 'Unknown')[:20]}... 补充失败: {e}")
                     results[index] = {}
 
         # 并发执行
@@ -190,9 +196,17 @@ class AMinerPaperDetailService:
         await asyncio.gather(*tasks, return_exceptions=True)
 
         # 合并结果
+        enriched_count = 0
+        not_found_count = 0
+
         for index, detail in results.items():
             if detail:
                 papers[index].update(detail)
+                enriched_count += 1
+            else:
+                not_found_count += 1
+
+        print(f"[AMinerDetail] 补充完成: 成功{enriched_count}篇, 未找到{not_found_count}篇")
 
         return papers
 
