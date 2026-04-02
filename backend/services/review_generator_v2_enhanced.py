@@ -1,18 +1,17 @@
 """
-文献综述生成服务 v2.0 - 生产版（优化版）
+文献综述生成服务 v2.0 - 增强版（精细控制版）
 
-这是默认的综述生成服务，优化了 token 消耗。
+这是增强版的综述生成服务，提供更精细的步骤控制。
 
 版本说明：
-- 本文件：生产版（review_generator.py）- 4-5次调用，节省40% token
-- 增强版：review_generator_v2_enhanced.py - 8-10次调用，更精细控制
+- 生产版：review_generator.py - 4-5次调用，节省40% token（推荐）
+- 本文件：增强版（review_generator_v2_enhanced.py）- 8-10次调用，更精细控制
 - 旧版（单prompt）：已移除
 
-优化策略：
-1. 批量生成：将多个主题合并为1-2次调用
-2. 复用上下文：避免重复传递文献列表
-3. 智能分块：根据内容复杂度动态调整
-4. 缓存复用：复用大纲生成结果
+与生产版相比：
+- 每个主体主题单独生成，质量更高
+- 更详细的对比分析要求
+- 适合需要最高质量综述的场景
 """
 import os
 from openai import AsyncOpenAI
@@ -20,29 +19,20 @@ from typing import List, Dict, Tuple
 from .aminer_paper_detail import enrich_papers
 
 
-class ReviewGeneratorService:
+class ReviewGeneratorServiceV2:
     """
-    综述生成服务 v2.0 生产版（优化版）
+    综述生成服务 v2.0 - 多步骤生成
 
-    步骤拆分（优化后）：
-    1. 生成综述大纲 - 1次调用
-    2. 批量生成内容 - 2-3次调用（合并主体部分）
-    3. 验证和修复引用 - 0-1次调用
-    4. 润色和格式化 - 无 LLM 调用
-
-    总调用次数：4-5次（比原版减少50%）
-
-    优化策略：
-    1. 批量生成：将多个主题合并为1-2次调用
-    2. 复用上下文：避免重复传递文献列表
-    3. 智能分块：根据内容复杂度动态调整
-    4. 缓存复用：复用大纲生成结果
+    步骤拆分：
+    1. 生成综述大纲 - 确定结构和主题划分
+    2. 逐节生成内容 - 专注于内容质量和对比分析
+    3. 验证和修复引用 - 确保引用符合规范
+    4. 润色和格式化 - 提升可读性
     """
 
     def __init__(self, api_key: str, base_url: str = "https://api.deepseek.com", aminer_token: str = None):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.aminer_token = aminer_token or os.getenv('AMINER_API_TOKEN')
-        self._outline_cache = None  # 缓存大纲结果
 
     async def generate_review(
         self,
@@ -52,7 +42,7 @@ class ReviewGeneratorService:
         specificity_guidance: dict = None
     ) -> Tuple[str, List[Dict]]:
         """
-        生成文献综述（优化版）
+        生成文献综述（多步骤版本）
 
         Args:
             topic: 论文主题
@@ -64,7 +54,7 @@ class ReviewGeneratorService:
             (综述内容, 实际被引用的文献列表)
         """
         print("=" * 80)
-        print("综述生成 v2.0 - 优化版 (4-5次调用)")
+        print("综述生成 v2.0 - 多步骤生成")
         print("=" * 80)
 
         # === 第1步：生成综述大纲 ===
@@ -72,63 +62,87 @@ class ReviewGeneratorService:
         outline = await self._step1_generate_outline(
             topic, papers, specificity_guidance, model
         )
-        self._outline_cache = outline  # 缓存大纲
-        print(f"[步骤 1/4] ✓ 大纲生成完成")
+        print(f"[步骤 1/4] ✓ 大纲生成完成，包含 {len(outline.get('sections', []))} 个主题")
 
-        # === 第2步：批量生成内容（优化：合并调用）===
-        print(f"\n[步骤 2/4] 批量生成内容...")
-        content_draft = await self._step2_generate_content_optimized(
+        # === 第2步：逐节生成内容 ===
+        print(f"\n[步骤 2/4] 逐节生成内容...")
+        content_draft = await self._step2_generate_sections(
             topic, papers, outline, specificity_guidance, model
         )
-        print(f"[步骤 2/4] ✓ 内容生成完成，字数约 {len(content_draft)}")
+        print(f"[步骤 2/4] ✓ 内容生成完成，字数约 {len(content_draft)} 字符")
 
         # === 第3步：验证和修复引用 ===
         print(f"\n[步骤 3/4] 验证和修复引用...")
-        cited_indices = self._extract_cited_indices(content_draft)
-        unique_cited = len(cited_indices)
-        print(f"  - 当前引用: {unique_cited} 篇")
-
-        # 只在引用不足时才补充引用
-        min_citations = 25  # 降低要求
-        if unique_cited < min_citations:
-            print(f"  - 引用不足，补充中...")
-            papers_dict = [self._paper_to_dict(p) for p in papers]
-            content_draft = await self._add_more_citations(
-                content_draft, papers_dict, topic, min_citations, model, cited_indices
-            )
-            cited_indices = self._extract_cited_indices(content_draft)
-
-        # 按出现顺序重新编号
-        cited_papers = [self._paper_to_dict(papers[i - 1]) for i in cited_indices if i <= len(papers)]
-        content, cited_papers = self._renumber_citations_by_appearance(content_draft, cited_papers, cited_indices)
-
-        # 限制每篇文献引用次数
-        content = self._limit_citation_count_v2(content, cited_papers, max_count=2)
-        content = self._sort_and_merge_citations(content)
-
-        print(f"[步骤 3/4] ✓ 引用修复完成，引用 {len(cited_papers)} 篇")
+        content_fixed, cited_papers = await self._step3_validate_citations(
+            content_draft, papers, topic, model
+        )
+        print(f"[步骤 3/4] ✓ 引用修复完成，引用 {len(cited_papers)} 篇文献")
 
         # === 第4步：润色和格式化 ===
         print(f"\n[步骤 4/4] 润色和格式化...")
-        final_review = await self._step4_polish_format(content, cited_papers)
+        final_review = await self._step4_polish_format(
+            content_fixed, cited_papers
+        )
         print(f"[步骤 4/4] ✓ 润色完成")
 
-        print(f"\n[完成] 综述生成完毕！总调用: 4-5次")
+        print(f"\n[完成] 综述生成完毕！")
         print("=" * 80)
 
         return final_review, cited_papers
 
-    # ==================== 第1步：生成大纲 ====================
+    def _paper_to_dict(self, paper) -> Dict:
+        """
+        将 PaperMetadata 对象或字典转换为统一格式
+        """
+        if isinstance(paper, dict):
+            return paper
+
+        # 处理 PaperMetadata 对象
+        result = {}
+        if hasattr(paper, 'title'):
+            result['title'] = paper.title or ''
+            result['authors'] = paper.authors if paper.authors else []
+            result['year'] = paper.year
+            result['abstract'] = paper.abstract if paper.abstract else ''
+            result['cited_by_count'] = paper.cited_by_count if paper.cited_by_count else 0
+            result['type'] = paper.paper_type if hasattr(paper, 'paper_type') else 'article'
+            result['doi'] = paper.doi if hasattr(paper, 'doi') else ''
+            result['id'] = paper.id if hasattr(paper, 'id') else ''
+        else:
+            # 默认返回空字典
+            return {
+                'title': '',
+                'authors': [],
+                'year': None,
+                'abstract': '',
+                'cited_by_count': 0,
+                'type': 'article',
+                'doi': '',
+                'id': ''
+            }
+        return result
+
+    # ==================== 第1步：生成综述大纲 ====================
 
     async def _step1_generate_outline(
         self,
         topic: str,
-        papers: List,
+        papers: List[Dict],
         specificity_guidance: dict,
         model: str
     ) -> Dict:
-        """生成综述大纲（与原版相同）"""
+        """
+        生成综述大纲
+
+        专注任务：
+        - 确定综述结构
+        - 划分主题
+        - 为每个主题分配相关文献
+        """
+        # 构建场景特异性指导
         specificity_section = self._format_specificity_guidance(specificity_guidance)
+
+        # 构建文献简要信息（用于大纲分配）
         papers_brief = self._format_papers_brief(papers)
 
         system_prompt = f"""你是学术综述大纲设计专家。
@@ -138,9 +152,9 @@ class ReviewGeneratorService:
 你的任务是根据研究主题和文献列表，设计一个高质量的文献综述大纲。
 
 要求：
-1. **结构清晰**：包含引言、主体（2-3个主题）、结论
+1. **结构清晰**：包含引言、主体（2-4个主题）、结论
 2. **主题划分**：主体部分按研究主题或方法论划分
-3. **文献分配**：为每个主题推荐最相关的文献
+3. **文献分配**：为每个主题推荐最相关的文献（使用文献编号）
 4. **逻辑连贯**：各主题之间要有逻辑关系
 
 输出格式（JSON）：
@@ -190,47 +204,50 @@ class ReviewGeneratorService:
 
         except Exception as e:
             print(f"[步骤1] 生成大纲失败: {e}")
+            # 返回默认大纲
             return self._get_default_outline(topic, papers)
 
-    # ==================== 第2步：批量生成内容（优化版）====================
+    # ==================== 第2步：逐节生成内容 ====================
 
-    async def _step2_generate_content_optimized(
+    async def _step2_generate_sections(
         self,
         topic: str,
-        papers: List,
+        papers: List[Dict],
         outline: Dict,
         specificity_guidance: dict,
         model: str
     ) -> str:
         """
-        批量生成综述内容（优化版）
+        逐节生成综述内容
 
-        优化策略：
-        - 引言和结论分开生成（各1次）
-        - 主体部分合并为1-2次调用
-        - 总共3-4次调用（原版6-7次）
+        专注任务：
+        - 生成各节内容
+        - 构建文献矩阵对比
+        - 确保引用正确
         """
         specificity_section = self._format_specificity_guidance(specificity_guidance)
+        papers_info = self._format_papers_for_prompt(papers)
 
         sections = []
 
-        # === 调用1：生成引言 ===
-        print(f"  - [调用1/3] 生成引言...")
-        intro = await self._generate_introduction_optimized(
+        # 生成引言
+        print(f"  - 生成引言...")
+        intro = await self._generate_introduction(
             topic, outline.get('introduction', {}), papers, specificity_section, model
         )
         sections.append(intro)
 
-        # === 调用2：批量生成主体部分 ===
-        print(f"  - [调用2/3] 批量生成主体部分...")
-        body_sections = await self._generate_body_sections_optimized(
-            topic, outline.get('sections', []), papers, specificity_section, model
-        )
-        sections.extend(body_sections)
+        # 生成主体各节
+        for i, section_outline in enumerate(outline.get('sections', []), 1):
+            print(f"  - 生成主体 {i}/{len(outline.get('sections', []))}: {section_outline.get('title', '')}...")
+            section = await self._generate_section(
+                topic, section_outline, papers, specificity_section, model
+            )
+            sections.append(section)
 
-        # === 调用3：生成结论 ===
-        print(f"  - [调用3/3] 生成结论...")
-        conclusion = await self._generate_conclusion_optimized(
+        # 生成结论
+        print(f"  - 生成结论...")
+        conclusion = await self._generate_conclusion(
             topic, outline.get('conclusion', {}), outline.get('sections', []),
             papers, specificity_section, model
         )
@@ -238,208 +255,221 @@ class ReviewGeneratorService:
 
         return "\n\n".join(sections)
 
-    async def _generate_introduction_optimized(
+    async def _generate_introduction(
         self,
         topic: str,
         intro_outline: Dict,
-        papers: List,
+        papers: List[Dict],
         specificity_section: str,
         model: str
     ) -> str:
-        """生成引言（精简版 prompt）"""
+        """生成引言部分"""
         key_papers = intro_outline.get('key_papers', [])
         focus = intro_outline.get('focus', '介绍研究背景和意义')
-
-        # 只传递前20篇论文的简要信息
-        papers_brief = self._format_papers_compact(papers[:20])
 
         system_prompt = f"""你是学术写作专家，擅长撰写文献综述的引言部分。
 
 {specificity_section}
 
-**写作要求**：
-1. 介绍研究背景和意义（200-300字）
+**引言写作要求**：
+1. 介绍研究背景和意义
 2. 说明当前研究现状
-3. 指出研究的必要性和挑战
+3. 指出研究的必要性
 4. 自然过渡到主体内容
 
 **引用要求**：
-- 使用文献编号，如 [1]、[2]
-- 推荐引用：{key_papers[:5] if key_papers else '根据内容选择'}
-- 本部分引用 5-8 篇即可
+- 只使用文献编号，如 [1]、[2]
+- 推荐优先引用：{key_papers[:10] if key_papers else '根据内容选择'}
+- 本部分引用 5-10 篇即可
 
-输出：Markdown（## 引言）"""
+输出格式：Markdown（二级标题 ## 引言）"""
 
-        user_prompt = f"""主题：{focus}
+        user_prompt = f"""请撰写关于"{topic}"的引言部分。
 
-可用文献编号：1-{len(papers[:20])}
+**写作重点**：{focus}
 
-{papers_brief}
+**可用文献**（共{len(papers)}篇，使用编号引用）：
+{self._format_papers_for_prompt(papers, max_papers=30)}
 
-请生成引言部分："""
+请输出引言部分："""
 
-        return await self._call_llm(system_prompt, user_prompt, model, max_tokens=1500)
+        return await self._call_llm(system_prompt, user_prompt, model)
 
-    async def _generate_body_sections_optimized(
+    async def _generate_section(
         self,
         topic: str,
-        sections_outline: List[Dict],
-        papers: List,
+        section_outline: Dict,
+        papers: List[Dict],
         specificity_section: str,
         model: str
-    ) -> List[str]:
-        """
-        批量生成主体部分（优化版）
+    ) -> str:
+        """生成主体部分的一个主题"""
+        title = section_outline.get('title', '')
+        focus = section_outline.get('focus', '')
+        key_papers = section_outline.get('key_papers', [])
+        comparison_points = section_outline.get('comparison_points', [])
 
-        策略：
-        - 如果主题少于3个：合并为1次调用
-        - 如果主题多于3个：分为2次调用
-        """
-        all_sections = []
-
-        if len(sections_outline) <= 3:
-            # === 合并为1次调用 ===
-            sections_info = self._format_sections_info(sections_outline)
-            papers_info = self._format_papers_compact(papers)
-
-            system_prompt = f"""你是学术写作专家，擅长撰写文献综述的主体部分，特别擅长构建"文献矩阵"进行对比分析。
+        system_prompt = f"""你是学术写作专家，擅长撰写文献综述的主体部分，特别擅长构建"文献矩阵"进行对比分析。
 
 {specificity_section}
 
-**写作要求**：
+**主题写作要求**：
 1. **构建文献矩阵**：不要简单列举，要对比不同研究的观点、方法、结论
-2. **明确指出分歧**：当研究结论不一致时，要明确指出并分析原因
-3. **使用对比表格**：对于关键对比，使用 Markdown 表格呈现
+2. **明确指出分歧**：当研究结论不一致时，要明确指出
+3. **分析原因**：探讨分歧产生的可能原因
+
+**对比分析示例**：
+✓ 正确写法：
+  在XX问题上，现有研究存在显著分歧。张三(2019)[5]认为...；而李四(2020)[8]则指出...；这种分歧可能源于...
 
 **引用要求**：
-- 每个主题引用 8-12 篇
+- 优先引用：{key_papers[:15] if key_papers else '根据内容选择'}
+- 本部分引用 10-15 篇
 - 每篇文献不超过2次
 
-输出：每个主题使用二级标题（## 标题）"""
+输出格式：Markdown（二级标题 ## {title}）"""
 
-            user_prompt = f"""主题：{topic}
+        user_prompt = f"""请撰写关于"{topic}"综述的主题：{title}
 
-需要生成的主体部分：
-{sections_info}
+**写作重点**：{focus}
 
-可用文献（共{len(papers)}篇）：
-{papers_info}
+**对比要点**：{', '.join(comparison_points) if comparison_points else '根据内容自行确定'}
 
-请生成所有主体部分："""
+**可用文献**（共{len(papers)}篇）：
+{self._format_papers_for_prompt(papers)}
 
-            content = await self._call_llm(system_prompt, user_prompt, model, max_tokens=4000)
+请输出该主题部分："""
 
-            # 分割各节内容
-            for section_outline in sections_outline:
-                title = section_outline.get('title', '')
-                # 提取该节的内容
-                section_content = self._extract_section_content(content, title)
-                if section_content:
-                    all_sections.append(section_content)
+        return await self._call_llm(system_prompt, user_prompt, model)
 
-        else:
-            # === 分为2次调用 ===
-            mid = len(sections_outline) // 2
-
-            # 第一批
-            sections_info_1 = self._format_sections_info(sections_outline[:mid])
-            all_sections.extend(await self._generate_body_batch(
-                topic, sections_outline[:mid], papers, specificity_section, model, sections_info_1
-            ))
-
-            # 第二批
-            sections_info_2 = self._format_sections_info(sections_outline[mid:])
-            all_sections.extend(await self._generate_body_batch(
-                topic, sections_outline[mid:], papers, specificity_section, model, sections_info_2
-            ))
-
-        return all_sections
-
-    async def _generate_body_batch(
-        self,
-        topic: str,
-        sections_outline: List[Dict],
-        papers: List,
-        specificity_section: str,
-        model: str,
-        sections_info: str
-    ) -> List[str]:
-        """生成一批主体部分"""
-        papers_info = self._format_papers_compact(papers)
-
-        system_prompt = f"""你是学术写作专家，擅长撰写文献综述的主体部分。
-
-{specificity_section}
-
-**写作要求**：
-1. 构建文献矩阵对比
-2. 明确指出分歧并分析原因
-3. 使用对比表格
-
-输出：每个主题使用二级标题"""
-
-        user_prompt = f"""主题：{topic}
-
-需要生成的主体部分：
-{sections_info}
-
-可用文献：
-{papers_info}
-
-请生成这些主体部分："""
-
-        content = await self._call_llm(system_prompt, user_prompt, model, max_tokens=3500)
-
-        # 分割各节内容
-        all_sections = []
-        for section_outline in sections_outline:
-            title = section_outline.get('title', '')
-            section_content = self._extract_section_content(content, title)
-            if section_content:
-                all_sections.append(section_content)
-
-        return all_sections
-
-    async def _generate_conclusion_optimized(
+    async def _generate_conclusion(
         self,
         topic: str,
         conclusion_outline: Dict,
         sections: List[Dict],
-        papers: List,
+        papers: List[Dict],
         specificity_section: str,
         model: str
     ) -> str:
-        """生成结论（精简版）"""
+        """生成结论部分"""
         focus = conclusion_outline.get('focus', '总结现有研究的不足和未来方向')
+
+        # 汇总所有主题
         section_titles = [s.get('title', '') for s in sections]
 
         system_prompt = f"""你是学术写作专家，擅长撰写文献综述的结论部分。
 
 {specificity_section}
 
-**写作要求**：
-1. 总结主要研究共识（200字左右）
+**结论写作要求**：
+1. 总结主要研究共识
 2. 指出研究分歧和不足
 3. 提出未来研究方向
+4. 回应研究主题的核心问题
 
-**引用要求**：结论部分引用要少，3-5篇即可
+**引用要求**：
+- 结论部分引用要少，主要引用关键文献
+- 本部分引用 3-5 篇即可
 
-输出：Markdown（## 结论）"""
+输出格式：Markdown（二级标题 ## 结论）"""
 
-        user_prompt = f"""主题：{topic}
+        user_prompt = f"""请撰写关于"{topic}"综述的结论部分。
 
-综述涵盖的主题：
+**综述已涵盖的主题**：
 {chr(10).join([f"- {t}" for t in section_titles])}
 
-写作重点：{focus}
+**写作重点**：{focus}
 
-请生成结论部分："""
+**可用文献**：
+{self._format_papers_for_prompt(papers, max_papers=20)}
 
-        return await self._call_llm(system_prompt, user_prompt, model, max_tokens=1200)
+请输出结论部分："""
+
+        return await self._call_llm(system_prompt, user_prompt, model)
+
+    # ==================== 第3步：验证和修复引用 ====================
+
+    async def _step3_validate_citations(
+        self,
+        content: str,
+        papers: List,
+        topic: str,
+        model: str
+    ) -> Tuple[str, List[Dict]]:
+        """
+        验证和修复引用
+
+        专注任务：
+        - 检查引用数量
+        - 修复引用格式
+        - 补充缺失的引用
+        """
+        # 将所有论文转换为字典格式
+        papers_dict = [self._paper_to_dict(p) for p in papers]
+
+        # 提取当前引用
+        cited_indices = self._extract_cited_indices(content)
+        unique_cited = len(cited_indices)
+
+        print(f"  - 当前引用: {unique_cited} 篇")
+
+        # 检查是否需要补充引用
+        min_citations = 30  # 降低要求，因为分步生成更容易控制
+        if unique_cited < min_citations:
+            print(f"  - 引用不足，补充中...")
+            content = await self._add_more_citations(
+                content, papers_dict, topic, min_citations, model, cited_indices
+            )
+            cited_indices = self._extract_cited_indices(content)
+            print(f"  - 补充后引用: {len(cited_indices)} 篇")
+
+        # 按出现顺序重新编号
+        cited_papers = [papers_dict[i - 1] for i in cited_indices if i <= len(papers_dict)]
+        content, cited_papers = self._renumber_citations_by_appearance(content, cited_papers, cited_indices)
+
+        # 限制每篇文献引用次数
+        content = self._limit_citation_count_v2(content, cited_papers, max_count=2)
+
+        # 排序和合并引用
+        content = self._sort_and_merge_citations(content)
+
+        return content, cited_papers
+
+    # ==================== 第4步：润色和格式化 ====================
+
+    async def _step4_polish_format(
+        self,
+        content: str,
+        cited_papers: List[Dict]
+    ) -> str:
+        """
+        润色和格式化
+
+        专注任务：
+        - 格式化参考文献
+        - 合并最终版本
+        """
+        # 尝试补充论文详情
+        if self.aminer_token:
+            try:
+                cited_papers = await enrich_papers(cited_papers, self.aminer_token)
+            except Exception as e:
+                print(f"[步骤4] 补充论文详情失败: {e}")
+
+        # 过滤佚名论文
+        content, cited_papers = self._filter_anonymous_and_renumber(content, cited_papers)
+
+        # 格式化参考文献
+        references = self._format_references(cited_papers)
+
+        # 合并最终版本
+        full_review = f"{content}\n\n## 参考文献\n\n{references}"
+
+        return full_review
 
     # ==================== 辅助方法 ====================
 
-    async def _call_llm(self, system_prompt: str, user_prompt: str, model: str, max_tokens: int = 3000) -> str:
+    async def _call_llm(self, system_prompt: str, user_prompt: str, model: str) -> str:
         """调用 LLM"""
         response = await self.client.chat.completions.create(
             model=model,
@@ -448,62 +478,9 @@ class ReviewGeneratorService:
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
-            max_tokens=max_tokens
+            max_tokens=3000
         )
         return response.choices[0].message.content
-
-    def _format_papers_compact(self, papers: List) -> str:
-        """格式化论文简要信息（节省 token）"""
-        brief = []
-        for i, paper in enumerate(papers, 1):
-            if hasattr(paper, 'title'):
-                title = paper.title[:60]
-                year = paper.year if hasattr(paper, 'year') else 'N/A'
-            else:
-                title = paper.get('title', '')[:60]
-                year = paper.get('year', 'N/A')
-            brief.append(f"[{i}] {title} ({year})")
-        return "\n".join(brief)
-
-    def _format_sections_info(self, sections: List[Dict]) -> str:
-        """格式化主题信息"""
-        info = []
-        for i, section in enumerate(sections, 1):
-            title = section.get('title', '')
-            focus = section.get('focus', '')
-            key_papers = section.get('key_papers', [])
-            comparison_points = section.get('comparison_points', [])
-            info.append(f"""
-{i}. **{title}**
-   - 重点：{focus}
-   - 推荐文献：{key_papers[:5] if key_papers else '根据内容选择'}
-   - 对比要点：{', '.join(comparison_points) if comparison_points else '根据内容确定'}
-""")
-        return "\n".join(info)
-
-    def _extract_section_content(self, content: str, title: str) -> str:
-        """从生成的内容中提取特定节"""
-        lines = content.split('\n')
-        section_lines = []
-        capturing = False
-        section_found = False
-
-        for line in lines:
-            # 检查是否是目标节标题
-            if f"## {title}" in line or f"## {title.split()[0]}" in line:
-                capturing = True
-                section_found = True
-                section_lines.append(line)
-                continue
-
-            # 检查是否到了下一个节
-            if capturing and line.startswith('## ') and title not in line:
-                break
-
-            if capturing:
-                section_lines.append(line)
-
-        return '\n'.join(section_lines) if section_found else ""
 
     def _format_specificity_guidance(self, specificity_guidance: dict) -> str:
         """格式化场景特异性指导"""
@@ -531,6 +508,7 @@ class ReviewGeneratorService:
         """格式化论文简要信息（用于大纲）"""
         brief = []
         for i, paper in enumerate(papers, 1):
+            # 处理 PaperMetadata 对象或字典
             if hasattr(paper, 'title'):
                 title = paper.title[:80]
             else:
@@ -538,30 +516,38 @@ class ReviewGeneratorService:
             brief.append(f"[{i}] {title}")
         return "\n".join(brief)
 
-    def _paper_to_dict(self, paper) -> Dict:
-        """将 PaperMetadata 对象或字典转换为统一格式"""
-        if isinstance(paper, dict):
-            return paper
+    def _format_papers_for_prompt(self, papers: List, max_papers: int = None) -> str:
+        """格式化论文信息用于 Prompt"""
+        if max_papers:
+            papers = papers[:max_papers]
 
-        result = {}
-        if hasattr(paper, 'title'):
-            result['title'] = paper.title or ''
-            result['authors'] = paper.authors if paper.authors else []
-            result['year'] = paper.year
-            result['abstract'] = paper.abstract if paper.abstract else ''
-            result['cited_by_count'] = paper.cited_by_count if paper.cited_by_count else 0
-            result['type'] = paper.paper_type if hasattr(paper, 'paper_type') else 'article'
-            result['doi'] = paper.doi if hasattr(paper, 'doi') else ''
-            result['id'] = paper.id if hasattr(paper, 'id') else ''
-        else:
-            return {
-                'title': '', 'authors': [], 'year': None,
-                'abstract': '', 'cited_by_count': 0,
-                'type': 'article', 'doi': '', 'id': ''
-            }
-        return result
+        formatted = []
+        for i, paper in enumerate(papers, 1):
+            # 处理 PaperMetadata 对象或字典
+            if hasattr(paper, 'title'):
+                title = paper.title
+                authors_list = paper.authors if paper.authors else []
+                year = paper.year
+                abstract = paper.abstract if paper.abstract else ''
+            else:
+                title = paper.get('title', '')
+                authors_list = paper.get("authors", [])
+                year = paper.get('year', '')
+                abstract = paper.get('abstract', '')
 
-    def _get_default_outline(self, topic: str, papers: List) -> Dict:
+            authors = ", ".join(authors_list[:3]) if authors_list else "未知作者"
+            if len(authors_list) > 3:
+                authors += " 等"
+
+            formatted.append(
+                f"[{i}] {title}\n"
+                f"    作者：{authors}\n"
+                f"    年份：{year or 'N/A'}\n"
+                f"    摘要：{(abstract or 'N/A')[:200]}..."
+            )
+        return "\n\n".join(formatted)
+
+    def _get_default_outline(self, topic: str, papers: List[Dict]) -> Dict:
         """获取默认大纲"""
         return {
             "introduction": {
@@ -613,28 +599,29 @@ class ReviewGeneratorService:
             authors = ", ".join(authors_list[:3]) if authors_list else "未知作者"
             if len(authors_list) > 3:
                 authors += " 等"
-            additional_papers.append(f"[{idx}] {paper.get('title', '')[:50]}... - {authors}")
+            additional_papers.append(f"[{idx}] {paper.get('title', '')} - {authors} ({paper.get('year', '')})")
 
-        supplement_prompt = f"""请在现有综述基础上补充更多文献引用。
+        supplement_prompt = f"""请在现有综述基础上，补充更多文献引用。
 
 当前已引用 {len(cited_indices)} 篇，目标 {target_count} 篇。
 
-可补充的文献（只显示前15篇）：
-{chr(10).join(additional_papers[:15])}
+可补充的文献：
+{chr(10).join(additional_papers[:20])}
 
 要求：
 1. 按顺序继续编号
 2. 添加到合适位置
 3. 直接输出修改后的完整综述
 
-当前综述（前3000字符）：
-{content[:3000]}..."""
+当前综述：
+{content[:4000]}
+"""
 
         try:
             response = await self.client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "你是学术写作助手。"},
+                    {"role": "system", "content": "你是学术写作助手，负责在综述中补充文献引用。"},
                     {"role": "user", "content": supplement_prompt}
                 ],
                 temperature=0.5,
@@ -645,26 +632,18 @@ class ReviewGeneratorService:
             print(f"[补充引用] 失败: {e}")
             return content
 
-    async def _step4_polish_format(self, content: str, cited_papers: List[Dict]) -> str:
-        """润色和格式化"""
-        if self.aminer_token:
-            try:
-                cited_papers = await enrich_papers(cited_papers, self.aminer_token)
-            except Exception as e:
-                print(f"[步骤4] 补充论文详情失败: {e}")
+    # ==================== 以下方法从原版复用 ====================
 
-        content, cited_papers = self._filter_anonymous_and_renumber(content, cited_papers)
-        references = self._format_references(cited_papers)
-        return f"{content}\n\n## 参考文献\n\n{references}"
-
-    # 以下方法复用原版
     def _extract_cited_indices(self, content: str) -> set:
+        """从正文中提取实际引用的文献编号"""
         import re
         citations = re.findall(r'\[(\d+)\]', content)
         return set(int(c) for c in citations)
 
     def _renumber_citations_by_appearance(self, content: str, cited_papers: List[Dict], cited_indices: set) -> tuple:
+        """按照引用在文中首次出现的顺序重新编号"""
         import re
+
         citation_pattern = re.compile(r'\[(\d+)\]')
         citations = []
 
@@ -689,10 +668,13 @@ class ReviewGeneratorService:
             return f"[{new_num}]"
 
         new_content = re.sub(r'\[(\d+)\]', replace_citation, content)
+
         return new_content, reordered_papers
 
     def _limit_citation_count_v2(self, content: str, cited_papers: List[Dict], max_count: int = 2) -> str:
+        """限制每篇文献的引用次数"""
         import re
+
         citation_pattern = re.compile(r'\[(\d+)\]')
         citations = []
 
@@ -721,7 +703,9 @@ class ReviewGeneratorService:
         return ''.join(result)
 
     def _sort_and_merge_citations(self, content: str) -> str:
+        """对正文中的引用进行排序和合并"""
         import re
+
         citation_block_pattern = re.compile(r'(\[\d+\])+')
         citation_pattern = re.compile(r'\[(\d+)\]')
 
@@ -732,6 +716,7 @@ class ReviewGeneratorService:
                 return block
 
             citations = sorted(set(citations))
+
             merged = []
             i = 0
             while i < len(citations):
@@ -753,11 +738,13 @@ class ReviewGeneratorService:
         return citation_block_pattern.sub(process_citation_block, content)
 
     def _filter_anonymous_and_renumber(self, content: str, cited_papers: List[Dict]) -> tuple:
+        """过滤掉佚名论文并重新编号引用"""
         valid_papers = []
         old_to_new = {}
 
         new_index = 1
         for old_index, paper in enumerate(cited_papers, 1):
+            # 确保是字典格式
             if not isinstance(paper, dict):
                 paper = self._paper_to_dict(paper)
 
@@ -790,8 +777,10 @@ class ReviewGeneratorService:
         return content, valid_papers
 
     def _format_references(self, papers: List) -> str:
+        """格式化参考文献列表"""
         valid_papers = []
         for paper in papers:
+            # 确保是字典格式
             if not isinstance(paper, dict):
                 paper = self._paper_to_dict(paper)
 
@@ -809,6 +798,8 @@ class ReviewGeneratorService:
         return "\n\n".join(references)
 
     def _format_single_reference(self, paper, index: int) -> str:
+        """格式化单条参考文献"""
+        # 确保是字典格式
         if not isinstance(paper, dict):
             paper = self._paper_to_dict(paper)
 
@@ -831,8 +822,14 @@ class ReviewGeneratorService:
         }
         type_code = type_map.get(paper_type, 'J')
 
-        journal_info = f"{year}" if year else "n.d."
-        doi_suffix = f".DOI:{paper.get('doi', '')}" if paper.get('doi') else ""
+        journal_info = ""
+        if year:
+            journal_info = f"{year}"
+        else:
+            journal_info = "n.d."
+
+        doi = paper.get("doi", "")
+        doi_suffix = f".DOI:{doi}" if doi else ""
 
         return f"[{index}]{authors}.{title}[{type_code}].{journal_info}{doi_suffix}."
 
@@ -840,31 +837,41 @@ class ReviewGeneratorService:
         await self.client.close()
 
 
-# Token 消耗对比
-"""
-原版 v2.0 调用次数：8-10次
-- 步骤1：1次
-- 步骤2：6-7次（引言1 + 主体4 + 结论1）
-- 步骤3：0-2次（补充引用）
-- 步骤4：0次
+# 测试代码
+async def test_v2_generator():
+    """测试 v2 生成器"""
+    print("测试综述生成 v2.0")
 
-优化版调用次数：4-5次
-- 步骤1：1次
-- 步骤2：3次（引言1 + 主体批量1 + 结论1）
-- 步骤3：0-1次（补充引用）
-- 步骤4：0次
+    # 模拟数据
+    topic = "基于机器学习的图像识别研究"
+    papers = [
+        {
+            "id": f"paper_{i}",
+            "title": f"关于机器学习图像识别的研究 {i}",
+            "authors": ["张三", "李四"],
+            "year": 2020 + i % 5,
+            "abstract": "这是一篇关于机器学习图像识别的研究论文...",
+            "cited_by_count": 100 - i * 5,
+            "type": "journal-article"
+        }
+        for i in range(1, 31)
+    ]
 
-Token 节省：
-- 输入：约 30K -> 18K（节省40%）
-- 输出：约 20K -> 12K（节省40%）
-- 总计：约 50K -> 30K（节省40%）
+    generator = ReviewGeneratorServiceV2(
+        api_key="test_key",
+        aminer_token=None
+    )
 
-成本计算（DeepSeek）：
-- 输入：0.14元/1K tokens
-- 输出：0.28元/1K tokens
+    try:
+        # 只测试大纲生成
+        outline = await generator._step1_generate_outline(
+            topic, papers, None, "deepseek-chat"
+        )
+        print(f"大纲: {outline}")
+    finally:
+        await generator.close()
 
-原版成本：(30 * 0.14 + 20 * 0.28) / 1000 ≈ 0.0098元/篇
-优化版成本：(18 * 0.14 + 12 * 0.28) / 1000 ≈ 0.0059元/篇
 
-节省：约40%
-"""
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(test_v2_generator())
