@@ -291,8 +291,25 @@ class ReviewTaskExecutor:
 
         # 获取小节关键词
         section_keywords = framework.get('section_keywords', {})
-        sections = framework.get('framework', {})
-        section_titles = list(sections.keys())
+
+        # 获取小节列表（从 outline 或 framework）
+        outline = framework.get('outline', {})
+        body_sections = outline.get('body_sections', [])
+
+        # 如果 outline 中没有小节，尝试从 framework.sections 获取
+        if not body_sections:
+            framework_dict = framework.get('framework', {})
+            body_sections = framework_dict.get('sections', [])
+
+        # 提取小节标题
+        section_titles = []
+        for section in body_sections:
+            if isinstance(section, dict):
+                title = section.get('title', '')
+            else:
+                title = str(section)
+            if title and title not in ['引言', '结论']:
+                section_titles.append(title)
 
         print(f"[阶段3] 检测到 {len(section_titles)} 个小节")
         for title in section_titles:
@@ -300,8 +317,9 @@ class ReviewTaskExecutor:
             print(f"  - {title}: {len(keywords)} 个关键词")
 
         # 获取数据库session
-        from database import get_db_session
-        db_session = next(get_db_session())
+        from database import db
+        db_session_gen = db.get_session()
+        db_session = next(db_session_gen)
 
         # 按小节搜索文献（先不去重，收集所有文献）
         raw_papers_by_section = {}
