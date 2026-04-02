@@ -107,8 +107,8 @@ class ReviewTaskExecutor:
                     import traceback
                     traceback.print_exc()
 
-            # 使用新的增强搜索方法
-            all_papers, search_queries_results = await self._search_literature_with_requirements(
+            # === 阶段3: 按小节搜索文献 ===
+            search_result = await self._search_literature_by_sections(
                 topic=topic,
                 search_queries=search_queries,
                 params=params,
@@ -116,62 +116,20 @@ class ReviewTaskExecutor:
                 task_id=task_id
             )
 
-            if not all_papers:
+            if not search_result['all_papers']:
                 raise Exception(f'未找到关于「{topic}」的相关文献')
 
-            # 3. 筛选文献（增强版）
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.PROCESSING,
-                progress={"step": "filtering", "message": "正在筛选文献..."}
+            # === 阶段4: 精简文献到50篇 ===
+            final_papers = await self._filter_papers_to_target(
+                search_result=search_result,
+                topic=topic,
+                framework=framework,
+                params=params,
+                task_id=task_id
             )
 
-            topic_keywords = gen.extract_relevance_keywords(framework)
-
-            # 获取配置参数
-            target_count = params.get('target_count', 50)
-            recent_years_ratio = params.get('recent_years_ratio', 0.5)
-            english_ratio = params.get('english_ratio', 0.3)
-
-            # 第1次筛选：使用标准要求
-            search_count = max(target_count * 2, 100)
-            filtered_papers = self.filter_service.filter_and_sort(
-                papers=all_papers,
-                target_count=search_count,
-                recent_years_ratio=recent_years_ratio,
-                english_ratio=english_ratio,
-                topic_keywords=topic_keywords
-            )
-
-            # 检查是否满足要求
-            filter_stats = self.filter_service.get_statistics(filtered_papers)
-            print(f"[TaskExecutor] 第1次筛选结果: 总数={filter_stats['total']}, "
-                  f"近5年比例={filter_stats['recent_ratio']:.2%}, "
-                  f"英文比例={filter_stats['english_ratio']:.2%}")
-
-            # 检查是否满足数量要求
-            requirements_met = (
-                filter_stats['total'] >= target_count and
-                filter_stats['recent_ratio'] >= recent_years_ratio * 0.8 and  # 允许20%误差
-                filter_stats['english_ratio'] >= english_ratio * 0.8
-            )
-
-            if not requirements_met:
-                print(f"[TaskExecutor] 第1次筛选未达标，尝试放宽要求重新筛选")
-
-                # 第2次筛选：放宽要求
-                filtered_papers = self.filter_service.filter_and_sort(
-                    papers=all_papers,
-                    target_count=search_count,
-                    recent_years_ratio=recent_years_ratio * 0.5,  # 放宽年份要求
-                    english_ratio=english_ratio * 0.5,  # 放宽英文比例要求
-                    topic_keywords=topic_keywords
-                )
-
-                filter_stats = self.filter_service.get_statistics(filtered_papers)
-                print(f"[TaskExecutor] 第2次筛选结果: 总数={filter_stats['total']}, "
-                      f"近5年比例={filter_stats['recent_ratio']:.2%}, "
-                      f"英文比例={filter_stats['english_ratio']:.2%}")
+            if not final_papers:
+                raise Exception(f'筛选后没有足够的文献')
 
             # 检查是否满足最低数量要求
             if filter_stats['total'] < target_count:
@@ -213,45 +171,11 @@ class ReviewTaskExecutor:
                         for paper in additional_papers:
                             if paper.get('id') not in existing_ids:
                                 filtered_papers.append(paper)
-
-                        # 检查是否已满足要求
-                        if len(filtered_papers) >= target_count:
-                            print(f"[TaskExecutor] 补充搜索后达标，停止搜索")
-                            break
-
-                except Exception as e:
-                    print(f"[TaskExecutor] LLM调整搜索策略失败: {e}")
-                    import traceback
-                    traceback.print_exc()
-
-            # 保底：如果仍然不足，使用所有文献
-            if len(filtered_papers) < max(target_count, 10):
-                print(f"[TaskExecutor] 筛选后文献仍然不足，使用所有可用文献")
-                # 按相关性评分排序
-                all_papers_with_score = []
-                for paper in all_papers:
-                    score = self._calculate_relevance_score(paper, topic_keywords)
-                    all_papers_with_score.append({**paper, '_relevance_score': score})
-
-                all_papers_with_score.sort(key=lambda x: x.get('_relevance_score', 0), reverse=True)
-                filtered_papers = all_papers_with_score[:max(target_count * 2, 100)]
-
-                # 转换 _relevance_score 为 relevance_score
-                for paper in filtered_papers:
-                    if '_relevance_score' in paper:
-                        paper['relevance_score'] = paper.pop('_relevance_score')
-
-            # 最终统计
-            filter_stats = self.filter_service.get_statistics(filtered_papers)
-            print(f"[TaskExecutor] 最终筛选结果: 总数={filter_stats['total']}, "
-                  f"近5年比例={filter_stats['recent_ratio']:.2%}, "
-                  f"英文比例={filter_stats['english_ratio']:.2%}")
-
-            # 4. 生成综述
+            # === 阶段5: 分小节生成综述 ===
             task_manager.update_task_status(
                 task_id,
                 TaskStatus.PROCESSING,
-                progress={"step": "preselecting", "message": "正在预选高相关文献..."}
+                progress={"step": "generating", "message": f"正在生成综述 (50篇文献)..."}
             )
 
             api_key = os.getenv("DEEPSEEK_API_KEY")
@@ -260,38 +184,8 @@ class ReviewTaskExecutor:
             if not api_key:
                 raise Exception("DEEPSEEK_API_KEY not configured")
 
-            # === 预选文献：从筛选后的文献池中智能预选60篇 ===
-            # 要求（在范围内随机）：
-            # 1. 从100篇文献池中
-            # 2. 英文文献：30%～45%（约18～27篇）
-            # 3. 近5年文献：50%～80%（约30～48篇）
-            # 4. 总共输出60篇
-
-            import random
-            english_ratio = random.uniform(0.30, 0.45)  # 英文文献比例：30%～45%
-            recent_ratio = random.uniform(0.50, 0.80)  # 近5年文献比例：50%～80%
-
-            min_english = int(60 * english_ratio)
-            min_recent_count = int(60 * recent_ratio)
-
-            print(f"[预选] 本次随机目标: 英文比例={english_ratio:.2%} ({min_english}篇), "
-                  f"近5年比例={recent_ratio:.2%} ({min_recent_count}篇)")
-
-            preselected_papers = self._preselect_papers_with_requirements(
-                papers=filtered_papers,
-                target_count=60,
-                min_english=min_english,
-                min_recent_ratio=recent_ratio
-            )
-
-            print(f"[TaskExecutor] 预选文献: {len(filtered_papers)} → {len(preselected_papers)} 篇")
-
-            # 验证预选结果
-            preselect_stats = self.filter_service.get_statistics(preselected_papers)
-            print(f"[TaskExecutor] 预选结果: 总数={preselect_stats['total']}, "
-                  f"英文={preselect_stats['english_count']}, "
-                  f"近5年={preselect_stats['recent_count']}, "
-                  f"比例={preselect_stats['recent_ratio']:.2%}")
+            print(f"\n[阶段5] 分小节生成综述")
+            print(f"[阶段5] 文献数量: {len(final_papers)} 篇")
 
             task_manager.update_task_status(
                 task_id,
@@ -303,7 +197,7 @@ class ReviewTaskExecutor:
 
             review, cited_papers = await generator.generate_review(
                 topic=topic,
-                papers=preselected_papers,
+                papers=final_papers,
                 specificity_guidance=specificity_guidance
             )
 
@@ -317,7 +211,7 @@ class ReviewTaskExecutor:
             # 使用增强的验证方法
             content, cited_papers = await self._validate_and_fix_review(
                 review=review,
-                papers=preselected_papers,
+                papers=final_papers,
                 generator=generator,
                 task_id=task_id
             )
@@ -325,16 +219,9 @@ class ReviewTaskExecutor:
             # 6. 计算统计信息
             stats = self.filter_service.get_statistics(cited_papers)
 
+            # 标记文献是否被引用
             cited_paper_ids = {p.get('id') for p in cited_papers}
-            for query_result in search_queries_results:
-                cited_count = sum(1 for p in query_result['papers'] if p.get('id') in cited_paper_ids)
-                query_result['citedCount'] = cited_count
-                for paper in query_result['papers']:
-                    paper['cited'] = paper.get('id') in cited_paper_ids
-                    if 'relevance_score' not in paper:
-                        paper['relevance_score'] = 0
-
-            for paper in filtered_papers:
+            for paper in final_papers:
                 if 'relevance_score' not in paper:
                     paper['relevance_score'] = 0
                 paper['cited'] = paper.get('id') in cited_paper_ids
@@ -360,10 +247,9 @@ class ReviewTaskExecutor:
                     "topic": topic,
                     "review": review,
                     "papers": cited_papers,
-                    "candidate_pool": filtered_papers,
+                    "candidate_pool": final_papers,
                     "statistics": stats,
                     "analysis": framework,
-                    "search_queries_results": search_queries_results,
                     "cited_papers_count": len(cited_papers),
                     "validation": final_validation,
                     "created_at": record.created_at.isoformat()
@@ -397,25 +283,20 @@ class ReviewTaskExecutor:
 
     # ==================== 新增：阶段3增强文献搜索方法 ====================
 
-    async def _search_literature_with_requirements(
+    async def _search_literature_by_sections(
         self,
         topic: str,
         search_queries: list,
         params: dict,
         framework: dict,
         task_id: str
-    ) -> tuple:
+    ) -> dict:
         """
-        增强的文献搜索方法，确保满足数量和质量要求
+        按小节搜索文献（新流程）
 
-        要求：
-        1. 文献不重复
-        2. 总数>target_total（默认100，可配置）
-        3. 中文文献>target_chinese（默认60，可配置）
-        4. 英文文献>target_english（默认30，可配置）
-        5. AMiner论文补充详情
-        6. 保存到数据库
-        7. 不达标时扩大范围搜索
+        流程：
+        1. 按小节的关键词分别搜索
+        2. 输出按小节分组的文献列表
 
         Args:
             topic: 论文主题
@@ -425,177 +306,164 @@ class ReviewTaskExecutor:
             task_id: 任务ID
 
         Returns:
-            (文献列表, 搜索结果统计)
+            {
+                'sections': {
+                    '小节名': [论文列表],
+                    ...
+                },
+                'all_papers': [所有论文（去重后）],
+                'stats': 统计信息
+            }
         """
-        # 获取配置的目标数量
-        target_total = params.get('target_total', 100)
-        target_chinese = params.get('target_chinese', 60)
-        target_english = params.get('target_english', 30)
+        print("=" * 80)
+        print("[阶段3] 按小节搜索文献")
+        print("=" * 80)
 
-        print(f"[TaskExecutor] 文献搜索目标: 总数>{target_total}, 中文>{target_chinese}, 英文>{target_english}")
+        # 获取小节关键词
+        section_keywords = framework.get('section_keywords', {})
+        sections = framework.get('framework', {})
+        section_titles = list(sections.keys())
 
-        all_papers = []
-        search_queries_results = []
+        print(f"[阶段3] 检测到 {len(section_titles)} 个小节")
+        for title in section_titles:
+            keywords = section_keywords.get(title, [])
+            print(f"  - {title}: {len(keywords)} 个关键词")
+
+        # 按小节搜索文献
+        papers_by_section = {}
         seen_ids = set()
+        all_papers = []
 
-        # 第1轮：使用原始搜索查询
-        print(f"[TaskExecutor] 第1轮搜索: 使用{len(search_queries)}个搜索查询")
-        for i, query_info in enumerate(search_queries[:params.get('max_search_queries', 8)]):
-            query = query_info.get('query', topic)
-            section = query_info.get('section', '通用')
-            lang = query_info.get('lang', None)
-            keywords = query_info.get('keywords', None)
-            search_mode = query_info.get('search_mode', None)
+        for section_title in section_titles:
+            if section_title in ['引言', '结论']:
+                continue  # 跳过引言和结论
 
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.PROCESSING,
-                progress={"step": "searching", "message": f"正在搜索文献 ({i+1}/{len(search_queries)})..."}
-            )
+            keywords = section_keywords.get(section_title, [])
+            if not keywords:
+                print(f"[阶段3] 小节 '{section_title}' 没有关键词，跳过")
+                continue
 
-            papers = await self.search_service.search(
-                query=query,
-                years_ago=params.get('search_years', 10),
-                limit=50,
-                lang=lang,
-                keywords=keywords,
-                search_mode=search_mode
-            )
+            print(f"[阶段3] 正在搜索小节: {section_title}")
 
-            # 去重
-            new_papers = []
-            for paper in papers:
-                paper_id = paper.get("id")
-                if paper_id not in seen_ids:
-                    seen_ids.add(paper_id)
-                    new_papers.append(paper)
+            section_papers = []
+            # 为每个关键词搜索
+            for keyword in keywords[:5]:  # 每个小节最多5个关键词
+                task_manager.update_task_status(
+                    task_id,
+                    TaskStatus.PROCESSING,
+                    progress={"step": "searching", "message": f"正在搜索 {section_title}: {keyword}..."}
+                )
 
-            search_queries_results.append({
-                'query': query,
-                'section': section,
-                'papers': new_papers,
-                'citedCount': 0
-            })
-            all_papers.extend(new_papers)
-
-        # 检查是否满足要求
-        stats = self._calculate_paper_stats(all_papers)
-        print(f"[TaskExecutor] 第1轮搜索结果: 总数={stats['total']}, 中文={stats['chinese']}, 英文={stats['english']}")
-
-        # 第2轮：如果不满足要求，扩大范围搜索
-        if (stats['total'] < target_total or
-            stats['chinese'] < target_chinese or
-            stats['english'] < target_english):
-
-            print(f"[TaskExecutor] 第1轮未达标，开始第2轮扩大范围搜索")
-
-            # 扩大搜索策略：
-            # 1. 使用更宽泛的查询
-            # 2. 增加年份范围
-            # 3. 使用所有数据源
-
-            # 从框架中提取核心关键词
-            section_keywords = framework.get('section_keywords', {})
-
-            # 为每个章节进行扩展搜索
-            for section_title, keywords in section_keywords.items():
-                if section_title in ['引言', '结论']:
-                    continue  # 跳过引言和结论
-
-                # 取前3个关键词进行搜索
-                for keyword in keywords[:3]:
-                    task_manager.update_task_status(
-                        task_id,
-                        TaskStatus.PROCESSING,
-                        progress={"step": "searching", "message": f"正在扩大搜索: {keyword}..."}
-                    )
-
-                    # 扩大年份范围
-                    papers = await self.search_service.search(
-                        query=keyword,
-                        years_ago=params.get('search_years', 10) + 5,  # 增加5年
-                        limit=30,
-                        use_all_sources=True
-                    )
-
-                    # 去重
-                    new_papers = []
-                    for paper in papers:
-                        paper_id = paper.get("id")
-                        if paper_id not in seen_ids:
-                            seen_ids.add(paper_id)
-                            new_papers.append(paper)
-
-                    all_papers.extend(new_papers)
-
-                    # 检查是否已满足要求
-                    stats = self._calculate_paper_stats(all_papers)
-                    if (stats['total'] >= target_total and
-                        stats['chinese'] >= target_chinese and
-                        stats['english'] >= target_english):
-                        print(f"[TaskExecutor] 第2轮搜索已达标，停止搜索")
-                        break
-
-                # 再次检查
-                stats = self._calculate_paper_stats(all_papers)
-                if (stats['total'] >= target_total and
-                    stats['chinese'] >= target_chinese and
-                    stats['english'] >= target_english):
-                    break
-
-        # 第3轮：如果仍然不满足，使用主题进行宽泛搜索
-        stats = self._calculate_paper_stats(all_papers)
-        if (stats['total'] < target_total or
-            stats['chinese'] < target_chinese or
-            stats['english'] < target_english):
-
-            print(f"[TaskExecutor] 第2轮未达标，开始第3轮宽泛搜索")
-
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.PROCESSING,
-                progress={"step": "searching", "message": "正在进行宽泛搜索..."}
-            )
-
-            # 提取主题关键词
-            topic_keywords = self._extract_topic_keywords_from_framework(framework)
-
-            for keyword in topic_keywords[:5]:
                 papers = await self.search_service.search(
                     query=keyword,
-                    years_ago=20,  # 扩大到20年
-                    limit=50,
+                    years_ago=params.get('search_years', 10),
+                    limit=30,
                     use_all_sources=True
                 )
 
-                # 去重
-                new_papers = []
+                # 去重并添加到小节文献列表
                 for paper in papers:
                     paper_id = paper.get("id")
                     if paper_id not in seen_ids:
                         seen_ids.add(paper_id)
-                        new_papers.append(paper)
+                        section_papers.append(paper)
+                        all_papers.append(paper)
 
-                all_papers.extend(new_papers)
+            print(f"[阶段3] 小节 '{section_title}' 搜索到 {len(section_papers)} 篇文献")
+            papers_by_section[section_title] = section_papers
 
-                stats = self._calculate_paper_stats(all_papers)
-                if stats['total'] >= target_total:
-                    break
-
-        # 最终统计
+        # 统计信息
         stats = self._calculate_paper_stats(all_papers)
-        print(f"[TaskExecutor] 搜索完成: 总数={stats['total']}, 中文={stats['chinese']}, 英文={stats['english']}")
-
-        # 检查是否满足最低要求
-        if stats['total'] < 50:
-            print(f"[TaskExecutor] 警告: 搜索文献总数不足50篇，当前{stats['total']}篇")
+        print(f"\n[阶段3] 搜索完成:")
+        print(f"  - 总文献数: {stats['total']}")
+        print(f"  - 中文: {stats['chinese']}")
+        print(f"  - 英文: {stats['english']}")
+        print(f"  - 小节分布:")
+        for section_title, papers in papers_by_section.items():
+            print(f"    - {section_title}: {len(papers)} 篇")
 
         # AMiner论文详情补充
         all_papers = await self._enrich_aminer_papers(all_papers)
 
-        # 保存到数据库（由SmartPaperSearchService自动处理）
+        return {
+            'sections': papers_by_section,
+            'all_papers': all_papers,
+            'stats': stats
+        }
 
-        return all_papers, search_queries_results
+    async def _filter_papers_to_target(
+        self,
+        search_result: dict,
+        topic: str,
+        framework: dict,
+        params: dict,
+        task_id: str
+    ) -> list:
+        """
+        精简文献到目标数量（新流程阶段4）
+
+        流程：
+        1. 合并所有小节的文献
+        2. 按相关性筛选
+        3. 精简到50篇
+
+        Args:
+            search_result: 搜索结果（按小节分组）
+            topic: 论文主题
+            framework: 框架信息
+            params: 参数配置
+            task_id: 任务ID
+
+        Returns:
+            精简后的50篇文献列表
+        """
+        print("\n" + "=" * 80)
+        print("[阶段4] 精简文献到50篇")
+        print("=" * 80)
+
+        all_papers = search_result['all_papers']
+        papers_by_section = search_result['sections']
+
+        print(f"[阶段4] 输入文献数: {len(all_papers)}")
+
+        # 提取主题关键词
+        topic_keywords = []
+        section_keywords = framework.get('section_keywords', {})
+        for keywords in section_keywords.values():
+            topic_keywords.extend(keywords)
+
+        # 筛选参数
+        target_count = 50
+        recent_years_ratio = params.get('recent_years_ratio', 0.5)
+        english_ratio = params.get('english_ratio', 0.3)
+
+        # 使用筛选服务
+        task_manager.update_task_status(
+            task_id,
+            TaskStatus.PROCESSING,
+            progress={"step": "filtering", "message": "正在筛选和精简文献..."}
+        )
+
+        filtered_papers = self.filter_service.filter_and_sort(
+            papers=all_papers,
+            target_count=target_count * 2,  # 先筛选到100篇
+            recent_years_ratio=recent_years_ratio,
+            english_ratio=english_ratio,
+            topic_keywords=topic_keywords
+        )
+
+        # 从筛选结果中随机选择50篇
+        import random
+        random.seed(42)  # 固定随机种子
+        final_papers = random.sample(filtered_papers, min(target_count, len(filtered_papers)))
+
+        stats = self.filter_service.get_statistics(final_papers)
+        print(f"[阶段4] 精简完成:")
+        print(f"  - 最终文献数: {len(final_papers)}")
+        print(f"  - 英文文献: {stats['english_count']}")
+        print(f"  - 近5年文献: {stats['recent_count']} ({stats['recent_ratio']:.1%})")
+
+        return final_papers
 
     def _calculate_paper_stats(self, papers: list) -> dict:
         """计算文献统计信息"""
