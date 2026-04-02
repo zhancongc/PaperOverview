@@ -88,19 +88,67 @@ class ReviewGeneratorService:
         unique_cited = len(cited_indices)
         print(f"  - 当前引用: {unique_cited} 篇")
 
-        # 只在引用不足时才补充引用
-        min_citations = 25  # 降低要求
-        if unique_cited < min_citations:
-            print(f"  - 引用不足，补充中...")
-            papers_dict = [self._paper_to_dict(p) for p in papers]
-            content_draft = await self._add_more_citations(
-                content_draft, papers_dict, topic, min_citations, model, cited_indices
-            )
+        # 动态调整目标引用数量
+        target_citations = min(50, len(papers))  # 目标是50篇，但不能超过可用文献数
+        min_citations = max(30, int(target_citations * 0.7))  # 至少70%的目标数量
+
+        # 多次尝试补充引用
+        max_attempts = 3
+        for attempt in range(max_attempts):
             cited_indices = self._extract_cited_indices(content_draft)
+            unique_cited = len(cited_indices)
+
+            if unique_cited >= target_citations:
+                print(f"  - ✓ 引用数量达标: {unique_cited} 篇")
+                break
+
+            if unique_cited < min_citations:
+                print(f"  - 引用不足 ({unique_cited}/{target_citations})，尝试 {attempt + 1}/{max_attempts} 补充...")
+                papers_dict = [self._paper_to_dict(p) for p in papers]
+                content_draft = await self._add_more_citations(
+                    content_draft, papers_dict, topic, target_citations, model, cited_indices
+                )
+            else:
+                print(f"  - 引用数量接近目标: {unique_cited}/{target_citations}")
+                break
+        else:
+            # 最终检查
+            cited_indices = self._extract_cited_indices(content_draft)
+            unique_cited = len(cited_indices)
+            print(f"  - 最终引用数量: {unique_cited} 篇")
 
         # 按出现顺序重新编号
-        cited_papers = [self._paper_to_dict(papers[i - 1]) for i in cited_indices if i <= len(papers)]
-        content, cited_papers = self._renumber_citations_by_appearance(content_draft, cited_papers, cited_indices)
+        # 只保留在有效范围内的引用编号
+        valid_cited_indices = {i for i in cited_indices if 1 <= i <= len(papers)}
+        cited_papers = [self._paper_to_dict(papers[i - 1]) for i in valid_cited_indices]
+
+        # 更新 content_draft，替换超出范围的引用
+        if len(valid_cited_indices) < len(cited_indices):
+            invalid_count = len(cited_indices) - len(valid_cited_indices)
+            print(f"[引用修复] 发现 {invalid_count} 个超出范围的引用，尝试替换...")
+
+            # 获取未引用的文献
+            uncited_indices = set(range(1, len(papers) + 1)) - valid_cited_indices
+
+            if uncited_indices:
+                # 替换超出范围的引用
+                content_draft = self._replace_invalid_citations(
+                    content_draft, cited_indices, valid_cited_indices, uncited_indices, papers, topic
+                )
+            else:
+                # 没有可用文献进行替换，只能删除
+                print(f"[引用修复] 没有可用文献进行替换，删除超出范围的引用")
+                import re
+                def remove_invalid_citations(match):
+                    num = int(match.group(1))
+                    if num in valid_cited_indices:
+                        return match.group(0)
+                    return ""
+                content_draft = re.sub(r'\[(\d+)\]', remove_invalid_citations, content_draft)
+                # 清理空的方括号
+                content_draft = re.sub(r'\[\s*\]', '', content_draft)
+
+        content, cited_papers = self._renumber_citations_by_appearance(content_draft, cited_papers, valid_cited_indices)
 
         # 限制每篇文献引用次数
         content = self._limit_citation_count_v2(content, cited_papers, max_count=2)
@@ -108,10 +156,28 @@ class ReviewGeneratorService:
 
         print(f"[步骤 3/4] ✓ 引用修复完成，引用 {len(cited_papers)} 篇")
 
+        # === 第3.5步：内容完整性检查 ===
+        print(f"\n[步骤 3.5/4] 检查内容完整性...")
+        content = await self._ensure_content_completeness(
+            content, topic, papers, specificity_guidance, model, outline
+        )
+
+        # === 第3.6步：文献相关性检查 ===
+        print(f"\n[步骤 3.6/4] 检查文献相关性...")
+        # 使用术语库增强关键词提取
+        topic_keywords = self._extract_topic_keywords_with_library(topic)
+        cited_papers = self._filter_irrelevant_papers(cited_papers, topic, topic_keywords)
+        print(f"[步骤 3.6/4] ✓ 相关性检查完成，最终引用 {len(cited_papers)} 篇")
+
         # === 第4步：润色和格式化 ===
-        print(f"\n[步骤 4/4] 润色和格式化...")
+        print(f"\n[步骤 4/5] 润色和格式化...")
         final_review = await self._step4_polish_format(content, cited_papers)
-        print(f"[步骤 4/4] ✓ 润色完成")
+        print(f"[步骤 4/5] ✓ 润色完成")
+
+        # === 第5步：最终格式验证和清理 ===
+        print(f"\n[步骤 5/5] 最终格式验证和清理...")
+        final_review = self._final_format_cleanup(final_review)
+        print(f"[步骤 5/5] ✓ 格式验证完成")
 
         print(f"\n[完成] 综述生成完毕！总调用: 4-5次")
         print("=" * 80)
@@ -268,11 +334,21 @@ class ReviewGeneratorService:
 - 推荐引用：{key_papers[:5] if key_papers else '根据内容选择'}
 - 本部分引用 5-8 篇即可
 
+**重要提醒**：
+- 只引用与主题"{topic}"直接相关的文献
+- 不要引用其他领域（如气候、蛋白质结构等）的文献
+- 引用的文献必须与主题有明确的关联性
+
 输出：Markdown（## 引言）"""
 
         user_prompt = f"""主题：{focus}
 
-可用文献编号：1-{len(papers[:20])}
+**⚠️ 重要提示**：
+- 📚 本次可用文献总数：{len(papers)} 篇
+- 🔢 本部分可引用文献编号：1-{min(len(papers), 20)}
+- ❌ 严禁使用超出 {len(papers)} 的引用编号
+
+可用文献（显示前{min(len(papers), 20)}篇）：
 
 {papers_brief}
 
@@ -315,19 +391,38 @@ class ReviewGeneratorService:
 - 每个主题引用 8-12 篇
 - 每篇文献不超过2次
 
-输出：每个主题使用二级标题（## 标题）"""
+**重要：输出格式要求**
+- 每个主题必须使用二级标题（## 标题）
+- 标题必须与下方给出的主题标题完全一致
+- 例如：如果主题是"理论基础与研究现状"，则输出 "## 理论基础与研究现状"
+- 各主题之间用空行分隔
+- 不要添加额外的章节或内容
+
+**文献相关性提醒**：
+- 主题是：{topic}
+- 只引用与"{topic}"直接相关的文献
+- 不要引用其他领域的文献（如蛋白质折叠、气候模型等）
+- 确保每篇引用的文献都与主题有明确的关联"""
 
             user_prompt = f"""主题：{topic}
 
-需要生成的主体部分：
+需要生成的主体部分（必须按以下顺序生成，标题完全一致）：
 {sections_info}
+
+**⚠️ 重要提示**：
+- 📚 本次可用文献总数：{len(papers)} 篇
+- 🔢 可用文献编号范围：1-{len(papers)}
+- ❌ 严禁使用超出 {len(papers)} 的引用编号
 
 可用文献（共{len(papers)}篇）：
 {papers_info}
 
-请生成所有主体部分："""
+请按顺序生成所有主体部分，确保每个主题都使用对应的二级标题："""
 
             content = await self._call_llm(system_prompt, user_prompt, model, max_tokens=4000)
+
+            print(f"[主体生成] 原始内容长度: {len(content)} 字符")
+            print(f"[主体生成] 内容预览:\n{content[:500]}...")
 
             # 分割各节内容
             for section_outline in sections_outline:
@@ -336,6 +431,17 @@ class ReviewGeneratorService:
                 section_content = self._extract_section_content(content, title)
                 if section_content:
                     all_sections.append(section_content)
+                    print(f"[主体生成] ✓ 成功提取章节: {title} ({len(section_content)} 字符)")
+                else:
+                    print(f"[主体生成] ✗ 章节提取失败: {title}")
+                    # 如果提取失败，尝试单独生成该章节
+                    print(f"[主体生成] 尝试单独生成章节: {title}")
+                    fallback_content = await self._generate_fallback_section(
+                        topic, title, section_outline, papers, specificity_section, model
+                    )
+                    if fallback_content:
+                        all_sections.append(fallback_content)
+                        print(f"[主体生成] ✓ 补充生成成功: {title}")
 
         else:
             # === 分为2次调用 ===
@@ -424,6 +530,10 @@ class ReviewGeneratorService:
 
 **引用要求**：结论部分引用要少，3-5篇即可
 
+**重要提醒**：
+- 只输出结论部分的内容，不要添加参考文献列表
+- 不要在结论末尾添加"参考文献"或类似内容
+
 输出：Markdown（## 结论）"""
 
         user_prompt = f"""主题：{topic}
@@ -436,6 +546,140 @@ class ReviewGeneratorService:
 请生成结论部分："""
 
         return await self._call_llm(system_prompt, user_prompt, model, max_tokens=1200)
+
+    async def _generate_fallback_section(
+        self,
+        topic: str,
+        title: str,
+        section_outline: Dict,
+        papers: List,
+        specificity_section: str,
+        model: str
+    ) -> str:
+        """补充生成单个章节（当批量生成失败时使用）"""
+        focus = section_outline.get('focus', '深入分析该主题')
+        key_papers = section_outline.get('key_papers', [])
+        comparison_points = section_outline.get('comparison_points', [])
+
+        papers_brief = self._format_papers_compact(papers[:30])
+
+        system_prompt = f"""你是学术写作专家，擅长撰写文献综述的特定章节。
+
+{specificity_section}
+
+**写作要求**：
+1. 聚焦主题：{focus}
+2. 构建文献矩阵对比分析
+3. 引用相关文献支持观点
+
+**引用要求**：
+- 使用文献编号，如 [1]、[2]
+- 推荐引用：{key_papers[:10] if key_papers else '根据内容选择'}
+- 本部分引用 8-12 篇
+
+**重要**：
+- 必须使用二级标题（## {title}）
+- 标题必须完全一致
+- 不要添加其他章节
+
+**文献相关性提醒**：
+- 综述主题是：{topic}
+- 只引用与"{topic}"直接相关的文献
+- 不要引用其他领域的文献"""
+
+        user_prompt = f"""主题：{topic}
+
+章节标题：## {title}
+写作重点：{focus}
+对比要点：{', '.join(comparison_points) if comparison_points else '根据内容确定'}
+
+**⚠️ 重要提示**：
+- 📚 本次可用文献总数：{len(papers)} 篇
+- 🔢 本部分可引用文献编号：1-{min(len(papers), 30)}
+- ❌ 严禁使用超出 {len(papers)} 的引用编号
+
+可用文献（显示前{min(len(papers), 30)}篇）：
+
+{papers_brief}
+
+请生成该章节内容："""
+
+        return await self._call_llm(system_prompt, user_prompt, model, max_tokens=2000)
+
+    async def _ensure_content_completeness(
+        self,
+        content: str,
+        topic: str,
+        papers: List,
+        specificity_guidance: dict,
+        model: str,
+        outline: Dict
+    ) -> str:
+        """确保综述内容完整，包含所有必需章节"""
+        specificity_section = self._format_specificity_guidance(specificity_guidance)
+
+        # 检查各个章节是否存在
+        has_introduction = "## 引言" in content or "### 引言" in content
+        has_conclusion = "## 结论" in content or "### 结论" in content
+
+        # 检查主体章节
+        sections = outline.get('sections', [])
+        has_body_sections = True
+        missing_sections = []
+
+        for section in sections:
+            title = section.get('title', '')
+            # 使用多种匹配方式检查章节是否存在
+            if f"## {title}" not in content:
+                # 尝试关键词匹配
+                keywords = title.split()[:2]  # 取前两个关键词
+                found = any(kw in content for kw in keywords if len(kw) > 2)
+                if not found:
+                    has_body_sections = False
+                    missing_sections.append(section)
+
+        # 报告检查结果
+        print(f"[完整性检查] 引言: {'✓' if has_introduction else '✗ 缺失'}")
+        print(f"[完整性检查] 主体章节: {'✓' if has_body_sections else '✗ 缺失'}")
+        if missing_sections:
+            print(f"[完整性检查] 缺失章节: {[s.get('title', '') for s in missing_sections]}")
+        print(f"[完整性检查] 结论: {'✓' if has_conclusion else '✗ 缺失'}")
+
+        # 补充缺失的章节
+        if not has_introduction:
+            print("[完整性检查] 正在补充引言...")
+            intro_outline = outline.get('introduction', {})
+            introduction = await self._generate_introduction_optimized(
+                topic, intro_outline, papers, specificity_section, model
+            )
+            content = introduction + "\n\n" + content
+
+        if missing_sections:
+            print(f"[完整性检查] 正在补充 {len(missing_sections)} 个缺失章节...")
+            for section in missing_sections:
+                title = section.get('title', '')
+                print(f"[完整性检查] 补充章节: {title}")
+                fallback_content = await self._generate_fallback_section(
+                    topic, title, section, papers, specificity_section, model
+                )
+                if fallback_content:
+                    # 在结论之前插入
+                    conclusion_pos = content.find("## 结论")
+                    if conclusion_pos > 0:
+                        content = content[:conclusion_pos] + fallback_content + "\n\n" + content[conclusion_pos:]
+                    else:
+                        content = content + "\n\n" + fallback_content
+
+        if not has_conclusion:
+            print("[完整性检查] 正在补充结论...")
+            conclusion_outline = outline.get('conclusion', {})
+            conclusion = await self._generate_conclusion_optimized(
+                topic, conclusion_outline, sections, papers, specificity_section, model
+            )
+            content = content + "\n\n" + conclusion
+
+        print("[完整性检查] ✓ 内容完整性检查完成")
+        return content
 
     # ==================== 辅助方法 ====================
 
@@ -488,9 +732,27 @@ class ReviewGeneratorService:
         capturing = False
         section_found = False
 
-        for line in lines:
-            # 检查是否是目标节标题
-            if f"## {title}" in line or f"## {title.split()[0]}" in line:
+        # 提取标题关键词（更宽松的匹配）
+        title_keywords = title.split()
+        # 至少匹配前两个关键词
+        main_keyword = title_keywords[0] if title_keywords else ""
+        second_keyword = title_keywords[1] if len(title_keywords) > 1 else ""
+
+        for i, line in enumerate(lines):
+            # 检查是否是目标节标题（更宽松的匹配）
+            is_section_title = False
+
+            # 完全匹配
+            if f"## {title}" in line:
+                is_section_title = True
+            # 匹配主关键词
+            elif main_keyword and main_keyword in line and line.startswith('## '):
+                is_section_title = True
+            # 匹配前两个关键词
+            elif second_keyword and main_keyword in line and second_keyword in line and line.startswith('## '):
+                is_section_title = True
+
+            if is_section_title:
                 capturing = True
                 section_found = True
                 section_lines.append(line)
@@ -498,7 +760,9 @@ class ReviewGeneratorService:
 
             # 检查是否到了下一个节
             if capturing and line.startswith('## ') and title not in line:
-                break
+                # 如果新标题包含其他主体章节的关键词，则停止
+                if main_keyword and main_keyword not in line:
+                    break
 
             if capturing:
                 section_lines.append(line)
@@ -601,6 +865,7 @@ class ReviewGeneratorService:
         additional_count = min(len(uncited_indices), target_count - len(cited_indices))
         additional_papers = []
 
+        # 按被引量排序未引用的文献
         sorted_uncited = sorted(
             uncited_indices,
             key=lambda i: papers[i-1].get('cited_by_count', 0),
@@ -613,40 +878,66 @@ class ReviewGeneratorService:
             authors = ", ".join(authors_list[:3]) if authors_list else "未知作者"
             if len(authors_list) > 3:
                 authors += " 等"
-            additional_papers.append(f"[{idx}] {paper.get('title', '')[:50]}... - {authors}")
+            year = paper.get('year', 'n.d.')
+            additional_papers.append(f"[{idx}] {paper.get('title', '')[:60]}... - {authors} ({year})")
 
-        supplement_prompt = f"""请在现有综述基础上补充更多文献引用。
+        # 计算需要显示的内容长度（尽可能显示更多）
+        content_preview = content if len(content) <= 6000 else content[:6000]
 
-当前已引用 {len(cited_indices)} 篇，目标 {target_count} 篇。
+        supplement_prompt = f"""你是学术写作专家。请在现有综述基础上补充更多文献引用。
 
-可补充的文献（只显示前15篇）：
-{chr(10).join(additional_papers[:15])}
+**综述主题**：{topic}
 
-要求：
-1. 按顺序继续编号
-2. 添加到合适位置
-3. 直接输出修改后的完整综述
+**当前状态**：已引用 {len(cited_indices)} 篇，目标 {target_count} 篇
 
-当前综述（前3000字符）：
-{content[:3000]}..."""
+**可补充的文献**（按被引量排序，显示前20篇）：
+{chr(10).join(additional_papers[:20])}
+
+**⚠️ 重要限制**：
+- 📚 可用文献总数：{len(papers)} 篇
+- 🔢 可用文献编号范围：1-{len(papers)}
+- 📌 当前已使用的最大编号：{max(cited_indices) if cited_indices else 0}
+- ❌ 严禁使用超出 {len(papers)} 的引用编号（如 [{len(papers)+1}]、[{len(papers)+2}] 等）
+- ✅ 只能使用上方列出的文献编号
+
+**补充要求**：
+1. 只引用与主题"{topic}"直接相关的文献
+2. 在合适的段落添加引用，支持论点或数据
+3. 按顺序继续编号
+4. 每个新增引用至少包含一句话的上下文
+5. 不要改变原文的核心观点和结构
+6. 确保新增引用自然融入，不突兀
+
+**当前综述内容**：
+{content_preview}
+
+**输出要求**：
+- 输出完整的综述内容（包含原文和新增引用）
+- 保持原有格式和结构
+- 不要添加原文中不存在的引用编号"""
 
         try:
             response = await self.client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "你是学术写作助手。"},
+                    {"role": "system", "content": "你是专业的学术写作助手，擅长在综述中补充相关文献引用。"},
                     {"role": "user", "content": supplement_prompt}
                 ],
                 temperature=0.5,
-                max_tokens=4000
+                max_tokens=6000
             )
-            return response.choices[0].message.content
+            result = response.choices[0].message.content
+            print(f"[补充引用] 成功，返回内容长度: {len(result)} 字符")
+            return result
         except Exception as e:
             print(f"[补充引用] 失败: {e}")
             return content
 
     async def _step4_polish_format(self, content: str, cited_papers: List[Dict]) -> str:
         """润色和格式化"""
+        # 先清理 LLM 可能自行添加的参考文献部分
+        content = self._remove_informal_references(content)
+
         if self.aminer_token:
             try:
                 cited_papers = await enrich_papers(cited_papers, self.aminer_token)
@@ -657,8 +948,153 @@ class ReviewGeneratorService:
         references = self._format_references(cited_papers)
         return f"{content}\n\n## 参考文献\n\n{references}"
 
+    def _remove_informal_references(self, content: str) -> str:
+        """
+        去除 LLM 自行添加的非正式参考文献部分
+
+        检测并删除：
+        1. 结论后的 "**参考文献**" 开头的内容
+        2. "新增引用列表"、"补充引用" 等冗余内容
+        3. 不标准的参考文献格式
+        4. 正式的 "## 参考文献" 之前的多余内容
+        """
+        import re
+
+        lines = content.split('\n')
+        result_lines = []
+        skip_mode = False
+        found_formal_references = False
+
+        # 检测冗余内容开始的模式
+        redundant_patterns = [
+            r'新增引用列表',
+            r'补充引用列表',
+            r'补充的文献',
+            r'额外引用',
+            r'扩展引用',
+            r'\*\*参考文献\s*\*\*',  # ***参考文献** 或类似
+        ]
+
+        for line in lines:
+            # 如果已经找到正式的参考文献部分，停止处理
+            if line.startswith('## 参考文献') or line.startswith('### 参考文献'):
+                found_formal_references = True
+                skip_mode = False
+                result_lines.append(line)
+                continue
+
+            # 如果在正式参考文献之前，检测冗余内容
+            if not found_formal_references:
+                # 检测是否是冗余内容开始
+                is_redundant = False
+                for pattern in redundant_patterns:
+                    if re.search(pattern, line, re.IGNORECASE):
+                        is_redundant = True
+                        skip_mode = True
+                        print(f"[清理冗余内容] 检测到冗余内容模式: {line.strip()[:50]}")
+                        break
+
+                # 检测旧的冗余模式
+                if not is_redundant:
+                    if line.strip().startswith('**参考文献**') or \
+                       line.strip().startswith('**参考文献') or \
+                       (line.strip().startswith('参考文献') and not line.startswith('## ')):
+                        skip_mode = True
+                        continue
+
+                # 如果是冗余内容，跳过
+                if is_redundant or skip_mode:
+                    continue
+
+            # 如果不在删除模式，保留该行
+            if not skip_mode:
+                result_lines.append(line)
+
+        result = '\n'.join(result_lines)
+
+        # 额外清理：去除孤立的数字行（如 "1", "2"）
+        result = re.sub(r'^\d+\s*$', '', result, flags=re.MULTILINE)
+
+        # 清理多余的空行（超过2个连续空行）
+        result = re.sub(r'\n{3,}', '\n\n', result)
+
+        # 清理末尾的空行
+        result = result.rstrip()
+
+        return result
+
     # 以下方法复用原版
     def _extract_cited_indices(self, content: str) -> set:
+        import re
+        citations = re.findall(r'\[(\d+)\]', content)
+        return set(int(c) for c in citations)
+
+    def _replace_invalid_citations(
+        self,
+        content: str,
+        cited_indices: set,
+        valid_cited_indices: set,
+        uncited_indices: set,
+        papers: List,
+        topic: str
+    ) -> str:
+        """
+        替换超出范围的引用为相似的未引用文献
+
+        Args:
+            content: 综述内容
+            cited_indices: 所有引用编号（包括超出范围的）
+            valid_cited_indices: 有效引用编号
+            uncited_indices: 未引用的文献编号
+            papers: 所有文献列表
+            topic: 主题
+
+        Returns:
+            替换后的内容
+        """
+        import re
+
+        # 找出超出范围的引用
+        invalid_indices = cited_indices - valid_cited_indices
+        if not invalid_indices:
+            return content
+
+        # 按被引量排序未引用的文献
+        uncited_sorted = sorted(
+            uncited_indices,
+            key=lambda i: papers[i - 1].get('cited_by_count', 0) if isinstance(papers[i - 1], dict) else getattr(papers[i - 1], 'cited_by_count', 0),
+            reverse=True
+        )
+
+        # 创建替换映射
+        replacement_map = {}
+        for i, invalid_idx in enumerate(sorted(invalid_indices)):
+            if i < len(uncited_sorted):
+                replacement_map[invalid_idx] = uncited_sorted[i]
+                paper = papers[uncited_sorted[i] - 1]
+                title = paper.get('title', '')[:50] if isinstance(paper, dict) else getattr(paper, 'title', '')[:50]
+                print(f"[引用修复] 替换 [{invalid_idx}] → [{uncited_sorted[i]}]: {title}...")
+
+        # 执行替换
+        def replace_citation(match):
+            num = int(match.group(1))
+            if num in replacement_map:
+                new_num = replacement_map[num]
+                return f"[{new_num}]"
+            elif num in valid_cited_indices:
+                return match.group(0)
+            # 如果没有对应的替换，返回空
+            return ""
+
+        result = re.sub(r'\[(\d+)\]', replace_citation, content)
+
+        # 清理空的方括号
+        result = re.sub(r'\[\s*\]', '', result)
+
+        replaced_count = len(replacement_map)
+        print(f"[引用修复] 成功替换 {replaced_count}/{len(invalid_indices)} 个超出范围的引用")
+
+        return result
         import re
         citations = re.findall(r'\[(\d+)\]', content)
         return set(int(c) for c in citations)
@@ -680,8 +1116,19 @@ class ReviewGeneratorService:
                 seen.add(num)
                 ordered_old_nums.append(num)
 
+        # 构建旧编号到新编号的映射
         old_to_new = {old: new for new, old in enumerate(ordered_old_nums, 1)}
-        reordered_papers = [cited_papers[ordered_old_nums.index(i)] for i in ordered_old_nums]
+
+        # 根据旧的引用编号顺序重新排列文献列表
+        # 注意：引用编号是从1开始的，所以需要减1来获取列表索引
+        reordered_papers = []
+        for old_num in ordered_old_nums:
+            # 确保引用编号在有效范围内
+            if 1 <= old_num <= len(cited_papers):
+                paper_index = old_num - 1
+                reordered_papers.append(cited_papers[paper_index])
+            else:
+                print(f"[警告] 引用编号 {old_num} 超出文献列表范围 ({len(cited_papers)} 篇)，已跳过")
 
         def replace_citation(match):
             old_num = int(match.group(1))
@@ -814,27 +1261,373 @@ class ReviewGeneratorService:
 
         authors_list = paper.get("authors", [])
         if authors_list:
-            authors = ",".join(authors_list[:3])
+            # 处理作者名格式
+            formatted_authors = []
+            for author in authors_list[:3]:
+                formatted_author = self._format_author_name(author)
+                formatted_authors.append(formatted_author)
+
+            authors = ",".join(formatted_authors)
             if len(authors_list) > 3:
                 authors += ",等"
         else:
             authors = "未知作者"
 
         title = paper.get('title', '')
-        year = paper.get('year', '')
+        year = paper.get('year', 'n.d.')
+        venue = paper.get('venue_name', '')
+        doi = paper.get('doi', '')
 
-        paper_type = paper.get('type', '')
-        type_map = {
-            'journal-article': 'J', 'article': 'J', 'book': 'M',
-            'chapter': 'M', 'dataset': 'DB', 'dissertation': 'D',
-            'report': 'R', 'patent': 'P'
+        # 构建期刊信息
+        journal_info = str(year)
+        if venue:
+            journal_info += f".{venue}"
+
+        # 构建DOI信息
+        doi_suffix = ""
+        if doi:
+            # 规范化DOI格式
+            clean_doi = doi.strip().lstrip('DOI:').lstrip('doi:')
+            if not clean_doi.startswith('http'):
+                doi_suffix = f".DOI:https://doi.org/{clean_doi}"
+            else:
+                doi_suffix = f".DOI:{clean_doi}"
+
+        return f"[{index}]{authors}.{title}[J].{journal_info}{doi_suffix}."
+
+    def _format_author_name(self, name: str) -> str:
+        """格式化单个作者姓名"""
+        if not name or name.strip() in ['佚名', '匿名', '未知作者', '']:
+            return name
+
+        # 检查是否是中文姓名
+        if self._is_chinese_name(name):
+            return self._format_chinese_name(name)
+        else:
+            # 英文姓名保持原样
+            return name
+
+    def _format_chinese_name(self, name: str) -> str:
+        """格式化中文姓名"""
+        # 去除空格
+        name = name.replace(' ', '')
+
+        # 检查是否是颠倒的格式（如"浩妍 王"）
+        if ' ' in name or len(name.split()) == 2:
+            parts = name.split()
+            if len(parts) == 2:
+                first, second = parts
+                # 如果第一个部分不含中文而第二个含中文，可能是颠倒的
+                if not self._contains_chinese_char(first) and self._contains_chinese_char(second):
+                    return f"{second}{first}"
+
+        # 去除可能存在的点号
+        name = name.replace('.', '')
+
+        # 确保姓名不超过5个字符（中文姓名通常2-4个字）
+        if len(name) > 5:
+            # 可能包含多余信息，只取前4个字
+            name = name[:4]
+
+        return name
+
+    def _is_chinese_name(self, name: str) -> bool:
+        """检查是否是中文姓名"""
+        # 检查是否包含中文字符
+        has_chinese = self._contains_chinese_char(name)
+
+        # 进一步检查：如果是混合中英文的，可能是拼音格式
+        if has_chinese:
+            # 检查是否主要是中文字符（至少50%是中文）
+            chinese_char_count = sum(1 for c in name if '\u4e00' <= c <= '\u9fff')
+            if chinese_char_count / len(name) >= 0.3:
+                return True
+
+        return False
+
+    def _contains_chinese_char(self, text: str) -> bool:
+        """检查文本是否包含中文字符"""
+        return bool(text and any('\u4e00' <= char <= '\u9fff' for char in text))
+
+    def _filter_irrelevant_papers(self, papers: List[Dict], topic: str, topic_keywords: List[str] = None) -> List[Dict]:
+        """
+        过滤掉明显不相关的文献（增强版）
+
+        基于标题和主题的关键词匹配度来判断文献相关性
+
+        Args:
+            papers: 文献列表
+            topic: 论文主题
+            topic_keywords: 预提取的主题关键词（可选，如果不提供则自动提取）
+        """
+        # 如果没有提供关键词，自动提取
+        if topic_keywords is None:
+            topic_keywords = self._extract_topic_keywords(topic)
+
+        print(f"[相关性检查] 主题关键词 ({len(topic_keywords)}个): {topic_keywords[:10]}")
+
+        filtered_papers = []
+        removed_count = 0
+        removal_reasons = {}
+
+        for paper in papers:
+            if self._is_paper_relevant(paper, topic_keywords):
+                filtered_papers.append(paper)
+            else:
+                removed_count += 1
+                title = paper.get('title', '')[:60]
+                # 记录移除原因
+                venue = paper.get('venue_name', '')[:30]
+                key_info = f"{title}... ({venue})"
+                if key_info not in removal_reasons:
+                    removal_reasons[key_info] = 1
+                else:
+                    removal_reasons[key_info] += 1
+
+        if removed_count > 0:
+            print(f"[相关性检查] 共过滤 {removed_count} 篇不相关文献")
+            # 显示被过滤的文献样例（最多5个）
+            print(f"[相关性检查] 被过滤文献样例:")
+            for i, (paper_info, count) in enumerate(list(removal_reasons.items())[:5]):
+                print(f"  [{i+1}] {paper_info} (x{count})")
+
+        return filtered_papers
+
+    def _extract_topic_keywords(self, topic: str) -> List[str]:
+        """从主题中提取关键词"""
+        import re
+
+        # 技术术语映射表
+        tech_mappings = {
+            '双向长短期记忆网络': ['lstm', 'bilstm', 'rnn'],
+            '长短期记忆网络': ['lstm', 'rnn'],
+            '卷积神经网络': ['cnn', 'convolutional'],
+            '循环神经网络': ['rnn', 'recurrent'],
+            '注意力机制': ['attention', 'transformer'],
+            '深度学习': ['deep learning', 'neural network'],
+            '神经网络': ['neural network'],
         }
-        type_code = type_map.get(paper_type, 'J')
 
-        journal_info = f"{year}" if year else "n.d."
-        doi_suffix = f".DOI:{paper.get('doi', '')}" if paper.get('doi') else ""
+        # 需要过滤的短词（通常是提取错误的结果）
+        filter_short_words = {'ma', 'mc', 'na', 'cl', 'mg', 'ca', 'fe', 'si', 'in', 'on', 'at', 'to', 'of', 'an'}
 
-        return f"[{index}]{authors}.{title}[{type_code}].{journal_info}{doi_suffix}."
+        # 移除常见的停用词
+        stop_words = {'的', '是', '在', '和', '与', '基于', '研究', '分析', '方法', '模型',
+                      '论文', '系统', '应用', '一种', '用于', '以及', '通过', '进行', '位点',
+                      '预测', '网络', '算法'}
+
+        keywords = []
+
+        # 1. 首先检查是否包含已知的技术术语
+        for tech_term, alternatives in tech_mappings.items():
+            if tech_term in topic:
+                keywords.extend(alternatives)
+
+        # 2. 提取特殊格式的术语（如 6mA、DNA）
+        # 使用更精确的正则表达式
+        special_patterns = [
+            r'\d+[A-Z][a-z]',      # 如 6mA, 5mC（数字+大写+小写）
+            r'[A-Z]{2,}(?![a-z])',  # 如 DNA, RNA（大写缩写，后面不跟小写）
+        ]
+        for pattern in special_patterns:
+            matches = re.findall(pattern, topic)
+            for match in matches:
+                keywords.append(match.lower())
+
+        # 3. 提取英文单词（过滤掉单个字母和短词）
+        english_words = re.findall(r'[a-zA-Z]{2,}', topic)
+        for word in english_words:
+            word_lower = word.lower()
+            # 过滤条件：不在停用词中、不在过滤列表中、不在已有关键词中
+            if (word_lower not in stop_words and
+                word_lower not in filter_short_words and
+                word_lower not in keywords):
+                keywords.append(word_lower)
+
+        # 4. 提取中文词汇（限制长度，避免超长短语）
+        chinese_words = re.findall(r'[\u4e00-\u9fff]{2,6}', topic)
+        for word in chinese_words:
+            if word not in stop_words:
+                # 对于中文技术术语，添加其英文对应词
+                if '甲基化' in word:
+                    keywords.append('methylation')
+                if '表观遗传' in word:
+                    keywords.append('epigenetic')
+                if '预测' in word:
+                    keywords.append('prediction')
+                # 只添加较短的中文词（不超过4个字）
+                if len(word) <= 4:
+                    keywords.append(word.lower())
+
+        # 5. 去重并过滤
+        unique_keywords = list(set(keywords))
+
+        # 6. 后处理：过滤掉过于通用的词和超长短语
+        final_keywords = []
+        for kw in unique_keywords:
+            # 保留条件：
+            # - 至少3个字符，或
+            # - 是重要的技术缩写，或
+            # - 包含重要的生物学术语
+            if (len(kw) >= 3 and len(kw) <= 20 or  # 合理长度
+                kw in ['lstm', 'cnn', 'rnn', 'bilstm', 'dna', 'rna', '6ma', '5mc', 'cnn', 'gan'] or  # 特定缩写
+                any(t in kw for t in ['methylation', 'prediction', 'epigenetic', 'sequence', 'genome', 'network'])):  # 重要术语
+                final_keywords.append(kw)
+
+        return final_keywords
+
+    def _extract_topic_keywords_with_library(self, topic: str) -> List[str]:
+        """
+        使用术语库从主题中提取关键词（增强版）
+
+        Args:
+            topic: 论文主题
+
+        Returns:
+            关键词列表
+        """
+        try:
+            from services.academic_term_service import AcademicTermService
+            term_service = AcademicTermService()
+            keywords = term_service.search_keywords_from_topic(topic)
+            print(f"[术语库] 使用数据库术语库提取关键词")
+            return keywords
+        except Exception as e:
+            print(f"[术语库] 数据库查询失败，使用本地方法: {e}")
+            return self._extract_topic_keywords(topic)
+
+    def _is_paper_relevant(self, paper: Dict, topic_keywords: List[str]) -> bool:
+        """
+        判断文献是否与主题相关（增强版）
+
+        使用多维度评分机制：
+        1. 标题关键词匹配度
+        2. 期刊/会议相关性
+        3. 摘要关键词匹配度
+        4. 负面指标检测（明显不相关的内容）
+        """
+        # 安全获取标题和期刊信息
+        title = (paper.get('title') or '').lower()
+        venue = (paper.get('venue_name') or '').lower()
+        abstract = (paper.get('abstract') or '').lower()
+
+        # 如果论文没有标题，默认保留（可能是数据问题）
+        if not title:
+            return True
+
+        # === 正面指标：检查是否包含主题关键词 ===
+        # 计算标题中的关键词匹配度（权重最高）
+        title_keyword_matches = sum(1 for kw in topic_keywords if kw in title)
+        title_score = title_keyword_matches * 3  # 每个匹配得3分
+
+        # 计算期刊/会议中的关键词匹配度（权重中等）
+        venue_keyword_matches = sum(1 for kw in topic_keywords if kw in venue)
+        venue_score = venue_keyword_matches * 2  # 每个匹配得2分
+
+        # 计算摘要中的关键词匹配度（权重较低，因为摘要可能很长）
+        abstract_keyword_matches = sum(1 for kw in topic_keywords if kw in abstract)
+        abstract_score = min(abstract_keyword_matches * 0.5, 2)  # 最多得2分
+
+        # 计算总分
+        total_score = title_score + venue_score + abstract_score
+
+        # === 负面指标：检查是否包含明显不相关的内容 ===
+        # 这些关键词表示论文属于完全不相关的领域
+        strongly_irrelevant_keywords = [
+            # 精神病学/心理学
+            '抗抑郁', ' antidepressant', '抑郁', ' depression', '精神分裂', ' schizophrenia',
+            '心理治疗', ' psychotherapy', '焦虑症', ' anxiety disorder',
+            # 气象/气候
+            '气象', ' weather forecast', '气候变化', ' climate change', '天气预报',
+            # 金融/股票
+            '股票市场', ' stock market', '金融衍生品', ' financial derivative',
+            '投资回报', ' investment return', '证券', ' security',
+            # 社会科学/政治
+            '选举', ' election', '投票', ' voting', '公共政策', ' public policy',
+            '社会运动', ' social movement', '政治观点', ' political view',
+            # 教育
+            '教学方法', ' teaching method', '课程设计', ' curriculum design',
+            '学生评估', ' student assessment', '课堂教学', ' classroom teaching',
+        ]
+
+        for irrelevant_kw in strongly_irrelevant_keywords:
+            if irrelevant_kw in title or irrelevant_kw in venue:
+                print(f"[相关性检查] ✗ 强不相关: {irrelevant_kw} in {title[:40]}...")
+                return False
+
+        # === 软性负面指标：降低相关性但不是完全排除 ===
+        soft_irrelevant_keywords = [
+            '社会', ' social', '政治', ' political',
+            '经济', ' economic', '商业', ' business',
+            '教育', ' education', '管理', ' management',
+        ]
+
+        soft_irrelevant_count = sum(1 for kw in soft_irrelevant_keywords if kw in title or kw in venue)
+        if soft_irrelevant_count > 0 and total_score < 2:
+            # 如果有软性不相关关键词且总分较低，认为不相关
+            print(f"[相关性检查] ✗ 软不相关: {soft_irrelevant_count}个软性关键词，总分{total_score}")
+            return False
+
+        # === 最终决策 ===
+        # 至少需要2分才认为相关
+        if total_score >= 2:
+            return True
+
+        # 如果标题完全没有任何关键词匹配，且不是太短的标题，认为不相关
+        if title_keyword_matches == 0 and len(title) > 30:
+            print(f"[相关性检查] ✗ 标题无关键词匹配: {title[:40]}...")
+            return False
+
+        # 默认保留（保守策略）
+        return True
+
+    def _final_format_cleanup(self, review: str) -> str:
+        """
+        最终格式验证和清理
+
+        去除格式问题：
+        1. 孤立的数字行
+        2. 多余的空行
+        3. 末尾的空行
+        4. 格式不一致的问题
+        """
+        import re
+
+        lines = review.split('\n')
+        cleaned_lines = []
+
+        for line in lines:
+            stripped = line.strip()
+
+            # 跳过孤立的数字行（如 "1", "2"）
+            if stripped.isdigit():
+                continue
+
+            # 跳过空行（但保留段落分隔的空行）
+            if not stripped:
+                # 检查前一行是否也是空行，如果是则跳过
+                if cleaned_lines and not cleaned_lines[-1].strip():
+                    continue
+
+            cleaned_lines.append(line)
+
+        # 合并内容
+        result = '\n'.join(cleaned_lines)
+
+        # 清理多余的空行（超过2个连续空行）
+        result = re.sub(r'\n{4,}', '\n\n\n', result)
+
+        # 确保标题前没有多余的空行
+        result = re.sub(r'\n+(##)', r'\n\1', result)
+
+        # 确保引言前没有空行
+        if result.startswith('\n'):
+            result = result.lstrip()
+
+        # 清理末尾的空行
+        result = result.rstrip()
+
+        return result
 
     async def close(self):
         await self.client.close()

@@ -80,12 +80,22 @@ class ReviewTaskExecutor:
                 try:
                     from services.hybrid_classifier import HybridTopicClassifier
                     classifier = HybridTopicClassifier()
+                    print(f"[TaskExecutor] 原始搜索查询数量: {len(search_queries)}")
+                    for i, q in enumerate(search_queries[:5]):
+                        print(f"  [{i+1}] {q.get('query', '')[:50]}... (lang: {q.get('lang', 'N/A')})")
+
                     search_queries = await classifier.validate_and_fix_search_queries(
                         title=topic,
                         queries=search_queries
                     )
+
+                    print(f"[TaskExecutor] 修复后搜索查询数量: {len(search_queries)}")
+                    for i, q in enumerate(search_queries[:5]):
+                        print(f"  [{i+1}] {q.get('query', '')[:50]}... (lang: {q.get('lang', 'N/A')})")
                 except Exception as e:
                     print(f"[TaskExecutor] LLM关键词验证失败: {e}")
+                    import traceback
+                    traceback.print_exc()
 
             task_manager.update_task_status(
                 task_id,
@@ -231,31 +241,44 @@ class ReviewTaskExecutor:
             citation_checker = CitationOrderChecker()
 
             content, references_section = validator._split_review_and_references(review)
+
+            # 5.1 首先去除超出范围的引用
             citation_check_result = citation_checker.check_order(content, papers_count=len(cited_papers))
+            if citation_check_result.get('exceeds_range', False):
+                max_citation = citation_check_result.get('max_citation', 0)
+                papers_count = citation_check_result.get('papers_count', 0)
+                print(f"[TaskExecutor] 检测到超出范围的引用（最大: {max_citation}，文献数: {papers_count}），正在去除...")
+                content = citation_checker.remove_out_of_range_citations(content, papers_count)
 
-            if not citation_check_result['valid']:
-                if citation_check_result.get('exceeds_range', False):
-                    max_citation = citation_check_result.get('max_citation', 0)
-                    papers_count = citation_check_result.get('papers_count', 0)
-                    content = citation_checker.remove_out_of_range_citations(content, papers_count)
+            # 5.2 修复引用顺序
+            citations = citation_checker.extract_citations(content)
+            if citations:
+                fixed_content, number_mapping = citation_checker.fix_citation_order(content, citations)
 
-                citations = citation_checker.extract_citations(content)
-                if citations:
-                    fixed_content, number_mapping = citation_checker.fix_citation_order(content, citations)
+                # 5.3 根据新的引用顺序重新构建文献列表
+                new_to_old = {}
+                for item in number_mapping:
+                    new_to_old[item['new']] = item['old']
 
-                    new_to_old = {}
-                    for item in number_mapping:
-                        new_to_old[item['new']] = item['old']
+                new_cited_papers = []
+                for new_index in sorted(new_to_old.keys()):
+                    old_index = new_to_old[new_index]
+                    # 确保旧索引在有效范围内
+                    if 1 <= old_index <= len(cited_papers):
+                        new_cited_papers.append(cited_papers[old_index - 1])
 
-                    new_cited_papers = []
-                    for new_index in sorted(new_to_old.keys()):
-                        old_index = new_to_old[new_index]
-                        if old_index <= len(cited_papers):
-                            new_cited_papers.append(cited_papers[old_index - 1])
+                cited_papers = new_cited_papers
+                content = fixed_content
 
-                    cited_papers = new_cited_papers
-                    references = generator._format_references(cited_papers)
-                    review = f"{fixed_content}\n\n## 参考文献\n\n{references}"
+            # 5.4 最终检查：确保没有超出范围的引用
+            final_check = citation_checker.check_order(content, papers_count=len(cited_papers))
+            if final_check.get('exceeds_range', False):
+                print(f"[TaskExecutor] 警告：修复后仍有超出范围的引用，再次去除...")
+                content = citation_checker.remove_out_of_range_citations(content, len(cited_papers))
+
+            # 5.5 重新生成参考文献
+            references = generator._format_references(cited_papers)
+            review = f"{content}\n\n## 参考文献\n\n{references}"
 
             # 6. 计算统计信息
             stats = self.filter_service.get_statistics(cited_papers)
