@@ -130,8 +130,8 @@ class PaperFilterService:
 
         # 如果有主题关键词，计算关键词匹配度
         if topic_keywords:
-            title_lower = paper.get("title", "").lower()
-            abstract_lower = paper.get("abstract", "").lower()
+            title_lower = (paper.get("title") or "").lower()
+            abstract_lower = (paper.get("abstract") or "").lower()
 
             # 标题中的关键词匹配（每匹配一个加 10 分）
             for kw in topic_keywords:
