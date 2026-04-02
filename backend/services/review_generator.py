@@ -318,8 +318,8 @@ class ReviewGeneratorService:
         key_points = section_outline.get('key_points', [])
         comparison_points = section_outline.get('comparison_points', [])
 
-        # 格式化该小节的文献
-        papers_info = self._format_papers_compact(section_papers)
+        # 格式化全部文献（重要：让LLM能看到所有60篇文献）
+        papers_info = self._format_papers_compact(all_papers)
 
         system_prompt = f"""你是学术写作专家，擅长撰写文献综述。
 
@@ -366,11 +366,11 @@ class ReviewGeneratorService:
 {'='*60}
 ⚠️ 引用边界明确提示
 {'='*60}
-📚 本节可用文献数：{len(section_papers)} 篇
-🔢 全部文献编号范围：[1] 到 [{len(all_papers)}]
+📚 全部可用文献数：{len(all_papers)} 篇
+🔢 可引用文献编号范围：[1] 到 [{len(all_papers)}]
 ❌ 绝对禁止使用编号 [{len(all_papers)+1}] 或更大的编号
 
-本节可用文献：
+全部文献列表：
 {papers_info}
 {'='*60}
 
