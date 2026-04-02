@@ -26,6 +26,8 @@ class ReviewTaskExecutor:
         self.search_service = SmartPaperSearchService(self.scholarflux, get_db)
         self.filter_service = PaperFilterService()
         self.record_service = ReviewRecordService()
+        self.validator = ReferenceValidator()
+        self.citation_checker = CitationOrderChecker()
 
     async def execute_task(self, task_id: str, db_session: Session):
         """

@@ -218,8 +218,27 @@ class ReviewGeneratorService:
 
         specificity_section = self._format_specificity_guidance(specificity_guidance)
 
-        # 获取大纲
-        outline_sections = framework.get('framework', {})
+        # 获取大纲（从 outline 中获取 body_sections）
+        outline = framework.get('outline', {})
+        body_sections_list = outline.get('body_sections', [])
+
+        # 转换为字典格式，方便按标题查找
+        outline_sections = {}
+        for section in body_sections_list:
+            if isinstance(section, dict):
+                title = section.get('title', '')
+                if title:
+                    outline_sections[title] = section
+
+        # 如果没有 body_sections，尝试从 framework 获取
+        if not outline_sections:
+            framework_dict = framework.get('framework', {})
+            sections_list = framework_dict.get('sections', [])
+            for section in sections_list:
+                if isinstance(section, dict):
+                    title = section.get('title', '')
+                    if title:
+                        outline_sections[title] = section
 
         # 为每个小节生成内容
         section_contents = []
