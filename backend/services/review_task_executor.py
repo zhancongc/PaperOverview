@@ -74,91 +74,48 @@ class ReviewTaskExecutor:
             task_manager.update_task_status(
                 task_id,
                 TaskStatus.PROCESSING,
-                progress={"step": "generating_outline", "message": "正在生成大纲..."}
+                progress={"step": "generating_outline", "message": "正在生成大纲和搜索关键词..."}
             )
 
-            # === 阶段1: 生成大纲 ===
+            # === 阶段1: 生成大纲和搜索关键词 ===
             print("\n" + "=" * 80)
-            print("[阶段1] 生成综述大纲")
+            print("[阶段1] 生成综述大纲和搜索关键词")
             print("=" * 80)
 
             outline = await self._generate_review_outline(topic)
             framework = {'outline': outline}
 
-            print(f"[阶段1] 大纲生成完成:")
+            print(f"[阶段1] 大纲和关键词生成完成:")
             print(f"  - 引言: {outline.get('introduction', {}).get('focus', '')[:50]}...")
             print(f"  - 主体章节: {len(outline.get('body_sections', []))} 个")
+
+            # 从大纲中提取搜索关键词
+            section_keywords = {}
             for section in outline.get('body_sections', []):
                 if isinstance(section, dict):
                     title = section.get('title', '')
+                    search_keywords = section.get('search_keywords', [])
+                    section_keywords[title] = search_keywords
                     print(f"    - {title}")
+                    print(f"      搜索关键词: {', '.join(search_keywords)}")
+
             print(f"  - 结论: 待定（根据文献内容生成）")
 
-            # === 阶段2: 题目分析（生成搜索关键词） ===
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.PROCESSING,
-                progress={"step": "analyzing", "message": "正在分析题目生成搜索关键词..."}
-            )
-
-            print("\n" + "=" * 80)
-            print("[阶段2] 题目分析（生成搜索关键词）")
-            print("=" * 80)
-
+            # 获取场景特异性指导（保留这个功能）
             from services.hybrid_classifier import FrameworkGenerator
             gen = FrameworkGenerator()
             analysis_result = await gen.generate_framework(topic, enable_llm_validation=True)
-
-            # 提取场景特异性指导
             specificity_guidance = analysis_result.get('specificity_guidance', {})
 
-            # 获取搜索查询
-            search_queries = analysis_result.get('search_queries', [])
-
-            # 根据大纲为每个章节生成专属关键词
-            section_keywords = self._generate_section_keywords_from_outline(
-                outline=outline,
-                base_queries=search_queries,
-                topic=topic
-            )
-
-            print(f"[阶段2] 关键词生成完成:")
-            for section_title, keywords in section_keywords.items():
-                print(f"  - {section_title}: {len(keywords)} 个关键词")
-
-            # 使用LLM验证和修复搜索关键词
-            all_keywords = []
-            for keywords in section_keywords.values():
-                all_keywords.extend(keywords)
-
-            if all_keywords:
-                try:
-                    from services.hybrid_classifier import HybridTopicClassifier
-                    classifier = HybridTopicClassifier()
-
-                    # 将关键词转换为查询格式
-                    search_queries_formatted = [
-                        {'query': kw, 'lang': 'mixed'} for kw in all_keywords
-                    ]
-
-                    print(f"[阶段2] 原始搜索查询数量: {len(search_queries_formatted)}")
-                    for i, q in enumerate(search_queries_formatted[:5]):
-                        print(f"  [{i+1}] {q.get('query', '')[:50]}...")
-
-                    search_queries = await classifier.validate_and_fix_search_queries(
-                        title=topic,
-                        queries=search_queries_formatted
-                    )
-
-                    print(f"[阶段2] 修复后搜索查询数量: {len(search_queries)}")
-                except Exception as e:
-                    print(f"[阶段2] LLM关键词验证失败: {e}")
-                    import traceback
-                    traceback.print_exc()
-
-            # 将大纲和关键词整合到 framework
+            # 将关键词整合到 framework
             framework['section_keywords'] = section_keywords
             framework['specificity_guidance'] = specificity_guidance
+
+            # 准备搜索查询（将关键词转换为查询格式）
+            search_queries = []
+            for keywords in section_keywords.values():
+                for kw in keywords:
+                    search_queries.append({'query': kw, 'lang': 'mixed'})
 
             # === 阶段3: 按小节搜索文献 ===
             search_result = await self._search_literature_by_sections(
@@ -1015,13 +972,21 @@ class ReviewTaskExecutor:
 
         system_prompt = """你是学术综述大纲设计专家。
 
-你的任务是根据研究主题，设计一个高质量的文献综述大纲。
+你的任务是根据研究主题，设计一个高质量的文献综述大纲，并为每个章节生成搜索关键词。
 
 要求：
 1. **结构清晰**：包含引言、主体（2-5个主题章节）
 2. **主题划分**：主体部分按研究主题或方法论划分
 3. **逻辑连贯**：各主题之间要有逻辑关系
 4. **结论待定**：结论部分需要根据实际文献内容来定，大纲中只需说明
+5. **搜索关键词**：每个章节需要生成2-3个搜索关键词
+
+**搜索关键词生成规则**：
+- 从论文主题和章节标题中提取关键词
+- 关键词应该是可以在文献数据库（如知网、Web of Science）中搜索的术语
+- 关键词应该在论文的"标题"或"关键词"字段中出现
+- 例如：主题"基于DMAIC的高通芯片质量管理研究"，章节"DMAIC在质量管理领域的研究进展"
+  - 搜索关键词：["DMAIC", "质量管理", "高通芯片"]
 
 输出格式（JSON）：
 {
@@ -1034,7 +999,8 @@ class ReviewTaskExecutor:
             "title": "章节标题",
             "focus": "该章节的写作重点",
             "key_points": ["要点1", "要点2", "要点3"],
-            "comparison_points": ["对比点1", "对比点2"]
+            "comparison_points": ["对比点1", "对比点2"],
+            "search_keywords": ["关键词1", "关键词2", "关键词3"]
         }
     ],
     "conclusion": {
@@ -1045,7 +1011,8 @@ class ReviewTaskExecutor:
 注意：
 - body_sections 应该包含 2-5 个章节
 - 每个章节的 key_points 应该有 3-5 个要点
-- 每个章节的 comparison_points 应该有 2-3 个对比点"""
+- 每个章节的 comparison_points 应该有 2-3 个对比点
+- 每个章节的 search_keywords 应该有 2-3 个关键词"""
 
         user_prompt = f"""请为以下研究主题设计综述大纲：
 
@@ -1067,6 +1034,15 @@ class ReviewTaskExecutor:
 
             import json
             outline = json.loads(response.choices[0].message.content)
+
+            # 验证每个章节是否有 search_keywords
+            for section in outline.get('body_sections', []):
+                if isinstance(section, dict):
+                    if 'search_keywords' not in section or not section['search_keywords']:
+                        # 如果LLM没有生成，则自动生成
+                        title = section.get('title', '')
+                        section['search_keywords'] = self._auto_generate_keywords(topic, title)
+
             return outline
 
         except Exception as e:
@@ -1082,13 +1058,15 @@ class ReviewTaskExecutor:
                         "title": "理论基础与研究现状",
                         "focus": "梳理相关理论和方法",
                         "key_points": ["基本概念", "主要理论", "研究方法"],
-                        "comparison_points": ["方法差异", "理论分歧"]
+                        "comparison_points": ["方法差异", "理论分歧"],
+                        "search_keywords": self._auto_generate_keywords(topic, "理论基础与研究现状")
                     },
                     {
                         "title": "主要研究进展",
                         "focus": "总结当前研究的主要成果",
                         "key_points": ["技术进展", "应用案例", "效果评估"],
-                        "comparison_points": ["研究结论对比", "应用效果"]
+                        "comparison_points": ["研究结论对比", "应用效果"],
+                        "search_keywords": self._auto_generate_keywords(topic, "主要研究进展")
                     }
                 ],
                 "conclusion": {
@@ -1096,62 +1074,43 @@ class ReviewTaskExecutor:
                 }
             }
 
-    def _generate_section_keywords_from_outline(
-        self,
-        outline: dict,
-        base_queries: list,
-        topic: str
-    ) -> dict:
+    def _auto_generate_keywords(self, topic: str, section_title: str) -> list:
         """
-        根据大纲为每个章节生成专属关键词
+        自动生成搜索关键词（当LLM没有生成时使用）
 
         Args:
-            outline: 大纲
-            base_queries: 基础搜索查询
             topic: 论文主题
+            section_title: 章节标题
 
         Returns:
-            {章节标题: [关键词列表]}
+            2-3个关键词列表
         """
-        section_keywords = {}
+        keywords = []
 
-        # 提取主题关键词
+        # 从主题中提取关键词
         topic_keywords = self._extract_topic_keywords(topic)
+        if topic_keywords:
+            keywords.append(topic_keywords[0])  # 取第一个最重要的关键词
 
-        # 为每个章节生成关键词
-        body_sections = outline.get('body_sections', [])
-        for section in body_sections:
-            if isinstance(section, dict):
-                title = section.get('title', '')
-                focus = section.get('focus', '')
-                key_points = section.get('key_points', [])
+        # 从章节标题中提取关键词
+        section_keywords = self._extract_chinese_words(section_title)
+        if section_keywords:
+            # 取前2个最重要的词
+            keywords.extend(section_keywords[:2])
 
-                # 章节关键词 = 主题关键词 + 章节标题 + focus + key_points
-                keywords = set(topic_keywords)
+        # 去重并限制数量
+        keywords = list(set(keywords))[:3]
 
-                # 添加标题中的关键词
-                title_words = self._extract_chinese_words(title)
-                keywords.update(title_words)
+        # 如果还是不足2个，补充通用的章节关键词
+        if len(keywords) < 2:
+            generic_keywords = ["研究", "应用", "方法", "现状", "进展"]
+            for kw in generic_keywords:
+                if kw not in keywords:
+                    keywords.append(kw)
+                    if len(keywords) >= 3:
+                        break
 
-                # 添加 focus 中的关键词
-                focus_words = self._extract_chinese_words(focus)
-                keywords.update(focus_words)
-
-                # 添加 key_points 中的关键词
-                for point in key_points:
-                    point_words = self._extract_chinese_words(point)
-                    keywords.update(point_words)
-
-                # 添加相关的 base_queries
-                for query in base_queries:
-                    query_text = query.get('query', '') if isinstance(query, dict) else query
-                    # 如果查询与章节相关（包含章节关键词），则添加
-                    if any(kw in query_text for kw in keywords):
-                        keywords.add(query_text)
-
-                section_keywords[title] = list(keywords)
-
-        return section_keywords
+        return keywords[:3]
 
     def _extract_topic_keywords(self, topic: str) -> list:
         """从主题中提取关键词"""
