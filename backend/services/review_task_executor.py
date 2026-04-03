@@ -615,7 +615,7 @@ class ReviewTaskExecutor:
             print(f"    - {section_title}: {len(papers)} 篇")
 
         # 检查文献数量是否达标，不足则继续搜索
-        min_target_papers = 100  # 目标至少100篇
+        min_target_papers = 200  # 目标至少200篇
         max_search_rounds = 3  # 最多搜索3轮
         search_round = 1
 
