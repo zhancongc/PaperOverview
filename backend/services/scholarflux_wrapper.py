@@ -158,137 +158,145 @@ class ScholarFlux:
     - 结果保存到数据库
     """
 
+    # 类级别的标志，确保初始化日志只打印一次
+    _initialized = False
+
     def __init__(self):
         """初始化所有可用的学术API"""
         self.apis = []
         self.chinese_api = None
 
-        print("=" * 80)
-        print("ScholarFlux v2.0 - 多数据源文献搜索")
-        print("=" * 80)
+        # 只在首次初始化时打印日志
+        if not ScholarFlux._initialized:
+            print("=" * 80)
+            print("ScholarFlux v2.0 - 多数据源文献搜索")
+            print("=" * 80)
 
-        # ===== 数据源 1: OpenAlex =====
-        if os.getenv('OPENALEX_ENABLED', 'true').lower() == 'true':
-            try:
-                openalex_service = PaperSearchService()
-                rate_limit = float(os.getenv('OPENALEX_RATE_LIMIT', '5.0'))
-                self.apis.append(ScholarAPI(
-                    name="openalex",
-                    service=openalex_service,
-                    rate_limit=rate_limit,
-                    is_chinese=False
-                ))
-                print("[ScholarFlux] ✓ OpenAlex 已加载（英文文献，主要数据源）")
-            except Exception as e:
-                print(f"[ScholarFlux] ✗ OpenAlex 初始化失败: {e}")
-        else:
-            print("[ScholarFlux] ○ OpenAlex 已禁用（OPENALEX_ENABLED=false）")
-
-        # ===== 数据源 2: Crossref =====
-        if os.getenv('CROSSREF_ENABLED', 'true').lower() == 'true':
-            try:
-                crossref_service = CrossrefSearchService()
-                self.apis.append(ScholarAPI(
-                    name="crossref",
-                    service=crossref_service,
-                    rate_limit=5.0,
-                    is_chinese=False
-                ))
-                print("[ScholarFlux] ✓ Crossref 已加载（期刊/会议论文）")
-            except Exception as e:
-                print(f"[ScholarFlux] ✗ Crossref 初始化失败: {e}")
-        else:
-            print("[ScholarFlux] ○ Crossref 已禁用（CROSSREF_ENABLED=false）")
-
-        # ===== 数据源 3: DataCite =====
-        if os.getenv('DATACITE_ENABLED', 'true').lower() == 'true':
-            try:
-                datacite_service = DataCiteSearchService()
-                self.apis.append(ScholarAPI(
-                    name="datacite",
-                    service=datacite_service,
-                    rate_limit=5.0,
-                    is_chinese=False
-                ))
-                print("[ScholarFlux] ✓ DataCite 已加载（研究数据集）")
-            except Exception as e:
-                print(f"[ScholarFlux] ✗ DataCite 初始化失败: {e}")
-        else:
-            print("[ScholarFlux] ○ DataCite 已禁用（DATACITE_ENABLED=false）")
-
-        # ===== 数据源 4: Semantic Scholar =====
-        if os.getenv('SEMANTIC_SCHOLAR_ENABLED', 'false').lower() == 'true':
-            semantic_key = os.getenv('SEMANTIC_SCHOLAR_API_KEY')
-            try:
-                semantic_service = SemanticScholarService(api_key=semantic_key)
-                rate_limit = float(os.getenv('SEMANTIC_SCHOLAR_RATE_LIMIT', '1.0'))
-                self.apis.append(ScholarAPI(
-                    name="semantic_scholar",
-                    service=semantic_service,
-                    rate_limit=rate_limit,
-                    is_chinese=False
-                ))
-                if semantic_key:
-                    print("[ScholarFlux] ✓ Semantic Scholar 已加载（使用 API Key，速率限制: 1 req/s）")
-                else:
-                    print("[ScholarFlux] ✓ Semantic Scholar 已加载（无 API Key，速率限制: 0.1 req/s）")
-                    print("          提示: 配置 SEMANTIC_SCHOLAR_API_KEY 可获得更高速率限制")
-            except Exception as e:
-                print(f"[ScholarFlux] ✗ Semantic Scholar 初始化失败: {e}")
-        else:
-            print("[ScholarFlux] ○ Semantic Scholar 已禁用（SEMANTIC_SCHOLAR_ENABLED=false）")
-
-        # ===== 数据源 5: 中文 DOI =====
-        if os.getenv('CHINESE_DOI_ENABLED', 'false').lower() == 'true':
-            chinese_doi_key = os.getenv('CHINESE_DOI_API_KEY')
-            try:
-                chinese_doi_service = ChineseDoiSearchService(api_key=chinese_doi_key)
-                self.chinese_api = ScholarAPI(
-                    name="chinese_doi",
-                    service=chinese_doi_service,
-                    rate_limit=2.0,
-                    is_chinese=True
-                )
-                self.apis.append(self.chinese_api)
-                if chinese_doi_key:
-                    print("[ScholarFlux] ✓ 中文 DOI 已加载（中文文献）")
-                else:
-                    print("[ScholarFlux] ○ 中文 DOI 已加载（无 API 密钥，使用模拟数据）")
-                    print("          获取密钥: http://www.wanfangdata.com.cn/")
-            except Exception as e:
-                print(f"[ScholarFlux] ✗ 中文 DOI 初始化失败: {e}")
-                self.chinese_api = None
-        else:
-            print("[ScholarFlux] ○ 中文 DOI 已禁用（CHINESE_DOI_ENABLED=false）")
-
-        # ===== 数据源 6: AMiner =====
-        if os.getenv('AMINER_ENABLED', 'true').lower() == 'true':
-            aminer_token = os.getenv('AMINER_API_TOKEN')
-            if aminer_token:
+            # ===== 数据源 1: OpenAlex =====
+            if os.getenv('OPENALEX_ENABLED', 'true').lower() == 'true':
                 try:
-                    rate_limit = float(os.getenv('AMINER_RATE_LIMIT', '1.0'))
-                    aminer_service = AMinerSearchService(api_token=aminer_token)
-                    self.aminer_api = ScholarAPI(
-                        name="aminer",
-                        service=aminer_service,
+                    openalex_service = PaperSearchService()
+                    rate_limit = float(os.getenv('OPENALEX_RATE_LIMIT', '5.0'))
+                    self.apis.append(ScholarAPI(
+                        name="openalex",
+                        service=openalex_service,
                         rate_limit=rate_limit,
+                        is_chinese=False
+                    ))
+                    print("[ScholarFlux] ✓ OpenAlex 已加载（英文文献，主要数据源）")
+                except Exception as e:
+                    print(f"[ScholarFlux] ✗ OpenAlex 初始化失败: {e}")
+            else:
+                print("[ScholarFlux] ○ OpenAlex 已禁用（OPENALEX_ENABLED=false）")
+
+            # ===== 数据源 2: Crossref =====
+            if os.getenv('CROSSREF_ENABLED', 'true').lower() == 'true':
+                try:
+                    crossref_service = CrossrefSearchService()
+                    self.apis.append(ScholarAPI(
+                        name="crossref",
+                        service=crossref_service,
+                        rate_limit=5.0,
+                        is_chinese=False
+                    ))
+                    print("[ScholarFlux] ✓ Crossref 已加载（期刊/会议论文）")
+                except Exception as e:
+                    print(f"[ScholarFlux] ✗ Crossref 初始化失败: {e}")
+            else:
+                print("[ScholarFlux] ○ Crossref 已禁用（CROSSREF_ENABLED=false）")
+
+            # ===== 数据源 3: DataCite =====
+            if os.getenv('DATACITE_ENABLED', 'true').lower() == 'true':
+                try:
+                    datacite_service = DataCiteSearchService()
+                    self.apis.append(ScholarAPI(
+                        name="datacite",
+                        service=datacite_service,
+                        rate_limit=5.0,
+                        is_chinese=False
+                    ))
+                    print("[ScholarFlux] ✓ DataCite 已加载（研究数据集）")
+                except Exception as e:
+                    print(f"[ScholarFlux] ✗ DataCite 初始化失败: {e}")
+            else:
+                print("[ScholarFlux] ○ DataCite 已禁用（DATACITE_ENABLED=false）")
+
+            # ===== 数据源 4: Semantic Scholar =====
+            if os.getenv('SEMANTIC_SCHOLAR_ENABLED', 'false').lower() == 'true':
+                semantic_key = os.getenv('SEMANTIC_SCHOLAR_API_KEY')
+                try:
+                    semantic_service = SemanticScholarService(api_key=semantic_key)
+                    rate_limit = float(os.getenv('SEMANTIC_SCHOLAR_RATE_LIMIT', '1.0'))
+                    self.apis.append(ScholarAPI(
+                        name="semantic_scholar",
+                        service=semantic_service,
+                        rate_limit=rate_limit,
+                        is_chinese=False
+                    ))
+                    if semantic_key:
+                        print("[ScholarFlux] ✓ Semantic Scholar 已加载（使用 API Key，速率限制: 1 req/s）")
+                    else:
+                        print("[ScholarFlux] ✓ Semantic Scholar 已加载（无 API Key，速率限制: 0.1 req/s）")
+                        print("          提示: 配置 SEMANTIC_SCHOLAR_API_KEY 可获得更高速率限制")
+                except Exception as e:
+                    print(f"[ScholarFlux] ✗ Semantic Scholar 初始化失败: {e}")
+            else:
+                print("[ScholarFlux] ○ Semantic Scholar 已禁用（SEMANTIC_SCHOLAR_ENABLED=false）")
+
+            # ===== 数据源 5: 中文 DOI =====
+            if os.getenv('CHINESE_DOI_ENABLED', 'false').lower() == 'true':
+                chinese_doi_key = os.getenv('CHINESE_DOI_API_KEY')
+                try:
+                    chinese_doi_service = ChineseDoiSearchService(api_key=chinese_doi_key)
+                    self.chinese_api = ScholarAPI(
+                        name="chinese_doi",
+                        service=chinese_doi_service,
+                        rate_limit=2.0,
                         is_chinese=True
                     )
-                    self.apis.append(self.aminer_api)
-                    print("[ScholarFlux] ✓ AMiner 已加载（中文文献）")
+                    self.apis.append(self.chinese_api)
+                    if chinese_doi_key:
+                        print("[ScholarFlux] ✓ 中文 DOI 已加载（中文文献）")
+                    else:
+                        print("[ScholarFlux] ○ 中文 DOI 已加载（无 API 密钥，使用模拟数据）")
+                        print("          获取密钥: http://www.wanfangdata.com.cn/")
                 except Exception as e:
-                    print(f"[ScholarFlux] ✗ AMiner 初始化失败: {e}")
+                    print(f"[ScholarFlux] ✗ 中文 DOI 初始化失败: {e}")
+                self.chinese_api = None
+            else:
+                print("[ScholarFlux] ○ 中文 DOI 已禁用（CHINESE_DOI_ENABLED=false）")
+
+            # ===== 数据源 6: AMiner =====
+            if os.getenv('AMINER_ENABLED', 'true').lower() == 'true':
+                aminer_token = os.getenv('AMINER_API_TOKEN')
+                if aminer_token:
+                    try:
+                        rate_limit = float(os.getenv('AMINER_RATE_LIMIT', '1.0'))
+                        aminer_service = AMinerSearchService(api_token=aminer_token)
+                        self.aminer_api = ScholarAPI(
+                            name="aminer",
+                            service=aminer_service,
+                            rate_limit=rate_limit,
+                            is_chinese=True
+                        )
+                        self.apis.append(self.aminer_api)
+                        print("[ScholarFlux] ✓ AMiner 已加载（中文文献）")
+                    except Exception as e:
+                        print(f"[ScholarFlux] ✗ AMiner 初始化失败: {e}")
+                        self.aminer_api = None
+                else:
+                    print("[ScholarFlux] ○ AMiner 未配置（设置 AMINER_API_TOKEN 环境变量）")
                     self.aminer_api = None
             else:
-                print("[ScholarFlux] ○ AMiner 未配置（设置 AMINER_API_TOKEN 环境变量）")
+                print("[ScholarFlux] ○ AMiner 已禁用（AMINER_ENABLED=false）")
                 self.aminer_api = None
-        else:
-            print("[ScholarFlux] ○ AMiner 已禁用（AMINER_ENABLED=false）")
-            self.aminer_api = None
 
-        print("=" * 80)
-        print(f"[ScholarFlux] 初始化完成，已加载 {len(self.apis)} 个数据源")
-        print("=" * 80)
+            print("=" * 80)
+            print(f"[ScholarFlux] 初始化完成，已加载 {len(self.apis)} 个数据源")
+            print("=" * 80)
+
+            # 标记已初始化，避免重复打印日志
+            ScholarFlux._initialized = True
 
     @contextmanager
     def _get_db_session(self):
