@@ -1053,7 +1053,8 @@ class ReviewGeneratorFCUnified:
 
             lines.append(ref_entry)
 
-        return "\n".join(lines)
+        # 使用双换行符确保 markdown 正确渲染为独立段落
+        return "\n\n".join(lines)
 
     def _deduplicate_papers_by_title(self, papers: List[Dict]) -> List[Dict]:
         """

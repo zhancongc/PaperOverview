@@ -458,6 +458,35 @@
   margin-bottom: 0.5rem;
 }
 
+/* Markdown content styling */
+.review-content > div > p {
+  margin-bottom: 1rem;
+}
+
+/* References section styling */
+.review-content h2 {
+  margin-top: 2rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+/* Ensure each reference is on its own line */
+.review-content p {
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+
+/* Reference list styling - ensure line breaks */
+.review-content > div > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Handle consecutive references */
+.review-content > div > p + p {
+  margin-top: 0.5rem;
+}
+
+
 /* 历史记录 */
 .history-content {
   padding: 0;
