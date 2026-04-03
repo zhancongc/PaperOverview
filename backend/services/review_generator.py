@@ -179,6 +179,10 @@ class ReviewGeneratorService:
         final_review = self._final_format_cleanup(final_review)
         print(f"[步骤 5/5] ✓ 格式验证完成")
 
+        # 添加综述标题（一级标题）
+        title_line = f"# {topic}\n\n"
+        final_review = title_line + final_review
+
         print(f"\n[完成] 综述生成完毕！总调用: 4-5次")
         print("=" * 80)
 
@@ -339,6 +343,14 @@ class ReviewGeneratorService:
         # 限制每篇文献引用次数
         content = self._limit_citation_count_v2(content, cited_papers, max_count=2)
         content = self._sort_and_merge_citations(content)
+
+        # 添加综述标题（一级标题）
+        title_line = f"# {topic}\n\n"
+        content = title_line + content
+
+        # 添加参考文献部分
+        references = self._format_references(cited_papers)
+        content = f"{content}\n\n## 参考文献\n\n{references}"
 
         print(f"[阶段5] ✓ 综述生成完成，引用 {len(cited_papers)} 篇")
         print("=" * 80)
