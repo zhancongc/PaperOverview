@@ -129,6 +129,11 @@ class SmartPaperSearchService:
                 sources.append(f"API{ext_count}篇")
             print(f"[搜索] '{query}': 找到 {total_count} 篇 ({', '.join(sources)})")
 
+        # 为每篇论文添加搜索来源标记
+        for paper in all_papers[:limit]:
+            if '_search_keywords' not in paper:
+                paper['_search_keywords'] = [query]
+
         return all_papers[:limit]
 
     async def search_papers(

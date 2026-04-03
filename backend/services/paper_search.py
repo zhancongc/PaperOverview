@@ -35,20 +35,72 @@ class PaperSearchService:
         # 计算截止日期
         cutoff_date = (datetime.now() - timedelta(days=years_ago * 365)).strftime("%Y-%m-%d")
 
-        params = {
-            "search": query,
-            "filter": f"from_publication_date:{cutoff_date},has_abstract:true",
-            "sort": "cited_by_count:desc",
-            "per_page": min(limit, 200)  # OpenAlex 最大每页200
-        }
-
+        papers = []
         try:
-            response = await self.client.get(f"{self.BASE_URL}/works", params=params)
+            # 策略1: 先使用严格的领域限定搜索（计算机科学）
+            # 使用 concepts.id 而不是 concepts.name（Computer Science ID: C41008148）
+            print(f"[OpenAlex] 搜索: {query} (限定: Computer Science)")
+
+            params_strict = {
+                "search": query,
+                "filter": f"from_publication_date:{cutoff_date},has_abstract:true,concepts.id:C41008148",
+                "sort": "cited_by_count:desc",
+                "per_page": min(limit, 200)
+            }
+
+            response = await self.client.get(f"{self.BASE_URL}/works", params=params_strict)
             response.raise_for_status()
             data = response.json()
 
-            papers = []
+            results_count = len(data.get("results", []))
+            print(f"[OpenAlex] 搜索返回: {results_count} 篇")
+
+            # 如果结果太少，放宽限制（只限定有摘要和年份）
+            if results_count < 10:
+                print(f"[OpenAlex] 结果不足，放宽限制（只限定年份和摘要）")
+                params_relaxed = {
+                    "search": query,
+                    "filter": f"from_publication_date:{cutoff_date},has_abstract:true",
+                    "sort": "cited_by_count:desc",
+                    "per_page": min(limit, 200)
+                }
+                response = await self.client.get(f"{self.BASE_URL}/works", params=params_relaxed)
+                response.raise_for_status()
+                data = response.json()
+                print(f"[OpenAlex] 放宽搜索返回: {len(data.get('results', []))} 篇")
+
+            # 处理搜索结果
             for item in data.get("results", []):
+                # 额外的相关性过滤：检查主题是否相关
+                concepts = [c.get("display_name", "").lower() for c in item.get("concepts", [])]
+
+                # 相关领域关键词（计算机科学相关）
+                relevant_fields = [
+                    'computer science', 'programming', 'software', 'algorithm',
+                    'artificial intelligence', 'machine learning', 'deep learning',
+                    'natural language processing', 'nlp', 'language model',
+                    'code', 'coding', 'programming language', 'software engineering',
+                    'data', 'database', 'information', 'computing'
+                ]
+
+                # 不相关领域关键词
+                irrelevant_fields = [
+                    'medicine', 'medical', 'clinical', 'healthcare', 'health',
+                    'biology', 'biological', 'genetics', 'dna', 'gene', 'genomic',
+                    'chemistry', 'chemical', 'physics', 'quantum',
+                    'geology', 'environmental', 'climate', 'ecology',
+                    'political science', 'sociology', 'psychology'
+                ]
+
+                # 检查是否包含相关领域的概念
+                has_relevant = any(any(field in c for field in relevant_fields) for c in concepts)
+                # 检查是否包含太多不相关领域的概念
+                irrelevant_count = sum(1 for c in concepts if any(field in c for field in irrelevant_fields))
+
+                # 如果没有相关概念，或者有太多不相关概念，跳过
+                if not has_relevant or irrelevant_count >= 2:
+                    continue
+
                 # 过滤被引量
                 cited_by_count = item.get("cited_by_count", 0)
                 if cited_by_count < min_citations:
@@ -76,7 +128,7 @@ class PaperSearchService:
                     "type": item.get("type", ""),
                     "doi": item.get("doi", ""),
                     "primary_location": item.get("primary_location", {}),
-                    "concepts": [c.get("display_name") for c in item.get("concepts", [])[:5]]
+                    "concepts": [c.get("display_name") for c in item.get("concepts", "")[:5]]
                 })
 
             return papers

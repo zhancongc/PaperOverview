@@ -100,12 +100,9 @@ class ScholarAPI:
 
             # AMiner 使用不同的接口（需要关键词列表）
             if self.name == "aminer":
-                # 将查询字符串分割成关键词列表
-                keywords = [k.strip() for k in query.split() if k.strip() and len(k) > 1]
-
-                # 如果分割后没有有效关键词，使用整个查询
-                if not keywords:
-                    keywords = [query]
+                # 使用完整的查询字符串作为单个关键词，不要分割
+                # 这样可以保持查询的语义完整性
+                keywords = [query]
 
                 papers = await self.service.search_papers(
                     keywords=keywords,
@@ -395,12 +392,22 @@ class ScholarFlux:
 
         # 选择活跃的数据源
         if use_all_sources:
-            # 使用所有可用数据源
+            # 根据查询语言选择最优的数据源组合
             if is_chinese_query:
-                print(f"[ScholarFlux] 中文查询，使用所有数据源: {query}")
+                print(f"[ScholarFlux] 中文查询，优先使用 AMiner: {query}")
+                # 中文查询：优先使用 AMiner（中文文献支持最好）
+                # 然后使用 Semantic Scholar（也有一定中文支持）
+                # 最后使用其他数据源
+                aminer_apis = [api for api in self.apis if api.name == "aminer" and api.is_available]
+                semantic_apis = [api for api in self.apis if api.name == "semantic_scholar" and api.is_available]
+                other_apis = [api for api in self.apis if api.name not in ["aminer", "semantic_scholar"] and api.is_available]
+                active_apis = aminer_apis + semantic_apis + other_apis
             else:
-                print(f"[ScholarFlux] 英文查询，使用所有数据源: {query}")
-            active_apis = self.apis
+                print(f"[ScholarFlux] 英文查询，优先使用 Semantic Scholar: {query}")
+                # 英文查询：优先使用 Semantic Scholar（语义理解更好）
+                semantic_apis = [api for api in self.apis if api.name == "semantic_scholar" and api.is_available]
+                other_apis = [api for api in self.apis if api.name != "semantic_scholar" and api.is_available]
+                active_apis = semantic_apis + other_apis  # Semantic Scholar 优先
         else:
             # 只使用非中文数据源
             active_apis = [api for api in self.apis if not api.is_chinese]
