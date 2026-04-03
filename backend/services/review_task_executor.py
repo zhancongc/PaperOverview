@@ -485,8 +485,6 @@ class ReviewTaskExecutor:
                         # 转换为字典格式
                         db_papers_dict = [p.to_paper_dict() for p in db_papers]
 
-                        print(f"[阶段3] 数据库搜索 '{query}': 找到 {len(db_papers_dict)} 篇")
-
                         # 添加数据库搜索结果
                         for paper in db_papers_dict:
                             paper_id = paper.get("id")
@@ -496,7 +494,6 @@ class ReviewTaskExecutor:
 
                         # === 步骤2: 如果数据库搜索结果不足，使用API补充 ===
                         if len(db_papers_dict) < 20:  # 如果数据库搜索结果少于20篇
-                            print(f"[阶段3] 数据库结果不足，使用API补充搜索...")
 
                             # 根据数据源类型调用不同的API
                             api_papers = await self._search_with_source(
@@ -1832,7 +1829,6 @@ class ReviewTaskExecutor:
             if not english_query:
                 english_query = query
 
-            print(f"[搜索API] {source}: 使用英文查询 '{english_query}'")
             return await self._call_search_api(english_query, source, years_ago, limit)
 
         elif source in ['aminer', 'semantic_scholar', 'chinese_doi']:
@@ -1841,12 +1837,10 @@ class ReviewTaskExecutor:
             if not chinese_query:
                 chinese_query = query
 
-            print(f"[搜索API] {source}: 使用中文查询 '{chinese_query}'")
             return await self._call_search_api(chinese_query, source, years_ago, limit)
 
         else:
             # 通用搜索
-            print(f"[搜索API] 通用: 查询 '{query}'")
             return await self.search_service.search(
                 query=query,
                 years_ago=years_ago,

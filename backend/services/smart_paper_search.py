@@ -63,7 +63,6 @@ class SmartPaperSearchService:
                     min_year = current_year - years_ago
 
                     # 从数据库搜索
-                    print(f"[SmartSearch] 从数据库搜索: {query}")
                     db_results = dao.search_papers(
                         keyword=query,
                         min_year=min_year,
@@ -80,15 +79,12 @@ class SmartPaperSearchService:
                             db_papers.append(paper_dict)
                             seen_ids.add(paper.id)
 
-                    print(f"[SmartSearch] 数据库找到 {len(db_papers)} 篇相关论文")
-
             except Exception as e:
                 print(f"[SmartSearch] 数据库查询失败: {e}")
 
         # 2. 如果数据库结果不足，查询外部API
         needed = limit - len(db_papers)
         if needed > 0:
-            print(f"[SmartSearch] 需要再搜索 {needed} 篇，查询外部API...")
             try:
                 external_papers = await self.scholarflux.search(
                     query=query,
@@ -111,7 +107,6 @@ class SmartPaperSearchService:
                         seen_ids.add(paper_id)
 
                 external_papers = filtered_external
-                print(f"[SmartSearch] 外部API找到 {len(external_papers)} 篇新论文")
 
             except Exception as e:
                 print(f"[SmartSearch] 外部API查询失败: {e}")
@@ -122,7 +117,17 @@ class SmartPaperSearchService:
         # 4. 按相关性排序
         all_papers = self._sort_by_relevance(all_papers)
 
-        print(f"[SmartSearch] 总共返回 {len(all_papers[:limit])} 篇论文 (数据库: {len(db_papers)}, 外部: {len(external_papers)})")
+        # 只在找到论文时输出日志
+        if all_papers:
+            db_count = len(db_papers)
+            ext_count = len(external_papers)
+            total_count = len(all_papers[:limit])
+            sources = []
+            if db_count > 0:
+                sources.append(f"数据库{db_count}篇")
+            if ext_count > 0:
+                sources.append(f"API{ext_count}篇")
+            print(f"[搜索] '{query}': 找到 {total_count} 篇 ({', '.join(sources)})")
 
         return all_papers[:limit]
 

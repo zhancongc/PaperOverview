@@ -137,22 +137,14 @@ class PaperQualityFilter:
         """
         filtered = []
         removed_count = 0
-        removal_reasons = {}
 
         for paper in papers:
-            is_low, reason = self.is_low_quality_paper(paper)
+            is_low, _ = self.is_low_quality_paper(paper)
 
             if is_low:
                 removed_count += 1
-                removal_reasons[reason] = removal_reasons.get(reason, 0) + 1
             else:
                 filtered.append(paper)
-
-        # 打印移除统计
-        if removed_count > 0:
-            print(f"[QualityFilter] 移除 {removed_count} 篇低质量文献:")
-            for reason, count in sorted(removal_reasons.items(), key=lambda x: -x[1])[:5]:
-                print(f"  - {reason}: {count} 篇")
 
         return filtered
 

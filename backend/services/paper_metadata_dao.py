@@ -139,12 +139,10 @@ class PaperMetadataDAO:
                     )
                     self.session.add(paper_metadata)
                     new_count += 1
-            except Exception as e:
-                print(f"[PaperMetadataDAO] 保存论文失败: {e}")
+            except Exception:
                 continue
 
         self.session.commit()
-        print(f"[PaperMetadataDAO] 批量保存完成，新增 {new_count} 篇，总计 {len(papers)} 篇")
         return new_count
 
     def get_paper_by_id(self, paper_id: str) -> Optional[PaperMetadata]:

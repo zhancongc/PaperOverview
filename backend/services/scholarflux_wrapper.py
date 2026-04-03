@@ -314,9 +314,8 @@ class ScholarFlux:
                 from services.paper_metadata_dao import PaperMetadataDAO
                 dao = PaperMetadataDAO(session)
                 dao.save_papers(papers, source=source)
-                print(f"[ScholarFlux] 已保存 {len(papers)} 篇论文到数据库")
-        except Exception as e:
-            print(f"[ScholarFlux] 保存论文到数据库失败: {e}")
+        except Exception:
+            pass
 
     async def search_papers(
         self,
@@ -407,12 +406,7 @@ class ScholarFlux:
             print("[ScholarFlux] 所有数据源不可用")
             return []
 
-        # 显示正在使用的数据源
-        api_names = [api.name for api in active_apis]
-        print(f"[ScholarFlux] 使用数据源: {', '.join(api_names)}")
-
         # 并行搜索所有数据源
-        print(f"[ScholarFlux] 开始并行搜索 {len(active_apis)} 个数据源...")
         tasks = []
         for api in active_apis:
             task = api.search(
@@ -432,7 +426,6 @@ class ScholarFlux:
 
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"[ScholarFlux] {active_apis[i].name} 搜索失败: {result}")
                 source_counts[active_apis[i].name] = 0
                 continue
 
@@ -450,24 +443,11 @@ class ScholarFlux:
                 paper.setdefault('source', [source])  # 临时设置为列表
             all_papers.extend(result)
 
-        # 显示各数据源结果统计
-        print(f"[ScholarFlux] 搜索结果统计:")
-        for api_name, count in source_counts.items():
-            print(f"  - {api_name}: {count} 篇")
-        print(f"[ScholarFlux] 合并前总计: {len(all_papers)} 篇")
-
         # 质量过滤（移除低质量文献）
-        before_filter = len(all_papers)
         all_papers = filter_low_quality_papers(all_papers)
-        after_filter = len(all_papers)
-
-        if before_filter > after_filter:
-            print(f"[ScholarFlux] 质量过滤: {before_filter} → {after_filter} (移除 {before_filter - after_filter} 篇)")
 
         # 去重（基于标题，优先保留被引量高的）
-        print(f"[ScholarFlux] 开始去重...")
         unique_papers = self._deduplicate_by_title(all_papers)
-        print(f"[ScholarFlux] 去重后: {len(unique_papers)} 篇")
 
         # 按相关性排序（综合考虑被引量和年份）
         sorted_papers = self._sort_by_relevance(unique_papers)
@@ -482,11 +462,10 @@ class ScholarFlux:
                 paper['source'] = source_mapping[paper_id]
 
         # 保存到数据库
-        print(f"[ScholarFlux] 保存 {len(final_papers)} 篇论文到数据库...")
         try:
             self._save_papers_to_db(final_papers, source="scholarflux_v2")
         except Exception as e:
-            print(f"[ScholarFlux] 保存论文到数据库失败: {e}")
+            pass  # 静默处理保存失败
 
         print(f"[ScholarFlux] 最终返回: {len(final_papers)} 篇论文")
         return final_papers
