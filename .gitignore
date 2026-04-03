@@ -39,5 +39,10 @@ backend/init_*.py
 # Migration Scripts
 backend/migrate_*.py
 
+# Backup Files
+backend/*_new.py
+backend/*_old.py
+backend/*_backup.py
+
 # Temporary Docs
 docs/paper_*.md
