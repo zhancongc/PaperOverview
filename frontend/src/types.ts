@@ -121,7 +121,7 @@ export interface ThreeCirclesResponse {
 export type TopicType = 'application' | 'evaluation' | 'theoretical' | 'empirical' | 'general';
 
 // 标签页类型
-export type TabType = 'review' | 'papers' | 'history' | 'analysis' | 'search';
+export type TabType = 'review' | 'papers' | 'history' | 'analysis' | 'search' | 'logs';
 
 // 搜索查询结果详情
 export interface SearchQueryResult {

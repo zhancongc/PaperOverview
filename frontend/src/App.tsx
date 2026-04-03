@@ -15,14 +15,17 @@ import { ReviewPanel } from './components/ReviewPanel'
 import { PapersList } from './components/PapersList'
 import { HistoryList } from './components/HistoryList'
 import { SearchQueriesPanel } from './components/SearchQueriesPanel'
+import { LogsPanel } from './components/LogsPanel'
 import './App.css'
 
 function App() {
   const [topic, setTopic] = useState('')
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
+  const [searchingPapers, setSearchingPapers] = useState(false)
   const [review, setReview] = useState('')
   const [papers, setPapers] = useState<Paper[]>([])
+  const [allPapers, setAllPapers] = useState<Paper[]>([])  // 所有搜索到的文献
   const [statistics, setStatistics] = useState<Statistics | null>(null)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('review')
@@ -32,6 +35,10 @@ function App() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [taskProgress, setTaskProgress] = useState('')
   const [taskStatus, setTaskStatus] = useState<'idle' | 'polling' | 'completed' | 'failed'>('idle')
+
+  // 查找文献结果
+  const [searchPapersLogs, setSearchPapersLogs] = useState<string[]>([])
+  const [searchPapersResult, setSearchPapersResult] = useState<any>(null)
 
   // 配置参数
   const [targetCount, setTargetCount] = useState(50)
@@ -104,6 +111,74 @@ function App() {
       console.error('Analyze error:', err)
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  const handleSearchPapers = async () => {
+    if (!topic.trim()) {
+      setError('请输入论文题目')
+      return
+    }
+
+    setSearchingPapers(true)
+    setError('')
+    setActiveTab('logs')
+    setSearchPapersLogs([])
+    setSearchPapersResult(null)
+    setAllPapers([])
+    setPapers([])
+
+    try {
+      const response = await api.searchPapersOnly(topic, {
+        targetCount,
+        recentYearsRatio,
+        englishRatio,
+        searchYears,
+        maxSearchQueries
+      })
+
+      if (response.success && response.data) {
+        const data = response.data
+
+        // 保存日志
+        if (data.logs) {
+          setSearchPapersLogs(data.logs)
+        }
+
+        // 保存结果
+        setSearchPapersResult(data)
+
+        // 更新文献列表
+        if (data.all_papers) {
+          setAllPapers(data.all_papers)
+        }
+        if (data.filtered_papers) {
+          setPapers(data.filtered_papers)
+        }
+
+        // 更新统计信息
+        if (data.statistics) {
+          setStatistics(data.statistics)
+        }
+
+        // 更新搜索查询结果
+        if (data.search_queries_results) {
+          setSearchQueries(data.search_queries_results)
+        }
+
+        // 保存框架信息
+        if (data.framework) {
+          setFrameworkType(data.framework.outline?.structure || '通用结构')
+        }
+
+        // 切换到文献列表标签页
+        setActiveTab('papers')
+      }
+    } catch (err) {
+      setError('查找文献失败，请检查后端服务')
+      console.error('Search papers error:', err)
+    } finally {
+      setSearchingPapers(false)
     }
   }
 
@@ -288,9 +363,11 @@ function App() {
           value={topic}
           onChange={setTopic}
           onAnalyze={handleAnalyze}
+          onSearchPapers={handleSearchPapers}
           onGenerate={handleGenerate}
           loading={loading}
           analyzing={analyzing}
+          searchingPapers={searchingPapers}
           showExportButton={!!review}
           onExport={handleExportCurrent}
           error={error}
@@ -312,6 +389,16 @@ function App() {
               searchQueries={searchQueries}
               allPapersCount={papers.length}
               citedPapersCount={statistics?.total || 0}
+            />
+          )}
+
+          {activeTab === 'logs' && (
+            <LogsPanel
+              logs={searchPapersLogs}
+              framework={searchPapersResult?.framework}
+              allPapersCount={allPapers.length}
+              filteredPapersCount={papers.length}
+              statistics={statistics}
             />
           )}
 

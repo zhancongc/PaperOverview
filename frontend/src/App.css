@@ -98,21 +98,24 @@
 
 /* ==================== Topic Input Component ==================== */
 
-.topic-input-container {
-  display: flex;
-  gap: 1rem;
+.input-section {
+  margin-bottom: 1.5rem;
+}
+
+/* 论文标题输入框独占一行 */
+.topic-input-row {
   margin-bottom: 1rem;
-  align-items: center;
 }
 
 .topic-input {
-  flex: 1;
+  width: 100%;
   padding: 1rem 1.25rem;
   font-size: 1rem;
   border: 2px solid #e0e0e0;
   border-radius: 12px;
   outline: none;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
 .topic-input:focus {
@@ -123,40 +126,51 @@
   background: #f5f5f5;
 }
 
-.analyze-btn {
-  padding: 1rem 1.5rem;
-  font-size: 1rem;
+/* 按钮放在下一行 */
+.action-buttons-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.analyze-btn,
+.search-papers-btn {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #667eea;
   background: white;
   border: 2px solid #667eea;
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.analyze-btn:hover:not(:disabled) {
+.analyze-btn:hover:not(:disabled),
+.search-papers-btn:hover:not(:disabled) {
   background: #667eea;
   color: white;
 }
 
-.analyze-btn:active:not(:disabled) {
+.analyze-btn:active:not(:disabled),
+.search-papers-btn:active:not(:disabled) {
   transform: scale(0.98);
 }
 
-.analyze-btn:disabled {
+.analyze-btn:disabled,
+.search-papers-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 .generate-btn {
-  padding: 1rem 2rem;
-  font-size: 1rem;
+  padding: 0.75rem 2rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: white;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.1s;
 }
@@ -170,6 +184,32 @@
 }
 
 .generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-btn {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #28a745;
+  background: white;
+  border: 2px solid #28a745;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #28a745;
+  color: white;
+}
+
+.export-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.export-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -1850,4 +1890,148 @@
   font-size: 0.9rem;
   font-style: italic;
 }
+
+/* ==================== Logs Panel ==================== */
+
+.logs-placeholder {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #888;
+}
+
+.logs-placeholder .hint {
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  color: #999;
+}
+
+.logs-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.logs-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.logs-summary {
+  display: flex;
+  gap: 1rem;
+}
+
+.summary-item {
+  padding: 0.4rem 0.8rem;
+  background: #f0f0f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.logs-content {
+  background: #1a1a2e;
+  color: #eee;
+  padding: 1rem;
+  border-radius: 8px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 1.5rem;
+}
+
+.log-line {
+  padding: 0.2rem 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-stage {
+  color: #4fc3f7;
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.log-error {
+  color: #ef5350;
+  font-weight: 600;
+}
+
+.log-success {
+  color: #66bb6a;
+}
+
+.log-warning {
+  color: #ffa726;
+}
+
+.logs-statistics,
+.logs-framework {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.logs-statistics h4,
+.logs-framework h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 6px;
+}
+
+.stat-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.stat-value {
+  color: #667eea;
+  font-weight: 700;
+}
+
+.framework-content p {
+  margin-bottom: 0.5rem;
+}
+
+.framework-sections ul {
+  margin: 0.5rem 0 0 1.5rem;
+  padding: 0;
+}
+
+.framework-sections li {
+  margin-bottom: 0.3rem;
+  color: #555;
+}
+
+.keywords {
+  color: #888;
+  font-size: 0.9rem;
+  margin-left: 0.5rem;
 }

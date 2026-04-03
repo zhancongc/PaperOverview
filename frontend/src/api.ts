@@ -91,6 +91,28 @@ export const api = {
     return response.data;
   },
 
+  // 查找文献（不生成综述）
+  async searchPapersOnly(
+    topic: string,
+    options: {
+      targetCount?: number;
+      recentYearsRatio?: number;
+      englishRatio?: number;
+      searchYears?: number;
+      maxSearchQueries?: number;
+    } = {}
+  ): Promise<{ success: boolean; message: string; data: any }> {
+    const response = await axios.post(`${API_BASE}/search-papers-only`, {
+      topic,
+      target_count: options.targetCount ?? 50,
+      recent_years_ratio: options.recentYearsRatio ?? 0.5,
+      english_ratio: options.englishRatio ?? 0.3,
+      search_years: options.searchYears ?? 10,
+      max_search_queries: options.maxSearchQueries ?? 8
+    });
+    return response.data;
+  },
+
   // 获取任务状态
   async getTaskStatus(taskId: string): Promise<{ success: boolean; data: TaskInfo }> {
     const response = await axios.get(`${API_BASE}/tasks/${taskId}`);

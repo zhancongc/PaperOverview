@@ -545,6 +545,64 @@ async def get_task_status(task_id: str):
     }
 
 
+# ==================== 查找文献接口（不生成综述）====================
+
+class SearchPapersOnlyRequest(BaseModel):
+    """查找文献请求"""
+    topic: str = Field(..., description="论文主题", min_length=1)
+    target_count: int = Field(50, description="目标文献数量", ge=10, le=100)
+    recent_years_ratio: float = Field(0.5, description="近5年占比", ge=0.1, le=1.0)
+    english_ratio: float = Field(0.3, description="英文文献占比", ge=0.1, le=1.0)
+    search_years: int = Field(10, description="搜索年份范围", ge=5, le=30)
+    max_search_queries: int = Field(8, description="最多搜索查询数", ge=1, le=20)
+
+
+@app.post("/api/search-papers-only")
+async def search_papers_only(request: SearchPapersOnlyRequest):
+    """
+    查找文献（不生成综述）
+
+    执行流程：
+    1. 生成综述框架和搜索关键词
+    2. 优化搜索关键词
+    3. 按小节搜索文献
+    4. 质量过滤
+
+    返回：
+    - 综述框架
+    - 搜索到的文献列表
+    - 筛选后的文献列表
+    - 统计信息
+    - 过程日志
+    """
+    try:
+        executor = ReviewTaskExecutor()
+
+        params = {
+            'target_count': request.target_count,
+            'recent_years_ratio': request.recent_years_ratio,
+            'english_ratio': request.english_ratio,
+            'search_years': request.search_years,
+            'max_search_queries': request.max_search_queries,
+        }
+
+        result = await executor.search_papers_only(
+            topic=request.topic,
+            params=params
+        )
+
+        return {
+            "success": True,
+            "message": "文献查找完成",
+            "data": result
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 参考文献验证接口 ====================
 
 class ValidateRequest(BaseModel):

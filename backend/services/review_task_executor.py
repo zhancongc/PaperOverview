@@ -1944,4 +1944,182 @@ class ReviewTaskExecutor:
             print(f"[搜索API] {source} 搜索失败: {e}")
             return []
 
+    # ==================== 查找文献（不生成综述）====================
+
+    async def search_papers_only(
+        self,
+        topic: str,
+        params: dict,
+        progress_callback=None
+    ) -> dict:
+        """
+        只查找文献，不生成综述
+
+        执行流程：
+        1. 生成综述框架和搜索关键词
+        2. 优化搜索关键词
+        3. 按小节搜索文献
+        4. 质量过滤
+
+        Args:
+            topic: 论文主题
+            params: 参数配置
+            progress_callback: 进度回调函数
+
+        Returns:
+            {
+                'framework': 综述框架,
+                'all_papers': 所有搜索到的文献,
+                'filtered_papers': 筛选后的文献,
+                'statistics': 统计信息,
+                'search_queries_results': 搜索查询结果,
+                'logs': 过程日志
+            }
+        """
+        logs = []
+        framework = None
+        all_papers = []
+        filtered_papers = []
+
+        def add_log(message):
+            """添加日志"""
+            logs.append(message)
+            print(message)
+            if progress_callback:
+                progress_callback(message)
+
+        try:
+            # === 阶段1: 生成大纲和搜索关键词 ===
+            add_log("\n" + "=" * 80)
+            add_log("[阶段1] 生成综述大纲和搜索关键词")
+            add_log("=" * 80)
+
+            outline = await self._generate_review_outline(topic)
+            framework = {'outline': outline}
+
+            add_log(f"[阶段1] 大纲和关键词生成完成:")
+            add_log(f"  - 引言: {outline.get('introduction', {}).get('focus', '')[:50]}...")
+            add_log(f"  - 主体章节: {len(outline.get('body_sections', []))} 个")
+
+            # 从大纲中提取搜索关键词
+            section_keywords = {}
+            for section in outline.get('body_sections', []):
+                if isinstance(section, dict):
+                    title = section.get('title', '')
+                    search_keywords = section.get('search_keywords', [])
+                    section_keywords[title] = search_keywords
+                    add_log(f"    - {title}")
+                    add_log(f"      搜索关键词: {', '.join(search_keywords)}")
+
+            add_log(f"  - 结论: 待定（根据文献内容生成）")
+
+            # 获取场景特异性指导
+            from services.hybrid_classifier import FrameworkGenerator
+            gen = FrameworkGenerator()
+            analysis_result = await gen.generate_framework(topic, enable_llm_validation=True)
+            specificity_guidance = analysis_result.get('specificity_guidance', {})
+
+            # 将关键词整合到 framework
+            framework['section_keywords'] = section_keywords
+            framework['specificity_guidance'] = specificity_guidance
+
+            # 准备搜索查询
+            search_queries = []
+            for keywords in section_keywords.values():
+                for kw in keywords:
+                    search_queries.append({'query': kw, 'lang': 'mixed'})
+
+            # === 阶段2: 搜索词优化 ===
+            add_log("\n" + "=" * 80)
+            add_log("[阶段2] 搜索词优化（基本语言优化）")
+            add_log("=" * 80)
+
+            optimized_queries = self._optimize_search_queries_basic(
+                search_queries=search_queries,
+                topic=topic
+            )
+
+            add_log(f"[阶段2] 搜索词优化完成:")
+            add_log(f"  - 原始搜索词: {len(search_queries)} 个")
+            add_log(f"  - 优化后搜索词: {len(optimized_queries)} 个")
+
+            # === 阶段3: 按小节搜索文献 ===
+            add_log("\n" + "=" * 80)
+            add_log("[阶段3] 按小节搜索文献")
+            add_log("=" * 80)
+
+            search_result = await self._search_literature_by_sections(
+                topic=topic,
+                optimized_queries=optimized_queries,
+                params=params,
+                framework=framework,
+                task_id=None  # 不使用任务管理器
+            )
+
+            all_papers = search_result['all_papers']
+
+            if not all_papers:
+                raise Exception(f'未找到关于「{topic}」的相关文献')
+
+            add_log(f"[阶段3] 搜索完成:")
+            add_log(f"  - 总文献数: {len(all_papers)}")
+            add_log(f"  - 小节数: {len(search_result['sections'])}")
+
+            # === 阶段4: 质量过滤 ===
+            add_log("\n" + "=" * 80)
+            add_log("[阶段4] 质量过滤")
+            add_log("=" * 80)
+
+            filter_result = await self._filter_papers_by_quality(
+                search_result=search_result,
+                topic=topic,
+                framework=framework,
+                params=params,
+                task_id=None  # 不使用任务管理器
+            )
+
+            filtered_papers = filter_result['all_papers']
+
+            if not filtered_papers:
+                raise Exception(f'筛选后没有足够的文献')
+
+            add_log(f"[阶段4] 质量过滤完成:")
+            add_log(f"  - 筛选后文献数: {len(filtered_papers)}")
+
+            # 计算统计信息
+            stats = self.filter_service.get_statistics(filtered_papers)
+
+            # 准备搜索查询结果（用于前端展示）
+            search_queries_results = []
+            for section_title, papers in search_result['sections'].items():
+                search_queries_results.append({
+                    'section': section_title,
+                    'query': section_title,  # 使用小节标题作为查询
+                    'papers_count': len(papers),
+                    'papers': papers
+                })
+
+            add_log("\n" + "=" * 80)
+            add_log("[查找文献完成]")
+            add_log("=" * 80)
+            add_log(f"  - 搜索到文献: {len(all_papers)} 篇")
+            add_log(f"  - 筛选后文献: {len(filtered_papers)} 篇")
+            add_log(f"  - 目标引用数: {params.get('target_count', 50)} 篇")
+
+            return {
+                'framework': framework,
+                'all_papers': all_papers,
+                'filtered_papers': filtered_papers,
+                'statistics': stats,
+                'search_queries_results': search_queries_results,
+                'logs': logs
+            }
+
+        except Exception as e:
+            import traceback
+            error_msg = f"[错误] {str(e)}"
+            add_log(error_msg)
+            traceback.print_exc()
+            raise
+
 
