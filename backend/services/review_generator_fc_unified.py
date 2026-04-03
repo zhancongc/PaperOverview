@@ -28,7 +28,8 @@ class ReviewGeneratorFCUnified:
         papers: List[Dict],
         framework: dict,
         model: str = "deepseek-chat",
-        specificity_guidance: dict = None
+        specificity_guidance: dict = None,
+        target_citation_count: int = 50
     ) -> Tuple[str, List[Dict]]:
         """
         一次性生成完整综述（使用 Function Calling）
@@ -39,6 +40,7 @@ class ReviewGeneratorFCUnified:
             framework: 框架信息（包含大纲）
             model: 模型名称
             specificity_guidance: 场景特异性指导
+            target_citation_count: 目标引用数量
 
         Returns:
             (综述内容, 被引用的论文列表)
@@ -52,13 +54,14 @@ class ReviewGeneratorFCUnified:
         print(f"\n[准备] 论文标题列表 ({len(papers)} 篇):")
         print(f"  - 标题列表 token 估算: ~{len(paper_titles_list) // 4} tokens")
         print(f"  - 完整元数据 token 估算: ~{len(json.dumps(papers, ensure_ascii=False)) // 4} tokens")
-        print(f"  - 节省比例: ~{70}%")
+        print(f"  - 节省比例: ~{95}%")
+        print(f"  - 目标引用数: {target_citation_count} 篇")
 
         # 构建系统提示
-        system_prompt = self._build_system_prompt(specificity_guidance)
+        system_prompt = self._build_system_prompt(specificity_guidance, target_citation_count)
 
         # 构建用户消息
-        user_message = self._build_user_message(topic, paper_titles_list, framework)
+        user_message = self._build_user_message(topic, paper_titles_list, framework, target_citation_count)
 
         # 记录工具调用情况
         tool_calls_log = []
@@ -180,7 +183,9 @@ class ReviewGeneratorFCUnified:
         print(f"  - 引用的论文数: {len(cited_papers)}")
 
         # 检查引用数量，如果不足则补充
-        min_citations = max(20, int(len(papers) * 0.4))  # 至少20篇或40%
+        min_citations = max(target_citation_count - 10, int(len(papers) * 0.3))  # 目标-10 或30%
+        max_citations = target_citation_count + 10  # 目标+10
+
         if len(cited_papers) < min_citations:
             print(f"\n[补充] 引用数量不足 ({len(cited_papers)} < {min_citations})，正在补充...")
 
@@ -192,8 +197,11 @@ class ReviewGeneratorFCUnified:
                 if (i + 1) not in cited_indices_set
             ]
 
-            # 选择相关性高的未引用论文
-            uncited_papers.sort(key=lambda x: x[1].get('cited_by_count', 0), reverse=True)
+            # 按相关性评分和被引量排序
+            uncited_papers.sort(key=lambda x: (
+                x[1].get('relevance_score', 0),
+                x[1].get('cited_by_count', 0)
+            ), reverse=True)
 
             to_cite = uncited_papers[:min_citations - len(cited_papers)]
 
@@ -351,12 +359,12 @@ class ReviewGeneratorFCUnified:
 
         return "\n".join(lines)
 
-    def _build_system_prompt(self, specificity_guidance: dict = None) -> str:
+    def _build_system_prompt(self, specificity_guidance: dict = None, target_citation_count: int = 50) -> str:
         """构建系统提示"""
-        base_prompt = """你是学术写作专家，正在撰写一篇高质量的文献综述。
+        base_prompt = f"""你是学术写作专家，正在撰写一篇高质量的文献综述。
 
 **重要：使用工具获取论文详情**
-- 你只能看到论文的标题列表
+- 你只能看到论文的标题列表（共 {len(papers) if 'papers' in dir() else 100} 篇）
 - 当你需要引用某篇论文时，必须先调用 get_paper_details 工具获取摘要和详细信息
 - 不要编造论文内容，只使用工具返回的真实信息
 - 引用格式：[1]、[2] 等
@@ -368,16 +376,18 @@ class ReviewGeneratorFCUnified:
 4. 明确指出研究分歧和不足
 5. 指出研究空白和未来方向
 
-**语言要求**：
-- 只使用中文撰写
-- 禁止中英文混用
-- 使用学术化表达
-
-**引用规范**：
+**引用要求**：
+- 目标引用数量：{target_citation_count}篇左右（可浮动±10篇）
 - 每个重要观点都要有引用
 - 不要过度引用同一篇论文
 - 优先引用高被引论文（可通过工具查看 cited_by_count）
 - 在引用前，务必使用 get_paper_details 工具了解论文内容
+- 从提供的文献列表中选择最相关的文献进行引用
+
+**语言要求**：
+- 只使用中文撰写
+- 禁止中英文混用
+- 使用学术化表达
 """
 
         if specificity_guidance:
@@ -385,7 +395,7 @@ class ReviewGeneratorFCUnified:
 
         return base_prompt
 
-    def _build_user_message(self, topic: str, paper_titles: str, framework: dict) -> str:
+    def _build_user_message(self, topic: str, paper_titles: str, framework: dict, target_citation_count: int = 50) -> str:
         """构建用户消息"""
         outline = framework.get('outline', {})
 
@@ -446,6 +456,12 @@ class ReviewGeneratorFCUnified:
 3. 确保每个小节都有充分的引用支持
 4. 使用对比分析，指出不同研究的观点和差异
 5. 指出当前研究的不足和未来方向
+
+**引用要求**：
+- 目标引用数量：约 {target_citation_count} 篇（可浮动 ±10 篇）
+- 从提供的文献列表中选择最相关的文献进行引用
+- 优先引用高质量、高被引的文献
+- 每个重要观点都要有引用支持
 
 请开始撰写。
 """

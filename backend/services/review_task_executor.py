@@ -155,8 +155,8 @@ class ReviewTaskExecutor:
             if not search_result['all_papers']:
                 raise Exception(f'未找到关于「{topic}」的相关文献')
 
-            # === 阶段4: 精简文献到N篇 ===
-            filter_result = await self._filter_papers_to_target(
+            # === 阶段4: 质量过滤（不再精简数量） ===
+            filter_result = await self._filter_papers_by_quality(
                 search_result=search_result,
                 topic=topic,
                 framework=framework,
@@ -167,15 +167,12 @@ class ReviewTaskExecutor:
             if not filter_result['all_papers']:
                 raise Exception(f'筛选后没有足够的文献')
 
-            papers_by_section = filter_result['sections']
             all_papers = filter_result['all_papers']
-            N = filter_result['total_count']
+            total_count = len(all_papers)
 
-            print(f"\n[阶段4] 输出结果:")
-            print(f"  - 总文献数: {N}")
-            print(f"  - 小节分布:")
-            for section_title, papers in papers_by_section.items():
-                print(f"    - {section_title}: {len(papers)} 篇")
+            print(f"\n[阶段4] 质量过滤完成:")
+            print(f"  - 总文献数: {total_count}")
+            print(f"  - 说明: 将所有高质量文献标题发送给LLM，由LLM按需选择引用")
 
             # === 阶段5: 生成综述（Function Calling 统一版本） ===
             api_key = os.getenv("DEEPSEEK_API_KEY")
@@ -183,15 +180,18 @@ class ReviewTaskExecutor:
             if not api_key:
                 raise Exception("DEEPSEEK_API_KEY not configured")
 
+            # 计算目标引用数
+            target_citation_count = params.get('target_count', 50)
+
             print(f"\n[阶段5] 生成综述（Function Calling 统一版本）")
-            print(f"[阶段5] 文献数量: {N} 篇")
-            print(f"[阶段5] 使用渐进式信息披露，减少 ~70% token 消耗")
-            print(f"[阶段5] 一次性生成完整综述（无需分小节）")
+            print(f"[阶段5] 候选文献数: {total_count} 篇")
+            print(f"[阶段5] 目标引用数: {target_citation_count} 篇")
+            print(f"[阶段5] 使用渐进式信息披露，LLM按需选择最相关的文献")
 
             task_manager.update_task_status(
                 task_id,
                 TaskStatus.PROCESSING,
-                progress={"step": "generating", "message": f"正在生成综述 ({N}篇文献)..."}
+                progress={"step": "generating", "message": f"正在生成综述（从{total_count}篇候选中选择）..."}
             )
 
             # 使用 Function Calling 统一版本生成器
@@ -202,6 +202,7 @@ class ReviewTaskExecutor:
                 topic=topic,
                 papers=all_papers,
                 framework=framework,
+                target_citation_count=target_citation_count,  # 传递目标引用数
                 specificity_guidance=specificity_guidance
             )
 
@@ -859,6 +860,120 @@ class ReviewTaskExecutor:
             'sections': filtered_by_section,
             'all_papers': [p for papers in filtered_by_section.values() for p in papers],
             'total_count': final_total
+        }
+
+    async def _filter_papers_by_quality(
+        self,
+        search_result: dict,
+        topic: str,
+        framework: dict,
+        params: dict,
+        task_id: str
+    ) -> dict:
+        """
+        质量过滤（新流程阶段4）
+
+        只做质量过滤，不做数量精简。
+        保留所有高质量文献，让LLM按需选择。
+
+        Args:
+            search_result: 搜索结果
+            topic: 论文主题
+            framework: 框架信息
+            params: 参数配置
+            task_id: 任务ID
+
+        Returns:
+            {
+                'all_papers': [质量过滤后的论文列表],
+                'total_count': 论文数量
+            }
+        """
+        print("\n" + "=" * 80)
+        print("[阶段4] 质量过滤（保留所有高质量文献）")
+        print("=" * 80)
+
+        all_papers = search_result['all_papers']
+        print(f"[阶段4] 输入文献数: {len(all_papers)}")
+
+        task_manager.update_task_status(
+            task_id,
+            TaskStatus.PROCESSING,
+            progress={"step": "filtering", "message": f"正在进行质量过滤..."}
+        )
+
+        # 1. 去重（基于 paper.id）
+        seen_ids = set()
+        unique_papers = []
+        for paper in all_papers:
+            paper_id = paper.get('id')
+            if paper_id and paper_id not in seen_ids:
+                seen_ids.add(paper_id)
+                unique_papers.append(paper)
+
+        print(f"[阶段4] 去重后: {len(unique_papers)} 篇")
+
+        # 2. 质量过滤（过滤低质量文献）
+        from services.paper_quality_filter import PaperQualityFilter
+        quality_filter = PaperQualityFilter()
+
+        filtered_papers = []
+        removed_count = 0
+
+        for paper in unique_papers:
+            # 计算质量得分
+            quality_score = quality_filter.calculate_quality_score(paper)
+
+            # 过滤低质量文献
+            if quality_score >= 30:  # 质量得分阈值
+                paper['quality_score'] = quality_score
+                filtered_papers.append(paper)
+            else:
+                removed_count += 1
+
+        print(f"[阶段4] 质量过滤: 移除 {removed_count} 篇低质量文献")
+        print(f"[阶段4] 保留文献数: {len(filtered_papers)} 篇")
+
+        # 3. 增强相关性评分（添加到论文中）
+        section_keywords = framework.get('section_keywords', {})
+        topic_keywords = []
+        for keywords in section_keywords.values():
+            topic_keywords.extend(keywords)
+
+        for paper in filtered_papers:
+            # 使用增强筛选服务计算相关性评分
+            score = self.enhanced_filter_service._calculate_enhanced_relevance_score(
+                paper=paper,
+                topic_keywords=topic_keywords
+            )
+            paper['relevance_score'] = score
+
+        # 4. 按相关性评分排序
+        filtered_papers.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+
+        print(f"[阶段4] 已添加相关性评分并排序")
+
+        # 5. 统计信息
+        stats = self.filter_service.get_statistics(filtered_papers)
+
+        print(f"\n[阶段4] 质量过滤完成:")
+        print(f"  - 总文献数: {len(filtered_papers)}")
+        print(f"  - 英文文献: {stats['english_count']}")
+        print(f"  - 近5年文献: {stats['recent_count']} ({stats['recent_ratio']:.1%})")
+        print(f"  - 平均被引: {stats['avg_citations']:.1f}")
+
+        # 6. 如果文献数量仍然太少，尝试补充
+        min_papers = 50
+        if len(filtered_papers) < min_papers:
+            print(f"\n[阶段4] ⚠️ 文献数量不足（{len(filtered_papers)} < {min_papers}）")
+            print(f"[阶段4] 这通常意味着搜索结果本身较少，建议：")
+            print(f"  1. 扩大搜索年份范围")
+            print(f"  2. 使用更通用的搜索关键词")
+            print(f"  3. 检查数据源配置是否正确")
+
+        return {
+            'all_papers': filtered_papers,
+            'total_count': len(filtered_papers)
         }
 
     def _calculate_paper_stats(self, papers: list) -> dict:
