@@ -2,396 +2,394 @@
 
 ## 概述
 
-本文档描述了论文综述生成器API的智能生成综述流程（`/api/smart-generate`）。该流程采用混合分类器、多数据源搜索、语言区分搜索、质量过滤、LLM生成和质量验证反馈循环，确保生成的综述质量。
+本文档描述了论文综述生成器的完整生成流程。该流程采用**Function Calling渐进式信息披露**、**按小节文献管理**、**增强相关性评分**、**跨学科过滤**、**多数据源聚合**等技术，确保生成的综述质量。
 
-## 架构组件
+## 版本信息
+
+| 版本 | 日期 | 主要更新 |
+|------|------|----------|
+| 5.0 | 2026-04-03 | Function Calling统一版本、增强相关性评分、跨学科过滤、渐进式搜索 |
+| 4.0 | 2026-04-01 | 自然统计数据嵌入、深度对比分析、综述润色 |
+| 3.2 | 2026-04-01 | 论文元数据数据库、智能搜索 |
+| 3.0 | 2026-04-01 | 语言区分搜索、质量过滤 |
+
+## 核心架构
 
 ### Service 类职责
 
 | Service 类 | 文件 | 职责 |
 |-----------|------|------|
-| `FrameworkGenerator` | `services/hybrid_classifier.py` | 题目分析、关键词提取、搜索查询生成 |
-| `SmartPaperSearchService` | `services/smart_paper_search.py` | 智能搜索（先查数据库，再查外部API） |
-| `ScholarFlux` | `services/scholarflux_wrapper.py` | 统一文献搜索API（多数据源聚合、语言区分） |
-| `PaperQualityFilter` | `services/paper_quality_filter.py` | 文献质量过滤（过滤低质量文献） |
-| `PaperFilterService` | `services/paper_filter.py` | 文献筛选、相关性评分、统计计算 |
-| `ReviewGeneratorService` | `services/review_generator.py` | 综述生成、引用处理、编号管理 |
-| `AMinerPaperDetailService` | `services/aminer_paper_detail.py` | 论文详情补充（获取作者、DOI） |
-| `PaperMetadataDAO` | `services/paper_metadata_dao.py` | 论文元数据数据库操作 |
+| `ReviewTaskExecutor` | `services/review_task_executor.py` | 综述生成任务执行器（主流程） |
+| `ReviewGeneratorFCUnified` | `services/review_generator_fc_unified.py` | **Function Calling统一版本生成器** |
+| `EnhancedPaperFilterService` | `services/paper_field_classifier.py` | **增强筛选服务（相关性评分+跨学科过滤）** |
+| `FrameworkGenerator` | `services/hybrid_classifier.py` | 题目分析、大纲生成、关键词提取 |
+| `SmartPaperSearchService` | `services/smart_paper_search.py` | 智能搜索（数据库优先+API补充） |
+| `ScholarFlux` | `services/scholarflux_wrapper.py` | 多数据源聚合搜索 |
+| `AcademicTermService` | `services/academic_term_service.py` | **学术术语服务** |
 | `ReferenceValidator` | `services/reference_validator.py` | 参考文献质量验证 |
 | `ReviewRecordService` | `services/review_record_service.py` | 综述记录数据库操作 |
-| `NaturalStatisticsIntegrator` | `services/natural_statistics.py` | 自然统计数据嵌入（避免AI痕迹） |
-| `DeepComparisonAnalyzer` | `services/deep_comparison.py` | 深度对比分析（追问分歧原因） |
-| `AIToneEliminator` | `services/review_polisher.py` | AI腔消除（综述润色） |
-| `ControversyAnalyzer` | `services/controversy_analyzer.py` | 争议与对话分析（观点碰撞） |
-| `CitationSplitter` | `services/citation_splitter.py` | 连续引用拆分（[1-5]→结构化陈述） |
 
 ## 数据源配置
 
 | 数据源 | 用途 | 语言 | API |
 |--------|------|------|-----|
-| AMiner | 中文文献搜索 | 中文/混合 | https://datacenter.aminer.cn |
-| OpenAlex | 英文文献搜索 | 英文 | https://api.openalex.org |
+| OpenAlex | 英文文献搜索（主要） | 英文 | https://api.openalex.org |
+| Crossref | 期刊/会议论文 | 英文 | https://api.crossref.org |
+| DataCite | 研究数据集 | 英文 | https://api.datacite.org |
 | Semantic Scholar | 补充搜索 | 全部 | https://api.semanticscholar.org |
+| AMiner | 中文文献搜索 | 中文 | https://datacenter.aminer.cn |
 
 ## 完整流程
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  0. 用户请求                                                         │
-│     POST /api/smart-generate                                        │
-│     { topic, target_count, recent_years_ratio, english_ratio,       │
-│       search_years, max_search_queries }                            │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
+│  输入：论文主题 + 参数                                              │
+│  POST /api/submit-review-task                                     │
+│  { topic, target_count, recent_years_ratio, english_ratio,         │
+│    search_years, max_search_queries }                              │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  1. 智能分析题目（FrameworkGenerator）                              │
-│     - 混合分类器：规则提取 + LLM验证优化                            │
-│     - 识别题目类型：应用型/评价型/理论型/实证型                     │
-│     - 生成搜索查询（search_queries）                                │
-│       • 每个查询包含：query, section, lang, keywords, search_mode   │
-│       • lang: 'zh'（中文）、'en'（英文）或 None（自动）             │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
+│  阶段1: 生成大纲和搜索关键词                                        │
+│  ─────────────────────────────────────────                         │
+│  • 生成综述大纲（DeepSeek LLM）                                    │
+│    - 引言：focus + key_papers                                     │
+│    - 主体章节：2-5个（每个含 title, focus, key_points,             │
+│                  comparison_points, search_keywords）             │
+│    - 结论：待定（根据文献内容生成）                                │
+│  • 提取每个小节的搜索关键词                                        │
+│  • 获取场景特异性指导                                              │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  2. 智能文献搜索（SmartPaperSearchService）【先数据库后外部】       │
-│                                                                     │
-│   对每个搜索查询（最多 max_search_queries 个）：                    │
-│     • 先从本地数据库搜索（paper_metadata表）                       │
-│     • 不足时再调用外部API                                          │
-│                                                                     │
-│   外部API语言区分：                                                 │
-│     • 中文查询（lang='zh'）→ 仅使用 AMiner                         │
-│     • 英文查询（lang='en'）→ 使用 OpenAlex + Semantic Scholar      │
-│     • 未指定语言 → 使用所有数据源                                  │
-│                                                                     │
-│   AMiner 特殊处理：                                                 │
-│     • 支持 title + keywords 双关键词组合搜索                       │
-│     • 使用 pro_search 接口提升相关度                               │
-│                                                                     │
-│   每个查询：years_ago=search_years, limit=50                       │
-│   补充搜索：如果总数 < 20，扩大年份范围继续搜索                    │
-│                                                                     │
-│   → 去重（基于 paper.id）                                          │
-│   → 自动保存到数据库（PaperMetadataDAO）【新增】                   │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
+│  阶段2: 搜索词优化（基本语言优化）                                  │
+│  ─────────────────────────────────────────                         │
+│  • 根据数据源类型使用不同语言                                        │
+│    OPENALEX, CROSSREF, DATACITE → 英文                              │
+│    AMINER, SEMANTIC_SCHOLAR → 中文/英文                             │
+│  • 不扩展同义词/近义词（避免浪费API资源）                           │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  3. 质量过滤（PaperQualityFilter）【新增】                         │
-│     - 过滤低质量文献：                                             │
-│       • 会议通知、会议记录、工作会议等                             │
-│       • 内部资料、工作简报、年度报告等                             │
-│       • 新闻、通知、公告等                                         │
-│       • 机构仓储无被引文献                                         │
-│       • 作者为"佚名"、"匿名"的文献（部分过滤）                     │
-│     - 计算质量得分（0-100）                                        │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
+│  阶段3: 按小节搜索文献（渐进式搜索策略）                             │
+│  ─────────────────────────────────────────                         │
+│  对每个小节：                                                      │
+│    1. 优先从PostgreSQL数据库搜索                                   │
+│    2. 数据库不足时使用API补充                                       │
+│    3. 渐进式搜索（最多3轮）：                                       │
+│       第1轮：原始关键词                                            │
+│       第2轮：同义词扩展（从术语库获取）                             │
+│       第3轮：简化查询                                              │
+│    4. 小节内部去重                                                │
+│    5. 小节间去重（保留文献少的小节的文献）                          │
+│    6. 总数<100篇时补充搜索                                         │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  4. 提取主题关键词（FrameworkGenerator.extract_relevance_keywords）│
-│     - 从 key_elements 中提取                                        │
-│     - 从 variables 中提取（实证型）                                 │
-│     - 处理缩写（QFD、FMEA、DMAIC、AHP）                             │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
+│  阶段4: 精简文献到N篇（N = 50~60随机）                              │
+│  ─────────────────────────────────────────                         │
+│  1. 随机确定目标数量 N ∈ [50, 60]                                  │
+│  2. 按小节比例分配文献数                                            │
+│  3. 对每个小节进行筛选：                                            │
+│     • 增强相关性评分（0-100分）                                     │
+│       - 标题关键词匹配：20分/词                                    │
+│       - 摘要关键词匹配：8分/词（可累计）                            │
+│       - 概念标签匹配：5分                                          │
+│       - 领域匹配：0-15分                                           │
+│       - 期刊质量：10分                                             │
+│       - 新近论文：0-10分                                           │
+│     • 跨学科过滤                                                   │
+│       - 自动分类论文领域                                           │
+│       - 小节-领域映射                                              │
+│       - 普适性章节检测（允许跨学科）                                │
+│       - 兜底机制（不足时补充）                                      │
+│  4. 按年份和语言比例筛选                                            │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  5. 筛选文献（PaperFilterService.filter_and_sort）                  │
-│     - 按相关性评分排序（关键词匹配度）                               │
-│     - 按时间分布筛选（近5年占比）                                    │
-│     - 按语言筛选（英文文献占比）                                     │
-│     → 输出：候选池（100+篇）                                        │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
+│  阶段5: 生成综述（Function Calling 统一版本）                       │
+│  ─────────────────────────────────────────                         │
+│  输入：                                                            │
+│    • 大纲结构                                                      │
+│    • 论文标题列表（轻量级，~600 tokens）                            │
+│                                                                   │
+│  流程：                                                            │
+│    1. 发送大纲 + 标题列表给 LLM                                    │
+│    2. 多轮对话循环：                                                │
+│       LLM 生成内容                                                │
+│       → 需要引用时调用 get_paper_details                           │
+│       → 返回论文详细信息（摘要、作者等）                            │
+│       → LLM 继续生成                                              │
+│    3. 检查引用数量，不足则补充                                     │
+│    4. 添加标题和参考文献                                           │
+│                                                                   │
+│  工具定义：                                                        │
+│    • get_paper_details: 获取论文详情                               │
+│    • search_papers_by_keyword: 按关键词搜索                         │
+│                                                                   │
+│  优势：                                                            │
+│    • Token 节省 ~70%                                              │
+│    • 全局连贯性好                                                 │
+│    • 引用编号一次性正确                                            │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  6-8. 生成综述 + 验证被引用文献（带重试循环）【核心】              │
-│                                                                     │
-│   ┌─────────────────────────────────────────────────────────┐      │
-│   │  Loop (最多2次):                                         │      │
-│   │                                                          │      │
-│   │  6. 生成综述 (ReviewGeneratorService)                   │      │
-│   │     ┌────────────────────────────────────────────────┐  │      │
-│   │     │ 6.1 LLM从候选池中选择文献引用                   │  │      │
-│   │     │ 6.2 按首次出现顺序重新编号                      │  │      │
-│   │     │ 6.3 补充论文详情（AMiner API）【新增】          │  │      │
-│   │     │     • 获取缺失的作者信息                         │  │      │
-│   │     │     • 获取缺失的 DOI                             │  │      │
-│   │     │ 6.4 过滤佚名论文【新增】                         │  │      │
-│   │     │     • 过滤作者为"佚名"、"匿名"、"未知作者"的论文 │  │      │
-│   │     │     • 重新编号引用                               │  │      │
-│   │     │ 6.5 限制每篇文献引用次数（最多2次）              │  │      │
-│   │     │ 6.6 排序并合并连续引用【新增】                   │  │      │
-│   │     │     • [35][34][36][47] → [34-36][47]            │  │      │
-│   │     │ 6.7 格式化参考文献列表                           │  │      │
-│   │     └────────────────────────────────────────────────┘  │      │
-│   │                                                          │      │
-│   │  7. 验证被引用文献质量                                  │      │
-│   │     - validate_citation_count(): 引用数量 >= target?    │      │
-│   │     - validate_recent_ratio(): 近5年占比 >= 用户要求?    │      │
-│   │     - validate_english_ratio(): 英文占比 >= 用户要求?    │      │
-│   │                                                          │      │
-│   │  8. 决策：                                                │      │
-│   │     - 全部通过 → 退出循环                                 │      │
-│   │     - 不通过 + 未达最大重试 → 扩大候选池重新生成        │      │
-│   │     - 不通过 + 达到最大重试 → 标记 validation_failed     │      │
-│   │                                                          │      │
-│   └─────────────────────────────────────────────────────────┘      │
-│                                                                     │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
+│  阶段6: 最终验证                                                    │
+│  ─────────────────────────────────────────                         │
+│  • 验证引用格式和编号                                               │
+│  • 检查所有引用是否在论文列表中                                     │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  9. 计算统计信息（PaperFilterService.get_statistics）               │
-│     - 基于最终被引用的文献计算（不是候选池）                         │
-│     - 总数、近5年占比、英文占比、平均被引量                         │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  10. 最终验证 + 保存记录                                            │
-│      - validate_review(): 完整验证                                  │
-│      - ReviewRecordService.update_success(): 保存到数据库          │
-└────────────────────────┬────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  返回结果                                                            │
-│  {                                                                   │
-│    id, topic, review, papers (候选池),                              │
-│    statistics, analysis, search_queries_results,                    │
-│    cited_papers_count, validation_passed, validation                │
-│  }                                                                   │
-└─────────────────────────────────────────────────────────────────────┘
+│  阶段7: 统计和保存                                                  │
+│  ─────────────────────────────────────────                         │
+│  • 计算统计信息（总数、中英文比例、近5年比例）                        │
+│  • 标记文献是否被引用                                               │
+│  • 保存到PostgreSQL数据库                                          │
+│  • 更新任务状态为 COMPLETED                                        │
+└────────────────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+                    输出：完整综述（Markdown格式）
 ```
 
 ## 核心设计决策
 
-### 1. 论文元数据数据库
+### 1. Function Calling 渐进式信息披露
 
-**问题**：每次搜索都调用外部API，效率低且消耗配额
+**问题**：一次性发送60篇完整论文（标题+摘要+作者）消耗大量token
 
 **解决方案**：
-- 创建 `paper_metadata` 表存储所有搜索到的论文
-- 搜索时优先查询本地数据库
-- 不足时再调用外部API
-- 自动保存新搜索到的论文到数据库
+- 初始只发送论文标题列表（~600 tokens）
+- LLM按需调用 `get_paper_details` 获取论文详情
+- Token节省：~49%（13,000 → 6,600）
 
-**实现**：
-- `SmartPaperSearchService`：智能搜索服务
-- `PaperMetadataDAO`：数据库访问层
-- `ScholarFlux._save_papers_to_db()`：自动保存
+**实现**：`ReviewGeneratorFCUnified` 类
 
 **优势**：
-- 避免重复搜索相同论文
+- Token节省49%
+- 注意力更集中（只处理需要的论文）
+- 全局连贯性好（一次性生成）
+
+### 2. 增强相关性评分
+
+**问题**：简单的关键词匹配无法准确评估论文相关性
+
+**解决方案**：
+```python
+评分构成（0-100分）：
+├─ 被引量：0-25分（归一化）
+├─ 标题关键词：20分/词
+├─ 摘要关键词：8分/词（可累计）
+├─ 概念标签：5分
+├─ 领域匹配：0-15分
+├─ 期刊质量：10分
+├─ 新近论文：0-10分
+└─ 英文论文：5分
+```
+
+**实现**：`EnhancedPaperFilterService._calculate_enhanced_relevance_score()`
+
+### 3. 跨学科过滤
+
+**问题**：材料章节可能引用医学论文（不相关）
+
+**解决方案**：
+- 自动分类论文领域（materials, medicine, cs等）
+- 小节-领域映射：
+  - "材料制备" → [materials, chemistry, engineering]
+  - "质量管理" → [management, engineering]
+  - "方法普适性研究" → [所有领域]
+- 过滤不匹配的论文
+- 兜底：不足时补充高相关性跨学科论文
+
+**实现**：`PaperFieldClassifier` + `SectionFieldMatcher`
+
+### 4. 渐进式搜索策略
+
+**问题**：一次性搜索所有同义词组合浪费API资源
+
+**解决方案**：
+```
+第1轮：原始关键词
+  ↓ 数量不足？
+第2轮：同义词扩展（从术语库获取）
+  ↓ 数量仍不足？
+第3轮：简化查询（去掉修饰词）
+```
+
+**优势**：
+- 避免浪费API资源
+- 优先使用原始关键词（最相关）
+- 按需扩展
+
+### 5. 按小节文献管理
+
+**问题**：所有论文共享导致引用分配不均
+
+**解决方案**：
+- 每个小节搜索专属文献
+- 小节间去重（保留文献少的小节的文献）
+- 每个小节分配固定数量的论文
+- 生成时每个小节引用自己的专属论文
+
+**优势**：
+- 引用分配均匀
+- 每个小节都有充足的引用
+- 避免某些小节引用不足
+
+### 6. 数据库优先搜索
+
+**问题**：每次搜索都调用外部API，效率低
+
+**解决方案**：
+- 优先从PostgreSQL数据库搜索
+- 不足时再调用外部API
+- 自动保存新搜索到的论文
+
+**优势**：
+- 避免重复搜索
 - 提高搜索速度
-- 减少API调用消耗
 - 积累论文资产
 
-### 2. 语言区分搜索
+## 增强相关性评分详解
 
-**问题**：OpenAlex 对中文文献的支持质量较差
+### 评分算法
 
-**解决方案**：
-- 中文查询（`lang='zh'`）→ 仅使用 AMiner
-- 英文查询（`lang='en'`）→ 使用 OpenAlex + Semantic Scholar
-- 未指定语言 → 使用所有数据源
+```python
+def _calculate_enhanced_relevance_score(paper, topic_keywords):
+    score = 0.0
 
-**实现**：`ScholarFlux.search()` 方法根据 `lang` 参数选择数据源
+    # 1. 被引量（0-25分）
+    citations = paper.get("cited_by_count", 0)
+    score += min(citations / 10, 25)
 
-### 3. AMiner 双关键词组合搜索
+    # 2. 标题关键词匹配（20分/词）
+    title_lower = paper.get("title", "").lower()
+    for kw in topic_keywords:
+        if kw.lower() in title_lower:
+            score += 20
 
-**问题**：单关键词搜索相关度不够
+    # 3. 摘要关键词匹配（8分/词，可累计）
+    abstract_lower = paper.get("abstract", "").lower()
+    for kw in topic_keywords:
+        if kw.lower() in abstract_lower:
+            score += 8
 
-**解决方案**：
-- 使用 `title` + `keywords` 双关键词组合
-- 通过 AMiner Pro API 实现：`/paper/search/pro`
+    # 4. 概念标签匹配（5分）
+    concepts = paper.get("concepts", [])
+    for concept in concepts:
+        for kw in topic_keywords:
+            if kw.lower() in concept.lower():
+                score += 5
+                break
 
-**效果**：大幅提升搜索结果相关度
+    # 5. 领域匹配（0-15分）
+    field_confidence = paper.get("field_confidence", 0)
+    score += field_confidence * 15
 
-### 3. 质量过滤
+    # 6. 期刊质量（10分）
+    high_quality_venues = ["nature", "science", "cell", ...]
+    if any(venue in paper.get("venue_name", "").lower() 
+           for venue in high_quality_venues):
+        score += 10
 
-**问题**：搜索结果中包含大量低质量文献
+    # 7. 新近论文（0-10分）
+    if paper.get("year", 0) >= current_year - 3:
+        score += 10
+    elif paper.get("year", 0) >= current_year - 5:
+        score += 5
 
-**解决方案**：
-- 过滤会议通知、内部资料、新闻通知等
-- 过滤机构仓储中无被引的文献
-- 过滤作者为"佚名"的文献
-
-**实现**：`PaperQualityFilter` 类
-
-### 4. 论文详情补充
-
-**问题**：部分文献缺少作者或DOI信息
-
-**解决方案**：
-- 使用 AMiner API 获取完整论文信息
-- 并发请求，限制速率避免超限
-
-**实现**：`AMinerPaperDetailService.enrich_papers()`
-
-### 5. 引用排序和合并
-
-**问题**：LLM生成的引用顺序混乱，如 `[35][34][36][47]`
-
-**解决方案**：
-- 按首次出现顺序重新编号
-- 过滤佚名论文后重新编号
-- 排序并合并连续引用
-
-**实现**：`_sort_and_merge_citations()` 方法
-
-**效果**：`[35][34][36][47]` → `[34-36][47]`
-
-### 6. 验证时机：生成后验证
-
-**问题**：为什么不在筛选后验证候选池？
-
-**答案**：
-- 候选池（100+篇）只是供LLM选择的范围
-- LLM最终可能只引用其中50篇
-- 验证候选池无法保证LLM选择的文献达标
-
-**解决方案**：在LLM生成综述后，验证其**实际引用**的文献质量。
-
-## 引用处理流程详解
-
-```
-原始AI生成内容
-    ↓
-[5][3][4][6]... （顺序混乱）
-    ↓
-┌─────────────────────────────────────────┐
-│ 按首次出现重新编号                        │
-│ [5][3][4][6] → [1][2][3][4]              │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 补充论文详情（AMiner API）               │
-│ 获取缺失的作者和DOI                      │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 过滤佚名论文                              │
-│ 移除作者为"佚名"的论文                    │
-│ 重新编号：[1][2][3][4] → [1][2][4]       │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 限制引用次数（每篇最多2次）               │
-└─────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────┐
-│ 排序并合并连续引用                        │
-│ [1][2][4] → [1-2][4]                     │
-└─────────────────────────────────────────┘
-    ↓
-最终格式化内容
+    return min(score, 100)
 ```
 
-## API 请求/响应
+### 跨学科过滤
 
-### 请求
-
-```json
-POST /api/smart-generate
-{
-  "topic": "基于QFD和PFMEA的螺纹钢质量管理研究",
-  "target_count": 50,
-  "recent_years_ratio": 0.5,
-  "english_ratio": 0.3,
-  "search_years": 10,
-  "max_search_queries": 8
+```python
+# 领域分类
+FIELD_KEYWORDS = {
+    FieldCategory.MATERIALS: {
+        "journals": ["nature materials", "advanced materials", ...],
+        "keywords": ["材料", "合成", "制备", "表征", ...],
+        "concepts": ["materials science", "nanotechnology", ...]
+    },
+    FieldCategory.MEDICINE: {
+        "journals": ["new england journal of medicine", ...],
+        "keywords": ["医学", "临床", "病理", ...],
+        "concepts": ["medicine", "clinical medicine", ...]
+    },
+    # ...
 }
-```
 
-### 响应
-
-```json
-{
-  "success": true,
-  "message": "文献综述生成成功",
-  "data": {
-    "id": 1,
-    "topic": "基于QFD和PFMEA的螺纹钢质量管理研究",
-    "review": "综述内容...",
-    "papers": [...],
-    "statistics": {
-      "total": 52,
-      "recent_count": 30,
-      "recent_ratio": 0.58,
-      "english_count": 18,
-      "english_ratio": 0.35
-    },
-    "analysis": {
-      "type": "application",
-      "key_elements": {...},
-      "search_queries": [...]
-    },
-    "search_queries_results": [...],
-    "cited_papers_count": 52,
-    "validation_passed": true,
-    "validation": {
-      "passed": true,
-      "warnings": [],
-      "details": {...}
-    },
-    "created_at": "2026-04-01T10:30:00"
-  }
+# 小节-领域映射
+SECTION_FIELD_MAPPING = {
+    "材料制备": [FieldCategory.MATERIALS, FieldCategory.CHEMISTRY],
+    "质量管理": [FieldCategory.MANAGEMENT, FieldCategory.ENGINEERING],
+    # ...
 }
+
+# 过滤逻辑
+def is_paper_allowed_for_section(paper, section_name):
+    paper_field = classify_paper(paper)
+    allowed_fields = SECTION_FIELD_MAPPING.get(section_name)
+    return paper_field in allowed_fields
 ```
 
-## 验证标准
+## Function Calling 工作流程
 
-| 验证项 | 默认要求 | 说明 |
-|--------|----------|------|
-| 引用数量 | >= 50 | 可通过 `target_count` 参数调整（10-100） |
-| 近5年占比 | >= 50% | 可通过 `recent_years_ratio` 参数调整（50%-100%） |
-| 英文文献占比 | 30%-70% | 可通过 `english_ratio` 参数调整（30%-70%） |
-
-**说明**：
-- 近5年文献占比：**不低于50%**（硬性要求）
-- 外文文献占比：**30%-70%之间**（上下限限制）
-- 如果验证未通过，系统会自动扩大搜索范围重新采集文献
+```
+用户请求
+    ↓
+发送：大纲 + 论文标题列表（60篇）
+    ↓
+┌─────────────────────────────────────┐
+│ LLM 开始生成                        │
+│ "深度学习在图像识别中..."           │
+│ 需要引用 → 调用 get_paper_details(3)│
+└─────────────────────────────────────┘
+    ↓
+返回：论文3的摘要、作者、年份...
+    ↓
+┌─────────────────────────────────────┐
+│ LLM 继续生成                        │
+│ "张三等[3]提出了一种新的..."        │
+│ 需要引用 → 调用 get_paper_details(7)│
+└─────────────────────────────────────┘
+    ↓
+返回：论文7的摘要、作者、年份...
+    ↓
+...（重复多次）
+    ↓
+┌─────────────────────────────────────┐
+│ LLM 完成生成                        │
+│ 输出完整综述                        │
+└─────────────────────────────────────┘
+```
 
 ## 环境变量配置
 
 ```bash
 # DeepSeek API（用于LLM生成）
 DEEPSEEK_API_KEY=sk-xxx
-DEEPSEEK_BASE_URL=https://api.deepseek.com
 
-# AMiner API（用于中文文献搜索和详情补充）
+# AMiner API（用于中文文献搜索）
 AMINER_API_TOKEN=eyJxxx
 
-# MySQL 数据库
+# PostgreSQL 数据库
 DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
+DB_PORT=5432
+DB_USER=postgres
 DB_PASSWORD=xxx
 DB_NAME=paper
+DB_TYPE=postgresql
 ```
-
-## 文件位置
-
-| 组件 | 文件路径 |
-|------|----------|
-| API接口 | `backend/main.py` - `/api/smart-generate` |
-| 智能搜索 | `backend/services/smart_paper_search.py` |
-| 文献搜索 | `backend/services/scholarflux_wrapper.py` |
-| AMiner搜索 | `backend/services/aminer_search.py` |
-| 题目分析 | `backend/services/hybrid_classifier.py` |
-| 质量过滤 | `backend/services/paper_quality_filter.py` |
-| 论文筛选 | `backend/services/paper_filter.py` |
-| 论文DAO | `backend/services/paper_metadata_dao.py` |
-| 综述生成 | `backend/services/review_generator.py` |
-| 详情补充 | `backend/services/aminer_paper_detail.py` |
-| 引用验证 | `backend/services/reference_validator.py` |
-| 数据记录 | `backend/services/review_record_service.py` |
 
 ## 数据库表
 
@@ -410,129 +408,142 @@ DB_NAME=paper
 | doi | String(200) | DOI |
 | concepts | JSON | 概念标签 |
 | venue_name | String(500) | 期刊/会议名称 |
-| issue | String(50) | 卷号 |
-| source | String(50) | 数据源（aminer/openalex/semantic_scholar） |
+| source | JSON | 数据源列表 ['openalex', 'semantic_scholar'] |
 | url | String(1000) | 论文链接 |
 | created_at | DateTime | 首次入库时间 |
 | updated_at | DateTime | 更新时间 |
 
-## 新增API接口
+### review_records（综述记录表）
 
-### 论文库管理
-
-| 接口 | 方法 | 说明 |
+| 字段 | 类型 | 说明 |
 |------|------|------|
-| `/api/papers/statistics` | GET | 获取论文库统计信息 |
-| `/api/papers/recent` | GET | 获取最近入库的论文 |
-| `/api/papers/top-cited` | GET | 获取高被引论文 |
+| id | Integer | 记录ID（主键，自增） |
+| topic | String(500) | 论文主题 |
+| review | Text | 综述内容 |
+| papers | JSON | 论文列表 |
+| statistics | JSON | 统计信息 |
+| status | String(20) | 状态（pending/processing/completed/failed） |
+| target_count | Integer | 目标文献数 |
+| recent_years_ratio | Float | 近5年占比要求 |
+| english_ratio | Float | 英文文献占比要求 |
+| error_message | Text | 错误信息 |
+| created_at | DateTime | 创建时间 |
+| updated_at | DateTime | 更新时间 |
+
+### academic_terms（学术术语表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | Integer | 术语ID（主键，自增） |
+| chinese_term | String(200) | 中文术语 |
+| english_terms | JSON | 英文术语列表 |
+| category | String(50) | 分类（dl/bio/ml等） |
+| subcategory | String(50) | 子分类 |
+| aliases | JSON | 别名列表 |
+| description | Text | 描述 |
+| priority | Integer | 优先级 |
+| is_active | Boolean | 是否活跃 |
+| created_at | DateTime | 创建时间 |
+| updated_at | DateTime | 更新时间 |
+
+## 验证标准
+
+| 验证项 | 默认要求 | 说明 |
+|--------|----------|------|
+| 引用数量 | >= 50 | 可通过 `target_count` 参数调整 |
+| 近5年占比 | >= 50% | 可通过 `recent_years_ratio` 参数调整 |
+| 英文文献占比 | 30%-70% | 可通过 `english_ratio` 参数调整 |
+
+## 性能指标
+
+```
+Token 效率：
+├─ 传统方式：~13,000 tokens
+└─ Function Calling：~6,600 tokens（节省49%）
+
+时间效率：
+├─ 数据库优先：减少API调用
+├─ 并发控制：最多3个任务同时执行
+└─ 渐进式搜索：避免浪费API资源
+
+质量保证：
+├─ 相关性评分：确保高相关性论文优先
+├─ 跨学科过滤：防止不相关引用
+└─ 引用验证：确保引用格式正确
+```
+
+## 测试结果
+
+```
+测试：8篇论文，3个小节
+├─ 迭代次数：9
+├─ 工具调用：8次
+├─ 访问论文：7篇
+├─ 引用率：100%
+└─ 内容长度：2,547字符
+```
+
+## 文件位置
+
+| 组件 | 文件路径 |
+|------|----------|
+| 主流程 | `backend/services/review_task_executor.py` |
+| 统一版本生成器 | `backend/services/review_generator_fc_unified.py` |
+| 增强筛选服务 | `backend/services/paper_field_classifier.py` |
+| 多数据源搜索 | `backend/services/scholarflux_wrapper.py` |
+| 学术术语服务 | `backend/services/academic_term_service.py` |
+| 引用验证 | `backend/services/reference_validator.py` |
 
 ## 更新历史
 
 | 日期 | 版本 | 更新内容 |
 |------|------|----------|
-| 2026-04-01 | 4.0 | 自然统计数据嵌入、深度对比分析、综述润色、连续引用拆分、观点碰撞分析 |
-| 2026-04-01 | 3.2 | 论文元数据数据库、智能搜索、论文库管理API |
-| 2026-04-01 | 3.1 | 文献占比限制：外文30%-70%，近5年不低于50%；强化对比分析撰写 |
-| 2026-04-01 | 3.0 | 语言区分搜索、质量过滤、论文详情补充、引用排序合并、佚名论文过滤 |
-| 2026-03-31 | 2.1 | 增加初始文献搜索数量：每个查询50篇，补充搜索确保至少150篇 |
-| 2026-03-31 | 2.0 | 重构验证流程：验证被引用文献而非候选池 |
+| 2026-04-03 | 5.0 | **Function Calling统一版本**、增强相关性评分、跨学科过滤、渐进式搜索、按小节文献管理、学术术语服务 |
+| 2026-04-01 | 4.0 | 自然统计数据嵌入、深度对比分析、综述润色 |
+| 2026-04-01 | 3.2 | 论文元数据数据库、智能搜索 |
+| 2026-04-01 | 3.0 | 语言区分搜索、质量过滤 |
+| 2026-03-31 | 2.0 | 重构验证流程 |
 | 2026-03-30 | 1.0 | 初始版本 |
 
 ---
 
-## 高级功能（v4.0）
+## 附录：Function Calling 工具定义
 
-### 1. 自然统计数据嵌入
-
-**问题**：AI生成的综述常使用 `(OR=0.65, p<0.001)` 风格的引用，AI痕迹明显
-
-**解决方案**：
-- 只对重要发现嵌入数据（突破性发现、大样本、高度显著）
-- 数据自然融入叙述："Zhang等[1]发现实施QFD后产品缺陷率下降了35%"
-
-**实现**：`NaturalStatisticsIntegrator` 类
-
-**使用判断**：
-- 突破性发现（OR<0.5或>2.0, r≥0.7, Cohen's d≥0.8）
-- 大样本研究（n≥1000）
-- 高度显著（p<0.001）
-- 边界条件/负面发现
-- 常规发现不使用数据（避免冗余）
-
-### 2. 深度对比分析
-
-**问题**：文献对比只列出对立观点，未分析分歧原因
-
-**解决方案**：
-- 不仅列出观点差异，还追问"这种分歧可能源于..."
-- 推断分歧原因：样本差异、方法差异、情境差异、理论差异
-
-**实现**：`DeepComparisonAnalyzer` 类
-
-**输出格式**：
-```
-关于媒体关注的效应，现有研究存在分歧。Zhang等[1]发现显著负相关；
-Smith等[2]则发现压力效应；Chen等[3]指出治理水平的调节作用。
-
-> **这种分歧可能源于：**
-> - **研究对象差异**：Zhang等[1]基于中国市场，而Smith等[2]研究美国企业
-> - **样本情境差异**：Smith等[2]聚焦于业绩压力情境
-> - **理论视角差异**：Zhang等[1]强调监督理论，而Smith等[2]关注压力应对理论
-```
-
-### 3. 综述润色（消除AI腔）
-
-**问题**：AI生成文本包含大量"AI腔"词汇
-
-**解决方案**：
-- 删除："近年来"、"值得注意的是"、"换言之"、"显而易见"等
-- 删除："随着...的发展"、"在...背景下"等背景铺垫
-- 删除："一方面...另一方面"、"此外"、"另外"等过渡词
-
-**实现**：`AIToneEliminator` 类
-
-**压缩效果**：通常可压缩30%-40%的文本
-
-### 4. 连续引用拆分
-
-**问题**：连续引用 `[1-5]` 难以识别具体文献
-
-**解决方案**：
-- 检测连续引用如 `[1-5]`, `[1,2,3,4,5]`
-- 拆分为结构化陈述："A等[x]...；B等[y]则..."
-
-**实现**：`CitationSplitter` 类
-
-**示例**：
-```
-原始：多项研究[1-5]支持QFD的积极作用
-拆分：Zhang等[1]发现...；Li等[2]指出...；Wang等[3]证实...
-```
-
-### 5. 观点碰撞分析
-
-**问题**：综述缺乏对学术争议的结构化分析
-
-**解决方案**：
-- 提取核心观点并分组
-- 识别对立观点
-- 分析分歧原因
-
-**实现**：`ControversyAnalyzer` 类
-
-**输出格式**：
-```markdown
-## 争议与对话
-
-### 对立观点A：支持派
-- 核心论点：...
-- 支持文献：[1-3]
-
-### 对立观点B：反对派
-- 核心论点：...
-- 支持文献：[4-5]
-
-### 可能的原因
-1. 样本差异：...
-2. 方法差异：...
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_paper_details",
+            "description": "获取论文的详细信息（摘要、作者、年份等）",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "paper_index": {
+                        "type": "integer",
+                        "description": "论文在列表中的索引（1-60）"
+                    }
+                },
+                "required": ["paper_index"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_papers_by_keyword",
+            "description": "根据关键词搜索论文",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keyword": {
+                        "type": "string",
+                        "description": "搜索关键词"
+                    }
+                },
+                "required": ["keyword"]
+            }
+        }
+    }
+]
 ```
