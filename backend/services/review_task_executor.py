@@ -208,7 +208,8 @@ class ReviewTaskExecutor:
                 recent_years_ratio=params.get('recent_years_ratio', 0.5),
                 english_ratio=params.get('english_ratio', 0.3),
                 specificity_guidance=specificity_guidance,
-                model=params.get('review_model', 'deepseek-chat')  # 支持切换模型
+                model=params.get('review_model', 'deepseek-chat'),  # 支持切换模型
+                enable_reasoning=params.get('enable_reasoning', False)  # 默认关闭思考模式
             )
 
             # 5. 最终验证

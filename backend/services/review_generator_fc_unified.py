@@ -32,7 +32,8 @@ class ReviewGeneratorFCUnified:
         target_citation_count: int = 50,
         min_citation_count: int = 50,
         recent_years_ratio: float = 0.5,
-        english_ratio: float = 0.3
+        english_ratio: float = 0.3,
+        enable_reasoning: bool = False
     ) -> Tuple[str, List[Dict]]:
         """
         一次性生成完整综述（使用 Function Calling）
@@ -47,6 +48,7 @@ class ReviewGeneratorFCUnified:
             min_citation_count: 最小引用数量（默认50）
             recent_years_ratio: 近5年文献比例要求（默认0.5，即50%）
             english_ratio: 英文文献比例要求（默认0.3，即30%）
+            enable_reasoning: 是否启用思考模式（仅对 deepseek-reasoner 有效）
 
         Returns:
             (综述内容, 被引用的论文列表)
@@ -106,6 +108,13 @@ class ReviewGeneratorFCUnified:
         max_tokens = get_max_tokens(model)
         print(f"[配置] 使用模型: {model}, 最大输出: {max_tokens} tokens")
 
+        # 构建 extra_body 参数（用于控制思考模式）
+        extra_body = {}
+        if "reasoner" in model and not enable_reasoning:
+            # 关闭思考模式，节省输出时间和 tokens
+            extra_body["thinking_budget"] = 1  # 设置为最小值，强制跳过思考
+            print(f"[配置] 已关闭思考模式，直接输出结果")
+
         while iteration < max_iterations:
             iteration += 1
 
@@ -118,7 +127,8 @@ class ReviewGeneratorFCUnified:
                 tools=self._get_tools_definition(len(papers)),
                 tool_choice="auto",
                 temperature=0.7,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                extra_body=extra_body if extra_body else None
             )
 
             assistant_message = response.choices[0].message
@@ -335,7 +345,8 @@ class ReviewGeneratorFCUnified:
                         {"role": "user", "content": supplement_message}
                     ],
                     temperature=0.3,
-                    max_tokens=max_tokens
+                    max_tokens=max_tokens,
+                    extra_body=extra_body if extra_body else None
                 )
 
                 content = supplement_response.choices[0].message.content
