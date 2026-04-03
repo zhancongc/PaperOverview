@@ -197,7 +197,7 @@ class ReviewTaskExecutor:
                 paper['cited'] = paper.get('id') in cited_paper_ids
 
             # 7. 最终验证
-            final_validation = validator.validate_review(review=review, papers=cited_papers)
+            final_validation = self.validator.validate_review(review=review, papers=cited_papers)
 
             # 8. 保存记录
             record = self.record_service.update_success(
