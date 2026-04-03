@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from services.task_manager import TaskManager, TaskStatus, task_manager
 from services.smart_paper_search import SmartPaperSearchService
 from services.paper_filter import PaperFilterService
+from services.paper_field_classifier import EnhancedPaperFilterService
 from services.review_generator import ReviewGeneratorService
+from services.review_generator_fc_unified import ReviewGeneratorFCUnified
 from services.reference_validator import ReferenceValidator
 from services.review_record_service import ReviewRecordService
 from services.citation_order_checker import CitationOrderChecker
@@ -25,6 +27,7 @@ class ReviewTaskExecutor:
         self.scholarflux = ScholarFlux()
         self.search_service = SmartPaperSearchService(self.scholarflux, get_db)
         self.filter_service = PaperFilterService()
+        self.enhanced_filter_service = EnhancedPaperFilterService()
         self.record_service = ReviewRecordService()
         self.validator = ReferenceValidator()
         self.citation_checker = CitationOrderChecker()
@@ -174,15 +177,16 @@ class ReviewTaskExecutor:
             for section_title, papers in papers_by_section.items():
                 print(f"    - {section_title}: {len(papers)} 篇")
 
-            # === 阶段5: 分小节生成综述 ===
+            # === 阶段5: 生成综述（Function Calling 统一版本） ===
             api_key = os.getenv("DEEPSEEK_API_KEY")
-            aminer_token = os.getenv("AMINER_API_TOKEN")
 
             if not api_key:
                 raise Exception("DEEPSEEK_API_KEY not configured")
 
-            print(f"\n[阶段5] 分小节生成综述")
+            print(f"\n[阶段5] 生成综述（Function Calling 统一版本）")
             print(f"[阶段5] 文献数量: {N} 篇")
+            print(f"[阶段5] 使用渐进式信息披露，减少 ~70% token 消耗")
+            print(f"[阶段5] 一次性生成完整综述（无需分小节）")
 
             task_manager.update_task_status(
                 task_id,
@@ -190,31 +194,27 @@ class ReviewTaskExecutor:
                 progress={"step": "generating", "message": f"正在生成综述 ({N}篇文献)..."}
             )
 
-            generator = ReviewGeneratorService(api_key=api_key, aminer_token=aminer_token)
+            # 使用 Function Calling 统一版本生成器
+            fc_generator = ReviewGeneratorFCUnified(api_key=api_key)
 
-            # 传递按小节分组的文献
-            review, cited_papers = await generator.generate_review_by_sections(
+            # 一次性生成完整综述
+            review, cited_papers = await fc_generator.generate_review(
                 topic=topic,
+                papers=all_papers,
                 framework=framework,
-                papers_by_section=papers_by_section,
-                all_papers=all_papers,
                 specificity_guidance=specificity_guidance
             )
 
-            # 5. 验证和修复（增强版）
+            # 5. 最终验证
             task_manager.update_task_status(
                 task_id,
                 TaskStatus.PROCESSING,
-                progress={"step": "validating", "message": "正在验证和修复引用..."}
+                progress={"step": "validating", "message": "正在验证引用..."}
             )
 
-            # 使用增强的验证方法
-            content, cited_papers = await self._validate_and_fix_review(
-                review=review,
-                papers=all_papers,
-                generator=generator,
-                task_id=task_id
-            )
+            # Function Calling 版本已经在内部处理了引用验证和补充
+            # 这里只做最终验证
+            final_validation = self.validator.validate_review(review=review, papers=cited_papers)
 
             # 6. 计算统计信息
             stats = self.filter_service.get_statistics(cited_papers)
@@ -752,8 +752,8 @@ class ReviewTaskExecutor:
 
         # 提取主题关键词
         topic_keywords = []
-        section_keywords = framework.get('section_keywords', {})
-        for keywords in section_keywords.values():
+        section_keywords_dict = framework.get('section_keywords', {})
+        for keywords in section_keywords_dict.values():
             topic_keywords.extend(keywords)
 
         # 筛选参数
@@ -806,30 +806,51 @@ class ReviewTaskExecutor:
         for section_title, section_papers in papers_by_section.items():
             target_count = section_targets.get(section_title, 1)
 
-            # 使用筛选服务筛选该小节的专属文献
-            filtered_papers = self.filter_service.filter_and_sort(
+            # 获取该小节的专属关键词
+            section_specific_keywords = section_keywords_dict.get(section_title, topic_keywords)
+
+            # 检查是否需要允许跨学科论文（如证明方法普适性的章节）
+            enable_field_filter = not self._is_generalizability_section(section_title)
+
+            # 使用增强筛选服务筛选该小节的专属文献
+            filtered_papers, filter_stats = self.enhanced_filter_service.filter_and_sort_with_field(
                 papers=section_papers,
+                section_name=section_title,
                 target_count=target_count,
                 recent_years_ratio=recent_years_ratio,
                 english_ratio=english_ratio,
-                topic_keywords=topic_keywords
+                topic_keywords=section_specific_keywords,
+                enable_field_filter=enable_field_filter,
+                use_llm_classification=False
             )
 
             # 截取到目标数量
             filtered_papers = filtered_papers[:target_count]
             filtered_by_section[section_title] = filtered_papers
-            print(f"[阶段4] 小节 '{section_title}': 筛选到 {len(filtered_papers)} 篇专属文献")
+
+            # 输出筛选结果
+            filter_msg = f"[阶段4] 小节 '{section_title}': 筛选到 {len(filtered_papers)} 篇专属文献"
+            if enable_field_filter and filter_stats.get('field_filtered', 0) > 0:
+                filter_msg += f" (过滤了 {filter_stats['field_filtered']} 篇跨学科论文)"
+            print(filter_msg)
 
         # 统计最终分配的文献总数
         final_total = sum(len(papers) for papers in filtered_by_section.values())
-        stats = self.filter_service.get_statistics(
-            [p for papers in filtered_by_section.values() for p in papers]
-        )
+        all_papers_flat = [p for papers in filtered_by_section.values() for p in papers]
+
+        stats = self.filter_service.get_statistics(all_papers_flat)
+
+        # 统计各领域的论文数量
+        field_stats = {}
+        for paper in all_papers_flat:
+            field = paper.get('field', 'unknown')
+            field_stats[field] = field_stats.get(field, 0) + 1
 
         print(f"\n[阶段4] 专属文献分配完成:")
         print(f"  - 总文献数: {final_total} (目标: {N})")
         print(f"  - 英文文献: {stats['english_count']}")
         print(f"  - 近5年文献: {stats['recent_count']} ({stats['recent_ratio']:.1%})")
+        print(f"  - 领域分布: {field_stats}")
         print(f"  - 小节分布:")
         for section_title, papers in filtered_by_section.items():
             print(f"    - {section_title}: {len(papers)} 篇")
@@ -850,6 +871,32 @@ class ReviewTaskExecutor:
             'chinese': chinese_count,
             'english': english_count
         }
+
+    def _is_generalizability_section(self, section_title: str) -> bool:
+        """
+        检查小节是否关于"证明方法普适性"
+
+        这类小节允许引用跨学科的文献。
+
+        Args:
+            section_title: 小节标题
+
+        Returns:
+            是否允许跨学科引用
+        """
+        generalizability_keywords = [
+            "普适性", "通用性", "适用性", "跨领域", "多领域",
+            "泛化", "广泛应用", "不同领域", "多种场景",
+            "generalizability", "generalization", "cross-domain",
+            "multi-domain", "versatility", "applicability"
+        ]
+
+        section_lower = section_title.lower()
+        for keyword in generalizability_keywords:
+            if keyword.lower() in section_lower:
+                return True
+
+        return False
 
     async def _enrich_aminer_papers(self, papers: list) -> list:
         """补充AMiner论文详情"""

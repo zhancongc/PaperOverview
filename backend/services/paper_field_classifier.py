@@ -533,9 +533,19 @@ class EnhancedPaperFilterService:
             ]
 
             if filtered_papers:
-                print(f"[EnhancedFilter] 章节'{section_name}'过滤了{len(filtered_papers)}篇不相关论文")
-                for p in filtered_papers[:3]:
-                    print(f"  - {(p.get('title') or '')[:50]}... ({p.get('_filter_reason', '')})")
+                print(f"[EnhancedFilter] 章节'{section_name}'过滤了{len(filtered_papers)}篇跨学科论文:")
+                for p in filtered_papers[:5]:
+                    title = (p.get('title') or '')[:60]
+                    field = p.get('field', 'unknown')
+                    reason = p.get('_filter_reason', '')
+                    print(f"  - [{field}] {title}... ({reason})")
+
+                # 统计被过滤论文的领域分布
+                filtered_field_counts = {}
+                for p in filtered_papers:
+                    field = p.get('field', 'unknown')
+                    filtered_field_counts[field] = filtered_field_counts.get(field, 0) + 1
+                print(f"  被过滤论文的领域分布: {filtered_field_counts}")
 
             papers_to_sort = allowed_papers
         else:
@@ -600,7 +610,7 @@ class EnhancedPaperFilterService:
                     selected.add(paper_id)
                     result.append(paper)
 
-        # 如果不足，从所有论文中补充
+        # 如果不足，从允许的论文中补充（优先考虑高相关性的）
         if len(result) < target_count:
             for paper in scored_papers:
                 paper_id = paper.get("id")
@@ -610,13 +620,53 @@ class EnhancedPaperFilterService:
                     if len(result) >= target_count:
                         break
 
-        # 转换relevance_score
+        # 如果还是不足（可能因为字段过滤导致论文太少），从被过滤的论文中补充
+        if len(result) < target_count and enable_field_filter and len(filtered_papers) > 0:
+            print(f"[EnhancedFilter] 章节'{section_name}'的允许论文不足，从被过滤的跨学科论文中补充 {target_count - len(result)} 篇")
+            # 对被过滤的论文也进行评分
+            filtered_scored = []
+            for paper in filtered_papers:
+                score = self._calculate_enhanced_relevance_score(paper, topic_keywords)
+                filtered_scored.append({**paper, '_relevance_score': score})
+
+            # 按相关性排序
+            filtered_scored.sort(key=lambda x: x.get('_relevance_score', 0), reverse=True)
+
+            # 补充最相关的跨学科论文
+            for paper in filtered_scored:
+                if len(result) >= target_count:
+                    break
+                paper_id = paper.get("id")
+                if paper_id not in selected:
+                    selected.add(paper_id)
+                    result.append(paper)
+                    # 标记为跨学科补充
+                    result[-1]['_cross_disciplinary'] = True
+
+        # 转换relevance_score和cross_disciplinary标记
         for paper in result:
             if '_relevance_score' in paper:
                 paper['relevance_score'] = paper.pop('_relevance_score')
+            if '_cross_disciplinary' in paper:
+                paper['cross_disciplinary'] = paper.pop('_cross_disciplinary')
+
+        # 统计跨学科论文数量
+        cross_disciplinary_count = sum(1 for p in result if p.get('cross_disciplinary', False))
+        if cross_disciplinary_count > 0:
+            stats["cross_disciplinary_count"] = cross_disciplinary_count
+            print(f"[EnhancedFilter] 章节'{section_name}'补充了 {cross_disciplinary_count} 篇跨学科论文以达到目标数量")
 
         stats["total_output"] = len(result)
         stats["fields_in_output"] = self._count_fields(result)
+
+        # 输出相关性评分分布（用于调试）
+        if len(result) > 0:
+            scores = [p.get('relevance_score', 0) for p in result]
+            stats["score_stats"] = {
+                "min": min(scores),
+                "max": max(scores),
+                "avg": sum(scores) / len(scores)
+            }
 
         return result[:target_count], stats
 
@@ -626,32 +676,44 @@ class EnhancedPaperFilterService:
 
         Args:
             paper: 论文信息
-            topic_keywords: 主题关键词
+            topic_keywords: 主题关键词（可能是小节专属关键词）
 
         Returns:
             相关性评分（0-100）
         """
         score = 0.0
 
-        # 基础分：被引量（归一化到 0-30 分）
+        # 1. 基础分：被引量（归一化到 0-25 分）
         citations = paper.get("cited_by_count", 0)
-        score += min(citations / 10, 30)
+        score += min(citations / 10, 25)
 
-        # 关键词匹配
+        # 2. 关键词匹配（最重要的评分项）
         if topic_keywords:
             title_lower = paper.get("title", "").lower()
-            abstract_lower = paper.get("abstract", "").lower()
+            abstract_lower = (paper.get("abstract") or "").lower()
 
+            # 标题完全匹配（权重最高：20分）
             for kw in topic_keywords:
                 if kw is None:
                     continue
                 kw_lower = kw.lower()
                 if kw_lower in title_lower:
-                    score += 15
-                elif kw_lower in abstract_lower:
-                    score += 5
+                    score += 20
+                    # 如果关键词在标题开头，额外加分
+                    if title_lower.startswith(kw_lower):
+                        score += 5
 
-            # 概念标签匹配
+            # 摘要匹配（权重：8分）
+            for kw in topic_keywords:
+                if kw is None:
+                    continue
+                kw_lower = kw.lower()
+                if kw_lower in abstract_lower:
+                    # 计算关键词在摘要中出现的次数
+                    count = abstract_lower.count(kw_lower)
+                    score += min(count * 8, 15)
+
+            # 概念标签匹配（权重：5分）
             concepts = paper.get("concepts", [])
             for concept in concepts:
                 if concept is None:
@@ -659,24 +721,41 @@ class EnhancedPaperFilterService:
                 concept_lower = concept.lower()
                 for kw in topic_keywords:
                     if kw is not None and kw.lower() in concept_lower:
-                        score += 3
+                        score += 5
                         break
 
-        # 新近论文加分
+        # 3. 领域匹配加分（0-15分）
+        paper_field = paper.get("field", "")
+        field_confidence = paper.get("field_confidence", 0)
+        if paper_field and paper_field != "general":
+            # 如果领域分类置信度高，加分
+            score += field_confidence * 15
+
+        # 4. 新近论文加分（0-10分）
         current_year = datetime.now().year
         paper_year = paper.get("year")
-        if paper_year is not None and paper_year >= current_year - 5:
-            score += 10
-        elif paper_year is not None and paper_year >= current_year - 10:
-            score += 5
+        if paper_year is not None:
+            if paper_year >= current_year - 3:
+                score += 10  # 近3年加10分
+            elif paper_year >= current_year - 5:
+                score += 5   # 3-5年前加5分
 
-        # 英文论文加分
+        # 5. 英文论文加分（0-5分）
         if paper.get("is_english", False):
             score += 5
 
-        # 领域置信度加分
-        field_confidence = paper.get("field_confidence", 0)
-        score += field_confidence * 10
+        # 6. 期刊/会议质量加分（0-10分）
+        venue_name = (paper.get("venue_name") or "").lower()
+        high_quality_venues = [
+            "nature", "science", "cell", " lancet", "nejm",
+            "ieee transactions", "acm transactions",
+            "journal of the american chemical society",
+            "physical review letters", "advanced materials"
+        ]
+        for quality_venue in high_quality_venues:
+            if quality_venue in venue_name:
+                score += 10
+                break
 
         return min(score, 100)
 
