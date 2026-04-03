@@ -13,7 +13,7 @@ import os
 import json
 import re
 from openai import AsyncOpenAI
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 
 
 class ReviewGeneratorFCUnified:
@@ -95,8 +95,12 @@ class ReviewGeneratorFCUnified:
             {"role": "user", "content": user_message}
         ]
 
-        max_iterations = 30  # 最多30轮对话
+        # 根据论文数量动态设置迭代次数
+        # 现在使用批量获取，只需要 1 次工具调用即可获取所有需要的论文详情
+        # 设置 5 轮应该足够（包括可能的搜索等额外操作）
+        max_iterations = 5
         iteration = 0
+        content = None  # 初始化 content 变量
 
         # 根据模型确定 max_tokens
         def get_max_tokens(model_name: str) -> int:
@@ -107,6 +111,7 @@ class ReviewGeneratorFCUnified:
 
         max_tokens = get_max_tokens(model)
         print(f"[配置] 使用模型: {model}, 最大输出: {max_tokens} tokens")
+        print(f"[配置] 最大迭代次数: {max_iterations} 轮")
 
         # 构建 extra_body 参数（用于控制思考模式）
         extra_body = {}
@@ -124,7 +129,7 @@ class ReviewGeneratorFCUnified:
                 messages=messages,
                 tools=self._get_tools_definition(len(papers)),
                 tool_choice="auto",
-                temperature=0.7,
+                temperature=0.4,  # 学术综述生成：平衡准确性和流畅性
                 max_tokens=max_tokens,
                 extra_body=extra_body if extra_body else None
             )
@@ -143,16 +148,16 @@ class ReviewGeneratorFCUnified:
                     function_args = json.loads(tool_call.function.arguments)
 
                     # 执行工具调用
-                    if function_name == "get_paper_details":
-                        result = self._get_paper_details(
-                            paper_index=function_args.get("paper_index"),
+                    if function_name == "get_multiple_paper_details":
+                        result = self._get_multiple_paper_details(
+                            paper_indices=function_args.get("paper_indices", []),
                             papers=papers
                         )
 
                         # 记录访问的论文
-                        paper_index = function_args.get("paper_index")
-                        if 1 <= paper_index <= len(papers):
-                            accessed_papers[paper_index] = papers[paper_index - 1]
+                        for paper_index in function_args.get("paper_indices", []):
+                            if 1 <= paper_index <= len(papers):
+                                accessed_papers[paper_index] = papers[paper_index - 1]
 
                         tool_responses.append({
                             "role": "tool",
@@ -187,16 +192,38 @@ class ReviewGeneratorFCUnified:
                 # 批量添加工具响应
                 messages.extend(tool_responses)
 
+                # 估算并打印上下文长度
+                context_tokens = self._estimate_context_tokens(messages)
+                print(f"[迭代 {iteration}] 上下文约 {context_tokens} tokens")
+
             else:
                 # 没有工具调用，对话结束
                 # 添加最终回复
                 messages.append(assistant_message)
 
                 content = assistant_message.content
+
+                # 检查内容是否被截断
+                finish_reason = response.choices[0].finish_reason
+                if finish_reason == "length":
+                    print(f"[警告] 生成内容因达到max_tokens限制而被截断！")
+                    print(f"[警告] 当前内容长度: {len(content)} 字符")
+                elif finish_reason == "content_filter":
+                    print(f"[警告] 生成内容因内容过滤被截断！")
+                else:
+                    print(f"[完成] 生成完成，原因: {finish_reason}")
+
                 break
 
         # === 后处理 ===
         print(f"[综述生成] 工具调用: {len(tool_calls_log)}次, 访问论文: {len(accessed_papers)}篇, 迭代: {iteration}轮")
+
+        # 检查 content 是否已生成
+        if content is None:
+            print(f"[错误] 生成失败：LLM 没有返回任何内容")
+            print(f"[错误] 可能原因：达到最大迭代次数 ({max_iterations}) 但 LLM 仍在调用工具")
+            # 返回空内容
+            return "", []
 
         # 提取引用的论文
         cited_indices = self._extract_cited_indices(content)
@@ -220,7 +247,13 @@ class ReviewGeneratorFCUnified:
 
             total = len(papers_list)
             recent_count = sum(1 for p in papers_list if p.get("year") and p.get("year", 0) >= recent_threshold)
-            english_count = sum(1 for p in papers_list if p.get("lang") == "en")
+
+            # 根据标题判断是否为英文文献
+            def _is_english(paper):
+                title = paper.get("title", "")
+                return not any('\u4e00' <= char <= '\u9fff' for char in title)
+
+            english_count = sum(1 for p in papers_list if _is_english(p))
 
             return {
                 "total": total,
@@ -267,7 +300,13 @@ class ReviewGeneratorFCUnified:
 
             # 分类未引用的论文
             recent_uncited = [(idx, p) for idx, p in uncited_papers if p.get("year", 0) >= recent_threshold]
-            english_uncited = [(idx, p) for idx, p in uncited_papers if p.get("lang") == "en"]
+
+            # 根据标题判断是否为英文文献
+            def _is_english(paper):
+                title = paper.get("title", "")
+                return not any('\u4e00' <= char <= '\u9fff' for char in title)
+
+            english_uncited = [(idx, p) for idx, p in uncited_papers if _is_english(p)]
 
             # 按优先级排序
             def _paper_priority(item):
@@ -277,7 +316,7 @@ class ReviewGeneratorFCUnified:
                 if paper.get("year", 0) >= recent_threshold:
                     score += 100
                 # 英文加分
-                if paper.get("lang") == "en":
+                if _is_english(paper):
                     score += 50
                 # 相关性加分
                 score += paper.get('relevance_score', 0) * 10
@@ -324,6 +363,9 @@ class ReviewGeneratorFCUnified:
                 # 生成补充内容
                 supplement_message = self._build_supplement_message(to_cite, content)
 
+                print(f"  - 准备补充 {len(to_cite)} 篇论文的引用")
+                print(f"  - 原内容长度: {len(content)} 字符")
+
                 supplement_response = await self.client.chat.completions.create(
                     model=model,
                     messages=[
@@ -335,7 +377,21 @@ class ReviewGeneratorFCUnified:
                     extra_body=extra_body if extra_body else None
                 )
 
-                content = supplement_response.choices[0].message.content
+                new_content = supplement_response.choices[0].message.content
+                finish_reason = supplement_response.choices[0].finish_reason
+
+                print(f"  - 补充后长度: {len(new_content)} 字符")
+                print(f"  - 完成原因: {finish_reason}")
+
+                # 检查内容是否变短（可能被截断）
+                if len(new_content) < len(content) * 0.8:
+                    print(f"  - ⚠️ 警告：补充后内容变短，可能被截断，保留原内容")
+                    # 保留原内容，不替换
+                elif finish_reason == "length":
+                    print(f"  - ⚠️ 警告：补充内容因达到max_tokens限制而被截断，保留原内容")
+                    # 保留原内容，不替换
+                else:
+                    content = new_content
 
                 # 重新提取引用
                 cited_indices = self._extract_cited_indices(content)
@@ -369,8 +425,8 @@ class ReviewGeneratorFCUnified:
             {
                 "type": "function",
                 "function": {
-                    "name": "get_paper_details",
-                    "description": f"""获取论文的详细信息，包括：
+                    "name": "get_multiple_paper_details",
+                    "description": f"""批量获取多篇论文的详细信息，包括：
 - 摘要（了解研究内容和结论）
 - 作者列表
 - 发表年份
@@ -378,20 +434,27 @@ class ReviewGeneratorFCUnified:
 - 研究关键词/概念标签
 - 被引次数
 
-当你需要引用某篇论文来支持论点时，必须先调用此函数获取详细信息。
+**重要：引用论文前，必须先调用此函数获取详细信息**
+不能只根据标题引用论文，必须查看论文摘要后再引用。
 不要编造论文内容，只使用工具返回的真实信息。
 
-重要：论文索引必须在有效范围内（1-{paper_count}）。
+**最佳实践：一次性获取多篇论文的详细信息**
+- 判断综述需要引用哪些论文（根据主题和大纲）
+- 一次性调用此函数，传入所有需要引用的论文索引
+- 可以一次性获取 10-50 篇论文的详情
+
+论文索引必须在有效范围内（1-{paper_count}）。
                     """,
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "paper_index": {
-                                "type": "integer",
-                                "description": f"论文在列表中的索引（1-{paper_count}），例如：[5] 表示索引为5的论文"
+                            "paper_indices": {
+                                "type": "array",
+                                "items": {"type": "integer"},
+                                "description": f"论文索引列表（1-{paper_count}），例如：[1, 5, 10, 15, 20]表示获取第1、5、10、15、20篇论文的详细信息"
                             }
                         },
-                        "required": ["paper_index"]
+                        "required": ["paper_indices"]
                     }
                 }
             },
@@ -418,24 +481,34 @@ class ReviewGeneratorFCUnified:
             }
         ]
 
-    def _get_paper_details(self, paper_index: int, papers: List[Dict]) -> Dict:
-        """获取论文详细信息（工具函数实现）"""
-        if not 1 <= paper_index <= len(papers):
-            return {
-                "error": f"论文索引 {paper_index} 超出范围（1-{len(papers)}）"
-            }
+    def _get_multiple_paper_details(self, paper_indices: List[int], papers: List[Dict]) -> Dict:
+        """批量获取论文详细信息（工具函数实现）"""
+        results = []
 
-        paper = papers[paper_index - 1]
+        for paper_index in paper_indices:
+            if not 1 <= paper_index <= len(papers):
+                results.append({
+                    "index": paper_index,
+                    "error": f"论文索引 {paper_index} 超出范围（1-{len(papers)}）"
+                })
+                continue
+
+            paper = papers[paper_index - 1]
+
+            results.append({
+                "index": paper_index,
+                "title": paper.get("title", ""),
+                "authors": paper.get("authors", [])[:5],  # 最多5个作者
+                "year": paper.get("year"),
+                "venue": paper.get("venue_name", ""),
+                "abstract": paper.get("abstract", "")[:2000],  # 限制摘要长度
+                "concepts": paper.get("concepts", [])[:10],  # 最多10个概念
+                "cited_by_count": paper.get("cited_by_count", 0)
+            })
 
         return {
-            "index": paper_index,
-            "title": paper.get("title", ""),
-            "authors": paper.get("authors", [])[:5],  # 最多5个作者
-            "year": paper.get("year"),
-            "venue": paper.get("venue_name", ""),
-            "abstract": paper.get("abstract", "")[:2000],  # 限制摘要长度
-            "concepts": paper.get("concepts", [])[:10],  # 最多10个概念
-            "cited_by_count": paper.get("cited_by_count", 0)
+            "papers": results,
+            "count": len(results)
         }
 
     def _search_papers_by_keyword(self, keyword: str, papers: List[Dict]) -> Dict:
@@ -495,9 +568,16 @@ class ReviewGeneratorFCUnified:
 
 **重要：使用工具获取论文详情**
 - 你只能看到论文的标题列表（共 {paper_count} 篇）
-- 当你需要引用某篇论文时，必须先调用 get_paper_details 工具获取摘要和详细信息
+- **引用论文前，必须先调用 get_multiple_paper_details 工具批量获取摘要和详细信息**
+- 不能只根据标题引用论文，必须查看论文内容后再引用
 - 不要编造论文内容，只使用工具返回的真实信息
 - 引用格式：[1]、[2] 等
+
+**最佳实践：批量获取论文详情**
+- **一次性判断综述需要引用哪些论文**（根据主题和大纲）
+- **一次性调用 get_multiple_paper_details，传入所有需要引用的论文索引**
+- 可以一次性获取 10-50 篇论文的详情，极大提高效率
+- 例如：如果需要引用 [1, 2, 5, 10, 15, 20, 25, 30]，就一次性传入这个数组
 
 **写作要求**：
 1. 按照提供的大纲结构撰写综述
@@ -514,12 +594,17 @@ class ReviewGeneratorFCUnified:
 - **不要过度引用同一篇论文**：同一篇论文不要被引用超过2次
 - **按顺序引用**：正文中首次出现的引用应该是[1]，然后是[2]，依此类推
 - 优先引用高被引论文（可通过工具查看 cited_by_count）
-- 在引用前，务必使用 get_paper_details 工具了解论文内容，包括年份和语言
+
+**工具调用要求**（必须严格遵守）：
+- **首先判断综述需要引用哪些论文**
+- **一次性调用 get_multiple_paper_details 工具，传入所有需要引用的论文索引**
+- **这是唯一的工具调用，获取足够数量的论文详情后开始撰写**
+- 目标是获取至少 {target_citation_count} 篇论文的详情
 
 **重要：主动引用策略**
-- 不要等待"需要"才引用，必须主动引用足够数量的论文
+- 根据主题和大纲，主动判断需要引用哪些论文
 - 每个小节至少需要引用 8-10 篇论文
-- 在撰写每个观点时，主动寻找可以支撑该观点的论文
+- 一次性获取所有相关论文的详情，然后开始撰写
 - 即使某个观点看起来很明显，也要找到相关文献来支持
 
 **语言要求**：
@@ -603,7 +688,7 @@ class ReviewGeneratorFCUnified:
 
 **写作要求**：
 1. 按照上述大纲结构撰写
-2. 在需要引用论文时，使用 get_paper_details 工具获取详细信息（包括年份和语言）
+2. **引用论文前，必须先调用 get_multiple_paper_details 工具批量获取详细信息**
 3. 确保每个小节都有充分的引用支持
 4. 使用对比分析，指出不同研究的观点和差异
 5. 指出当前研究的不足和未来方向
@@ -621,9 +706,15 @@ class ReviewGeneratorFCUnified:
 - 优先引用高质量、高被引的文献
 - 每个重要观点都要有引用支持
 
+**工具调用要求**（必须严格遵守）：
+- **首先判断综述需要引用哪些论文**（根据主题和大纲）
+- **一次性调用 get_multiple_paper_details 工具，传入所有需要引用的论文索引**
+- **这是唯一的工具调用，获取足够数量的论文详情后开始撰写**
+- 目标是获取至少 {target_citation_count} 篇论文的详情
+
 **主动引用策略**（重要）：
-- 不要等待"需要"才引用，必须主动引用足够数量的论文
-- 撰写每个观点时，主动调用 get_paper_details 获取论文详情
+- 根据主题和大纲，主动判断需要引用哪些论文
+- 一次性获取所有相关论文的详情，然后开始撰写
 - 即使某个观点看起来很明显，也要找到相关文献来支持
 
 请开始撰写。
@@ -638,18 +729,29 @@ class ReviewGeneratorFCUnified:
             abstract = (paper.get("abstract") or "")[:200]  # 处理 None 情况
             papers_info.append(f"[{idx}] {paper.get('title', '')}\n摘要：{abstract}...")
 
+        # 如果内容太长（>8000字符），只发送前半部分和后半部分
+        content_to_send = current_content
+        if len(current_content) > 8000:
+            # 发送前4000字符 + 后4000字符
+            content_to_send = f"""{current_content[:4000]}
+
+...（中间部分省略）...
+
+{current_content[-4000:]}"""
+
         return f"""请在以下综述内容中补充引用这些论文：
 
 【需要补充引用的论文】
 {chr(10).join(papers_info)}
 
 【当前综述】
-{current_content[:2000]}...
+{content_to_send}
 
 要求：
-1. 在适当位置添加引用
+1. 在适当位置添加引用（使用 [序号] 格式）
 2. 保持内容连贯性
-3. 只输出补充后的完整内容
+3. 必须输出完整的综述内容，不要省略任何段落
+4. 不要改变原文的结构和内容，只添加引用
 """
 
     def _extract_cited_indices(self, content: str) -> List[int]:
@@ -659,21 +761,133 @@ class ReviewGeneratorFCUnified:
         indices = [int(m) for m in matches]
         return sorted(set(indices))
 
+    def _estimate_context_tokens(self, messages: List[Any]) -> int:
+        """估算上下文的 token 数量"""
+        total_chars = 0
+        for msg in messages:
+            # 处理 Pydantic 模型和字典两种类型
+            if hasattr(msg, 'role'):
+                role = msg.role or ""
+                content = msg.content or ""
+                tool_calls = msg.tool_calls if hasattr(msg, 'tool_calls') else None
+            else:
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+                tool_calls = msg.get("tool_calls")
+
+            # 角色名约 10 个字符
+            total_chars += len(role) + len(content) + 20
+
+            # 如果有工具调用，也需要计算
+            if tool_calls:
+                for tool_call in tool_calls:
+                    function_name = tool_call.function.name
+                    arguments = tool_call.function.arguments
+                    total_chars += len(function_name) + len(arguments) + 50
+
+        # 粗略估算：中文约 1.5 字符/token，英文约 4 字符/token
+        # 这里使用保守的估算：3 字符/token
+        estimated_tokens = total_chars // 3
+        return estimated_tokens
+
     def _format_references(self, papers: List[Dict]) -> str:
-        """格式化参考文献"""
+        """
+        格式化参考文献（中国国标 GB/T 7714-2015）
+
+        格式示例：
+        - 期刊论文：[序号] 作者. 题名[J]. 期刊名, 年, 卷(期): 页码. DOI
+        - 会议论文：[序号] 作者. 题名[C]//会议论文集名. 年: 页码. DOI
+        - 预印本：[序号] 作者. 题名. arXiv preprint arXiv:xxxx.xxxx
+        """
         lines = []
         for i, paper in enumerate(papers, 1):
             title = paper.get("title", "")
             authors = paper.get("authors", [])
             year = paper.get("year", "")
-            venue = paper.get("venue_name", "")
+            doi = paper.get("doi", "")
 
-            if authors:
-                author_str = f"{authors[0]}等" if len(authors) > 1 else authors[0]
+            # 尝试从多个可能的字段获取期刊/会议信息
+            venue = (
+                paper.get("venue_name", "") or
+                paper.get("venue", "") or
+                paper.get("journal", "") or
+                paper.get("conference", "") or
+                paper.get("primary_location", {}).get("source", {}).get("display_name", "") or
+                ""
+            )
+
+            # 格式化作者（中国国标：姓在前，名在后，用等）
+            if authors and len(authors) > 0:
+                if len(authors) <= 3:
+                    author_list = []
+                    for author in authors[:3]:
+                        # 简化处理：直接使用原名称
+                        # 实际应该分离姓和名，但这里简化处理
+                        if isinstance(author, str):
+                            author_list.append(author)
+                    author_str = ", ".join(author_list)
+                else:
+                    # 超过3个作者，只列出前3个加"等"
+                    author_list = [a for a in authors[:3] if isinstance(a, str)]
+                    author_str = ", ".join(author_list) + ", 等"
             else:
-                author_str = "Unknown"
+                author_str = "佚名"
 
-            lines.append(f"[{i}] {author_str}. {title}. {venue}, {year}.")
+            # 判断文献类型和格式
+            if "arXiv" in venue or (doi and "arXiv" in str(doi)):
+                # arXiv 预印本
+                if doi and "arXiv" in str(doi):
+                    # 提取 arXiv ID（格式：arXiv:YYMM.NNNNN 或 arXiv:YYMM.NNNNNvV）
+                    doi_str = str(doi)
+
+                    # 方法1：从 arXiv.org/abs/ 提取
+                    if "arxiv.org/abs/" in doi_str.lower():
+                        arxiv_id = doi_str.lower().split("arxiv.org/abs/")[-1]
+                    # 方法2：从 10.48550/arXiv. 提取
+                    elif "10.48550/arxiv." in doi_str.lower():
+                        arxiv_id = doi_str.lower().split("10.48550/arxiv.")[-1]
+                    # 方法3：其他 arXiv 格式
+                    elif "arxiv:" in doi_str.lower():
+                        arxiv_id = doi_str.lower().split("arxiv:")[-1]
+                    else:
+                        arxiv_id = doi_str
+
+                    # 清理 arXiv ID（移除 URL 参数、版本号等）
+                    arxiv_id = arxiv_id.split("?")[0].strip()
+                    arxiv_id = arxiv_id.split("#")[0].strip()
+                    arxiv_id = arxiv_id.split("v")[0].strip()  # 移除版本号（如 v1, v2）
+
+                    ref_entry = f"[{i}] {author_str}. {title}. arXiv preprint arXiv:{arxiv_id}"
+                else:
+                    ref_entry = f"[{i}] {author_str}. {title}. arXiv preprint."
+
+            elif venue and any(keyword in venue.upper() for keyword in
+                ['PROCEEDINGS', 'CONFERENCE', 'SYMPOSIUM', 'WORKSHOP', 'IEEE', 'ACM']):
+                # 会议论文
+                ref_entry = f"[{i}] {author_str}. {title}[C]//{venue}. {year}."
+                if doi:
+                    ref_entry += f" DOI: {doi}"
+
+            elif venue and any(keyword in venue.upper() for keyword in
+                ['JOURNAL', 'TRANSACTIONS', 'LETTERS', 'REVIEW', 'NATURE', 'SCIENCE']):
+                # 期刊论文
+                ref_entry = f"[{i}] {author_str}. {title}[J]. {venue}, {year}."
+                if doi:
+                    ref_entry += f" DOI: {doi}"
+
+            elif venue:
+                # 其他有来源的文献
+                ref_entry = f"[{i}] {author_str}. {title}[J]. {venue}, {year}."
+                if doi:
+                    ref_entry += f" DOI: {doi}"
+
+            else:
+                # 无明确来源的文献
+                ref_entry = f"[{i}] {author_str}. {title}. {year}."
+                if doi:
+                    ref_entry += f" DOI: {doi}"
+
+            lines.append(ref_entry)
 
         return "\n".join(lines)
 

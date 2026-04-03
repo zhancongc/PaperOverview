@@ -128,9 +128,38 @@ class SemanticScholarService:
                     if external_ids and "DOI" in external_ids:
                         doi = external_ids["DOI"]
 
-                    # 获取期刊信息
+                    # 获取期刊/会议信息（更全面的提取）
+                    venue_name = ""
+
+                    # 尝试从 journal 字段获取
                     journal = item.get("journal", {})
-                    journal_name = journal.get("name", "") if journal else ""
+                    if journal:
+                        venue_name = journal.get("name", "")
+
+                    # 如果没有期刊信息，尝试从 venue 字段获取
+                    if not venue_name:
+                        venue = item.get("venue", "")
+                        if venue:
+                            venue_name = venue
+
+                    # 如果仍然没有，尝试从 publicationVenueId 推断
+                    if not venue_name:
+                        venue_id = item.get("publicationVenueId", "")
+                        if venue_id:
+                            venue_name = venue_id
+
+                    # 从 DOI 解析出版社信息（作为补充）
+                    if not venue_name and doi:
+                        if "10.1145/" in doi:
+                            venue_name = "ACM"
+                        elif "10.1109/" in doi:
+                            venue_name = "IEEE"
+                        elif "10.48550/arXiv" in doi:
+                            venue_name = "arXiv"
+                        elif "10.1038/" in doi:
+                            venue_name = "Nature"
+                        elif "10.1126/" in doi:
+                            venue_name = "Science"
 
                     papers.append({
                         "id": item.get("paperId", ""),
@@ -142,10 +171,13 @@ class SemanticScholarService:
                         "abstract": item.get("abstract", ""),
                         "type": "article",
                         "doi": doi,
+                        "venue": venue_name,  # 添加 venue 字段
+                        "journal": venue_name,  # 添加 journal 字段
+                        "venue_name": venue_name,  # 添加 venue_name 字段（用于数据库存储）
                         "primary_location": {
                             "source": {
-                                "display_name": journal_name
-                            } if journal_name else {}
+                                "display_name": venue_name
+                            } if venue_name else {}
                         },
                         "concepts": [],  # Semantic Scholar 没有直接的 concepts 字段
                         "source": "semantic_scholar"  # 标记数据来源

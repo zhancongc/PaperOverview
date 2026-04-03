@@ -117,6 +117,31 @@ class PaperSearchService:
                 title = item.get("title", "")
                 is_english = self._is_english(title)
 
+                # 提取期刊/会议信息
+                primary_location = item.get("primary_location", {})
+                source = primary_location.get("source", {}) if isinstance(primary_location, dict) else {}
+
+                # 从多个可能的字段获取期刊/会议名称
+                venue_name = (
+                    source.get("display_name", "") or
+                    primary_location.get("display_name", "") or
+                    item.get("type", "")
+                )
+
+                # 如果仍然没有，尝试从 DOI 解析
+                doi = item.get("doi", "")
+                if not venue_name and doi:
+                    if "10.1145/" in doi:
+                        venue_name = "ACM"
+                    elif "10.1109/" in doi:
+                        venue_name = "IEEE"
+                    elif "10.48550/arXiv" in doi:
+                        venue_name = "arXiv"
+                    elif "10.1038/" in doi:
+                        venue_name = "Nature"
+                    elif "10.1126/" in doi:
+                        venue_name = "Science"
+
                 papers.append({
                     "id": item.get("id", ""),
                     "title": title,
@@ -126,8 +151,11 @@ class PaperSearchService:
                     "is_english": is_english,
                     "abstract": self._clean_abstract(item.get("abstract", "")),
                     "type": item.get("type", ""),
-                    "doi": item.get("doi", ""),
-                    "primary_location": item.get("primary_location", {}),
+                    "doi": doi,
+                    "venue": venue_name,  # 添加 venue 字段
+                    "journal": venue_name,  # 添加 journal 字段
+                    "venue_name": venue_name,  # 添加 venue_name 字段（用于数据库存储）
+                    "primary_location": primary_location,
                     "concepts": [c.get("display_name") for c in item.get("concepts", "")[:5]]
                 })
 
