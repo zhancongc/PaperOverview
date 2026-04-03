@@ -637,7 +637,7 @@ class ReviewGeneratorFCUnified:
         """构建补充引用的消息"""
         papers_info = []
         for idx, paper in to_cite:
-            abstract = paper.get("abstract", "")[:200]
+            abstract = (paper.get("abstract") or "")[:200]  # 处理 None 情况
             papers_info.append(f"[{idx}] {paper.get('title', '')}\n摘要：{abstract}...")
 
         return f"""请在以下综述内容中补充引用这些论文：
