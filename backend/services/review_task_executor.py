@@ -978,6 +978,20 @@ class ReviewTaskExecutor:
         print(f"  - 近5年文献: {stats['recent_count']} ({stats['recent_ratio']:.1%})")
         print(f"  - 平均被引: {stats['avg_citations']:.1f}")
 
+        # 打印筛选后的参考文献列表（前50篇）
+        print(f"\n[阶段4] 筛选后的参考文献列表（前50篇）:")
+        print(f"{'序号':<6}{'标题':<60}{'年份':<8}{'被引':<8}{'语言'}")
+        print("-" * 100)
+        for i, paper in enumerate(filtered_papers[:50], 1):
+            title = paper.get('title', '')[:57] + '...' if len(paper.get('title', '')) > 57 else paper.get('title', '')
+            year = paper.get('year', 'N/A')
+            cited = paper.get('cited_by_count', 0)
+            lang = '英文' if paper.get('lang') == 'en' else '中文'
+            print(f"{i:<6}{title:<60}{year:<8}{cited:<8}{lang}")
+        if len(filtered_papers) > 50:
+            print(f"... (还有 {len(filtered_papers) - 50} 篇文献未显示)")
+        print("-" * 100)
+
         # 6. 如果文献数量仍然太少，尝试补充
         min_papers = 50
         if len(filtered_papers) < min_papers:
@@ -1335,6 +1349,38 @@ class ReviewTaskExecutor:
                         # 如果LLM没有生成，则自动生成
                         title = section.get('title', '')
                         section['search_keywords'] = self._auto_generate_keywords(topic, title)
+
+            # 打印生成的大纲和关键词
+            print("\n" + "=" * 80)
+            print("[阶段1] 生成的综述大纲")
+            print("=" * 80)
+
+            # 引言
+            introduction = outline.get('introduction', {})
+            if introduction:
+                print(f"\n【引言】")
+                print(f"  重点: {introduction.get('focus', 'N/A')}")
+                key_papers = introduction.get('key_papers', [])
+                if key_papers:
+                    print(f"  关键文献: {', '.join([f'[{i}]' for i in key_papers])}")
+
+            # 主体章节
+            print(f"\n【主体章节】")
+            for i, section in enumerate(outline.get('body_sections', []), 1):
+                if isinstance(section, dict):
+                    print(f"\n  章节{i}: {section.get('title', 'N/A')}")
+                    print(f"    重点: {section.get('focus', 'N/A')}")
+                    keywords = section.get('search_keywords', [])
+                    if keywords:
+                        print(f"    搜索关键词: {', '.join(keywords)}")
+
+            # 结论
+            conclusion = outline.get('conclusion', {})
+            if conclusion:
+                print(f"\n【结论】")
+                print(f"  重点: {conclusion.get('focus', 'N/A')}")
+
+            print("\n" + "=" * 80)
 
             return outline
 
