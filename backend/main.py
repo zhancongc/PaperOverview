@@ -372,7 +372,7 @@ async def smart_analyze(request: TopicRequest):
     """
     智能分析接口（使用大模型）
 
-    根据题目类型自动选择合适的分析方法
+    根据题目类型自动选择合适的分析方法，并生成大纲和搜索关键词
     - 应用型：三圈交集分析
     - 评价型：金字塔式分析
     - 其他：通用分析
@@ -381,6 +381,28 @@ async def smart_analyze(request: TopicRequest):
         from services.hybrid_classifier import FrameworkGenerator
         gen = FrameworkGenerator()
         framework = await gen.generate_framework(request.topic, enable_llm_validation=True)
+
+        # === 生成大纲和搜索关键词（复用查找文献的第一步）===
+        from services.review_task_executor import ReviewTaskExecutor
+        executor = ReviewTaskExecutor()
+        outline = await executor._generate_review_outline(request.topic)
+
+        # 提取搜索关键词
+        search_queries = []
+        for section in outline.get('body_sections', []):
+            if isinstance(section, dict):
+                search_keywords = section.get('search_keywords', [])
+                section_title = section.get('title', '')
+                for kw in search_keywords:
+                    search_queries.append({
+                        'query': kw,
+                        'section': section_title,
+                        'lang': 'mixed'
+                    })
+
+        # 将大纲和搜索关键词添加到分析结果中
+        framework['outline'] = outline
+        framework['search_queries'] = search_queries
 
         # 根据类型选择分析方法
         if framework['type'] == 'application':
@@ -399,7 +421,7 @@ async def smart_analyze(request: TopicRequest):
                 })
 
             result = {
-                'analysis': framework,  # 使用正确的分类数据结构
+                'analysis': framework,  # 使用正确的分类数据结构（包含大纲和搜索关键词）
                 'circles': circles,
                 'review_framework': framework.get('framework'),
                 'framework_type': 'three-circles'
@@ -694,6 +716,191 @@ async def get_tasks_status():
                 "available_slots": max_concurrent - running_count,
                 "total_tasks": len(task_manager._tasks)
             }
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 查找文献历史记录接口 ====================
+
+@app.get("/api/search-history")
+async def get_search_history(
+    limit: int = 20,
+    offset: int = 0,
+    status: Optional[str] = None
+):
+    """
+    获取查找文献历史记录
+
+    参数：
+    - limit: 返回数量限制（默认20）
+    - offset: 偏移量（默认0）
+    - status: 状态筛选（可选：completed/failed/processing）
+
+    返回：
+    - 任务列表，包含各个阶段的数据
+    """
+    try:
+        from models import ReviewTask
+        from models import OutlineGenerationStage, PaperSearchStage, PaperFilterStage
+        from database import db
+
+        session = db.get_session()
+        try:
+            # 构建查询
+            query = session.query(ReviewTask)
+            if status:
+                query = query.filter(ReviewTask.status == status)
+
+            # 按创建时间倒序排列
+            query = query.order_by(ReviewTask.created_at.desc())
+
+            # 分页
+            total = query.count()
+            tasks = query.offset(offset).limit(limit).all()
+
+            # 构建结果
+            results = []
+            for task in tasks:
+                task_dict = task.to_dict()
+
+                # 获取各个阶段的数据
+                outline_stage = session.query(OutlineGenerationStage).filter_by(
+                    task_id=task.id
+                ).first()
+                search_stage = session.query(PaperSearchStage).filter_by(
+                    task_id=task.id
+                ).first()
+                filter_stage = session.query(PaperFilterStage).filter_by(
+                    task_id=task.id
+                ).first()
+
+                task_dict['stages'] = {
+                    'outline': outline_stage.to_dict() if outline_stage else None,
+                    'search': search_stage.to_dict() if search_stage else None,
+                    'filter': filter_stage.to_dict() if filter_stage else None
+                }
+
+                results.append(task_dict)
+
+            return {
+                "success": True,
+                "data": {
+                    "total": total,
+                    "offset": offset,
+                    "limit": limit,
+                    "tasks": results
+                }
+            }
+        finally:
+            session.close()
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/search-history/{task_id}")
+async def get_search_history_detail(task_id: str):
+    """
+    获取单个查找文献任务的详细记录
+
+    参数：
+    - task_id: 任务ID
+
+    返回：
+    - 任务的完整信息，包括所有阶段的数据
+    """
+    try:
+        from models import ReviewTask
+        from models import OutlineGenerationStage, PaperSearchStage, PaperFilterStage
+        from database import db
+
+        session = db.get_session()
+        try:
+            # 获取任务
+            task = session.query(ReviewTask).filter_by(id=task_id).first()
+            if not task:
+                raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
+
+            task_dict = task.to_dict()
+
+            # 获取各个阶段的数据
+            outline_stage = session.query(OutlineGenerationStage).filter_by(
+                task_id=task_id
+            ).first()
+            search_stage = session.query(PaperSearchStage).filter_by(
+                task_id=task_id
+            ).first()
+            filter_stage = session.query(PaperFilterStage).filter_by(
+                task_id=task_id
+            ).first()
+
+            task_dict['stages'] = {
+                'outline': outline_stage.to_dict() if outline_stage else None,
+                'search': search_stage.to_dict() if search_stage else None,
+                'filter': filter_stage.to_dict() if filter_stage else None
+            }
+
+            return {
+                "success": True,
+                "data": task_dict
+            }
+        finally:
+            session.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/tasks/{task_id}/search-sources")
+async def get_task_search_sources(task_id: str):
+    """
+    获取任务的搜索来源统计（关键词-文献对应关系）
+
+    参数：
+    - task_id: 任务ID
+
+    返回：
+    - 搜索来源统计信息
+    """
+    try:
+        from services.stage_recorder import stage_recorder
+        result = stage_recorder.get_paper_search_sources(task_id)
+        return {
+            "success": True,
+            "data": result
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/search-history/{task_id}/search-sources")
+async def get_search_history_search_sources(task_id: str):
+    """
+    获取查找文献历史记录的搜索来源统计
+
+    参数：
+    - task_id: 任务ID
+
+    返回：
+    - 搜索来源统计信息
+    """
+    try:
+        from services.stage_recorder import stage_recorder
+        result = stage_recorder.get_paper_search_sources(task_id)
+        return {
+            "success": True,
+            "data": result
         }
     except Exception as e:
         import traceback

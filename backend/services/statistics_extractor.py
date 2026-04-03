@@ -535,7 +535,7 @@ class EnhancedReviewGenerator:
                     {"role": "system", "content": "你是一位学术写作专家，擅长在综述中引用具体统计数据。"},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7,
+                temperature=0.3,  # 统计信息提取需要准确理解数据
                 max_tokens=1500
             )
 

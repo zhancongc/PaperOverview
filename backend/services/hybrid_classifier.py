@@ -298,7 +298,7 @@ class HybridTopicClassifier:
                         messages=[
                             {"role": "user", "content": fix_prompt}
                         ],
-                        temperature=0.5,
+                        temperature=0.3,  # 优化关键词需要一定的结构化
                         max_tokens=800
                     )
 

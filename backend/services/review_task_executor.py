@@ -18,6 +18,7 @@ from services.reference_validator import ReferenceValidator
 from services.review_record_service import ReviewRecordService
 from services.citation_order_checker import CitationOrderChecker
 from services.scholarflux_wrapper import ScholarFlux
+from services.stage_recorder import stage_recorder
 from database import get_db
 
 
@@ -61,6 +62,9 @@ class ReviewTaskExecutor:
         params = task.params
         topic = task.topic
 
+        # 创建任务记录（使用stage_recorder）
+        stage_recorder.create_task(task_id, topic, params)
+
         # 更新状态为处理中
         task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
 
@@ -74,106 +78,19 @@ class ReviewTaskExecutor:
                 english_ratio=params.get('english_ratio', 0.3)
             )
 
-            # 更新进度
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.PROCESSING,
-                progress={"step": "generating_outline", "message": "正在生成大纲和搜索关键词..."}
-            )
-
-            # === 阶段1: 生成大纲和搜索关键词 ===
-            print("\n" + "=" * 80)
-            print("[阶段1] 生成综述大纲和搜索关键词")
-            print("=" * 80)
-
-            outline = await self._generate_review_outline(topic)
-            framework = {'outline': outline}
-
-            print(f"[阶段1] 大纲和关键词生成完成:")
-            print(f"  - 引言: {outline.get('introduction', {}).get('focus', '')[:50]}...")
-            print(f"  - 主体章节: {len(outline.get('body_sections', []))} 个")
-
-            # 从大纲中提取搜索关键词
-            section_keywords = {}
-            for section in outline.get('body_sections', []):
-                if isinstance(section, dict):
-                    title = section.get('title', '')
-                    search_keywords = section.get('search_keywords', [])
-                    section_keywords[title] = search_keywords
-                    print(f"    - {title}")
-                    print(f"      搜索关键词: {', '.join(search_keywords)}")
-
-            print(f"  - 结论: 待定（根据文献内容生成）")
-
-            # 获取场景特异性指导（保留这个功能）
-            from services.hybrid_classifier import FrameworkGenerator
-            gen = FrameworkGenerator()
-            analysis_result = await gen.generate_framework(topic, enable_llm_validation=True)
-            specificity_guidance = analysis_result.get('specificity_guidance', {})
-
-            # 将关键词整合到 framework
-            framework['section_keywords'] = section_keywords
-            framework['specificity_guidance'] = specificity_guidance
-
-            # 准备搜索查询（将关键词转换为查询格式）
-            search_queries = []
-            for keywords in section_keywords.values():
-                for kw in keywords:
-                    search_queries.append({'query': kw, 'lang': 'mixed'})
-
-            # === 阶段2: 搜索词优化（基本语言优化） ===
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.PROCESSING,
-                progress={"step": "optimizing_keywords", "message": "正在优化搜索关键词..."}
-            )
-
-            print("\n" + "=" * 80)
-            print("[阶段2] 搜索词优化（基本语言优化）")
-            print("=" * 80)
-
-            # 只做基本的语言优化：根据数据源类型使用不同语言
-            # 不扩展同义词、近义词（留到阶段3数量不足时再用）
-            optimized_queries = self._optimize_search_queries_basic(
-                search_queries=search_queries,
-                topic=topic
-            )
-
-            print(f"[阶段2] 搜索词优化完成:")
-            print(f"  - 原始搜索词: {len(search_queries)} 个")
-            print(f"  - 优化后搜索词: {len(optimized_queries)} 个")
-            print(f"  - 注意：同义词/近义词扩展将在阶段3数量不足时使用")
-
-            # === 阶段3: 按小节搜索文献 ===
-            search_result = await self._search_literature_by_sections(
+            # === 执行阶段1-4：文献搜索和筛选（共同逻辑）===
+            search_result = await self._search_and_filter_papers(
                 topic=topic,
-                optimized_queries=optimized_queries,
-                params=params,
-                framework=framework,
-                task_id=task_id
-            )
-
-            if not search_result['all_papers']:
-                raise Exception(f'未找到关于「{topic}」的相关文献')
-
-            # === 阶段4: 质量过滤（不再精简数量） ===
-            filter_result = await self._filter_papers_by_quality(
-                search_result=search_result,
-                topic=topic,
-                framework=framework,
                 params=params,
                 task_id=task_id
             )
 
-            if not filter_result['all_papers']:
-                raise Exception(f'筛选后没有足够的文献')
-
-            all_papers = filter_result['all_papers']
-            total_count = len(all_papers)
-
-            print(f"\n[阶段4] 质量过滤完成:")
-            print(f"  - 总文献数: {total_count}")
-            print(f"  - 说明: 将所有高质量文献标题发送给LLM，由LLM按需选择引用")
+            framework = search_result['framework']
+            all_papers = search_result['all_papers']
+            filtered_papers = search_result['filtered_papers']
+            stats = search_result['stats']
+            specificity_guidance = search_result['specificity_guidance']
+            total_count = len(filtered_papers)
 
             # === 阶段5: 生成综述（Function Calling 统一版本） ===
             api_key = os.getenv("DEEPSEEK_API_KEY")
@@ -195,13 +112,41 @@ class ReviewTaskExecutor:
                 progress={"step": "generating", "message": f"正在生成综述（从{total_count}篇候选中选择）..."}
             )
 
+            # 检查参考文献数量
+            MIN_PAPERS_THRESHOLD = 20
+            if len(filtered_papers) < MIN_PAPERS_THRESHOLD:
+                error_msg = f"参考文献数量不足，筛选后只有 {len(filtered_papers)} 篇，至少需要 {MIN_PAPERS_THRESHOLD} 篇才能生成综述"
+                print(f"[错误] {error_msg}")
+
+                task_manager.update_task_status(
+                    task_id,
+                    TaskStatus.FAILED,
+                    error=error_msg
+                )
+
+                # 记录失败状态
+                stage_recorder.record_review_generation(
+                    task_id=task_id,
+                    papers_count=len(filtered_papers),
+                    review_length=0,
+                    citation_count=0,
+                    cited_papers_count=0,
+                    validation_result=None,
+                    review=None,
+                    papers_summary=None,
+                    status="failed",
+                    error_message=error_msg
+                )
+
+                raise ValueError(error_msg)
+
             # 使用 Function Calling 统一版本生成器
             fc_generator = ReviewGeneratorFCUnified(api_key=api_key)
 
             # 一次性生成完整综述
             review, cited_papers = await fc_generator.generate_review(
                 topic=topic,
-                papers=all_papers,
+                papers=filtered_papers,
                 framework=framework,
                 target_citation_count=target_citation_count,
                 min_citation_count=params.get('target_count', 50),
@@ -236,6 +181,49 @@ class ReviewTaskExecutor:
             # 7. 最终验证
             final_validation = self.validator.validate_review(review=review, papers=cited_papers)
 
+            # === 记录阶段5完成 ===
+            stage_recorder.update_task_status(task_id, status="processing", current_stage="生成综述")
+
+            # 准备文献摘要（只包含核心字段，避免存储过多数据）
+            papers_summary = []
+            for p in cited_papers:
+                url = p.get('url') or ''
+                papers_summary.append({
+                    'id': p.get('id'),
+                    'title': p.get('title', '')[:200],  # 限制标题长度
+                    'authors': p.get('authors', [])[:5],  # 限制作者数量
+                    'year': p.get('year'),
+                    'venue': (p.get('journal', '') or p.get('venue', ''))[:100],  # 限制来源长度
+                    'cited_by_count': p.get('cited_by_count', 0),
+                    'url': url[:500] if url else ''  # 限制URL长度
+                })
+
+            # 准备候选文献池摘要（筛选前的所有论文）
+            candidate_pool_summary = []
+            for p in all_papers:
+                url = p.get('url') or ''
+                candidate_pool_summary.append({
+                    'id': p.get('id'),
+                    'title': p.get('title', '')[:200],  # 限制标题长度
+                    'authors': p.get('authors', [])[:5],  # 限制作者数量
+                    'year': p.get('year'),
+                    'venue': (p.get('journal', '') or p.get('venue', ''))[:100],  # 限制来源长度
+                    'cited_by_count': p.get('cited_by_count', 0),
+                    'url': url[:500] if url else ''  # 限制URL长度
+                })
+
+            stage_recorder.record_review_generation(
+                task_id=task_id,
+                papers_count=len(all_papers),
+                review_length=len(review),
+                citation_count=review.count('['),  # 粗略估计引用次数
+                cited_papers_count=len(cited_papers),
+                validation_result=final_validation,
+                review=review,  # 存储完整综述内容
+                papers_summary=papers_summary,  # 存储文献摘要
+                candidate_pool_summary=candidate_pool_summary  # 存储候选文献池摘要
+            )
+
             # 8. 保存记录
             record = self.record_service.update_success(
                 db_session=db_session,
@@ -263,6 +251,15 @@ class ReviewTaskExecutor:
                 }
             )
 
+            # 更新阶段记录器中的任务状态
+            stage_recorder.update_task_status(
+                task_id,
+                status="completed",
+                current_stage="完成",
+                completed_at=datetime.now(),
+                review_record_id=record.id
+            )
+
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -275,6 +272,15 @@ class ReviewTaskExecutor:
                 task_id,
                 TaskStatus.FAILED,
                 error=str(e)
+            )
+
+            # 更新阶段记录器中的任务状态
+            stage_recorder.update_task_status(
+                task_id,
+                status="failed",
+                current_stage="失败",
+                error_message=str(e),
+                completed_at=datetime.now()
             )
 
             # 更新数据库记录为失败
@@ -374,6 +380,10 @@ class ReviewTaskExecutor:
         from database import db
         db_session_gen = db.get_session()
         db_session = next(db_session_gen)
+
+        # 收集搜索来源记录（paper_id -> [search_keywords]）
+        paper_search_sources = []  # [{"paper_id": "...", "search_keyword": "..."}, ...]
+        paper_source_seen = set()  # 用于去重 (paper_id, search_keyword)
 
         try:
             # 按小节搜索文献（先不去重，收集所有文献）
@@ -493,9 +503,25 @@ class ReviewTaskExecutor:
                         # 添加数据库搜索结果
                         for paper in db_papers_dict:
                             paper_id = paper.get("id")
+                            source_key = (paper_id, query)
                             if paper_id and paper_id not in section_seen_ids:
                                 section_seen_ids.add(paper_id)
                                 section_papers.append(paper)
+                                # 记录搜索来源（去重）
+                                if source_key not in paper_source_seen:
+                                    paper_source_seen.add(source_key)
+                                    paper_search_sources.append({
+                                        "paper_id": paper_id,
+                                        "search_keyword": query
+                                    })
+                            elif paper_id and paper_id in section_seen_ids:
+                                # 文献已存在，但通过不同关键词搜到，也记录来源（去重）
+                                if source_key not in paper_source_seen:
+                                    paper_source_seen.add(source_key)
+                                    paper_search_sources.append({
+                                        "paper_id": paper_id,
+                                        "search_keyword": query
+                                    })
 
                         # === 步骤2: 如果数据库搜索结果不足，使用API补充 ===
                         if len(db_papers_dict) < 20:  # 如果数据库搜索结果少于20篇
@@ -512,9 +538,25 @@ class ReviewTaskExecutor:
                             # 添加API搜索结果（去重）
                             for paper in api_papers:
                                 paper_id = paper.get("id")
+                                source_key = (paper_id, query)
                                 if paper_id and paper_id not in section_seen_ids:
                                     section_seen_ids.add(paper_id)
                                     section_papers.append(paper)
+                                    # 记录搜索来源（去重）
+                                    if source_key not in paper_source_seen:
+                                        paper_source_seen.add(source_key)
+                                        paper_search_sources.append({
+                                            "paper_id": paper_id,
+                                            "search_keyword": query
+                                        })
+                                elif paper_id and paper_id in section_seen_ids:
+                                    # 文献已存在，但通过不同关键词搜到，也记录来源（去重）
+                                    if source_key not in paper_source_seen:
+                                        paper_source_seen.add(source_key)
+                                        paper_search_sources.append({
+                                            "paper_id": paper_id,
+                                            "search_keyword": query
+                                        })
 
                     # 检查当前轮次搜索后是否达到目标数量
                     current_count = len(section_papers)
@@ -659,9 +701,25 @@ class ReviewTaskExecutor:
                         # 添加到小节文献池
                         for paper in new_papers:
                             paper_id = paper.get('id')
+                            source_key = (paper_id, keyword)
                             if paper_id and paper_id not in existing_ids:
                                 section_papers.append(paper)
                                 existing_ids.add(paper_id)
+                                # 记录搜索来源（去重）
+                                if source_key not in paper_source_seen:
+                                    paper_source_seen.add(source_key)
+                                    paper_search_sources.append({
+                                        "paper_id": paper_id,
+                                        "search_keyword": keyword
+                                    })
+                            elif paper_id and paper_id in existing_ids:
+                                # 文献已存在，但通过不同关键词搜到，也记录来源（去重）
+                                if source_key not in paper_source_seen:
+                                    paper_source_seen.add(source_key)
+                                    paper_search_sources.append({
+                                        "paper_id": paper_id,
+                                        "search_keyword": keyword
+                                    })
 
                         # 如果数据库不足，用API补充
                         if len(new_papers) < 20:
@@ -674,9 +732,25 @@ class ReviewTaskExecutor:
 
                             for paper in api_papers:
                                 paper_id = paper.get('id')
+                                source_key = (paper_id, keyword)
                                 if paper_id and paper_id not in existing_ids:
                                     section_papers.append(paper)
                                     existing_ids.add(paper_id)
+                                    # 记录搜索来源（去重）
+                                    if source_key not in paper_source_seen:
+                                        paper_source_seen.add(source_key)
+                                        paper_search_sources.append({
+                                            "paper_id": paper_id,
+                                            "search_keyword": keyword
+                                        })
+                                elif paper_id and paper_id in existing_ids:
+                                    # 文献已存在，但通过不同关键词搜到，也记录来源（去重）
+                                    if source_key not in paper_source_seen:
+                                        paper_source_seen.add(source_key)
+                                        paper_search_sources.append({
+                                            "paper_id": paper_id,
+                                            "search_keyword": keyword
+                                        })
 
                     papers_by_section[section_title] = section_papers
 
@@ -704,6 +778,27 @@ class ReviewTaskExecutor:
 
         # AMiner论文详情补充
         all_papers = await self._enrich_aminer_papers(all_papers)
+
+        # === 保存搜索来源记录 ===
+        print(f"[阶段3] 保存搜索来源记录: {len(paper_search_sources)} 条")
+        from services.stage_recorder import stage_recorder
+        stage_recorder.record_paper_search_sources(task_id, paper_search_sources)
+
+        # === 为每篇论文添加 search_keywords 字段 ===
+        # 按 paper_id 聚合关键词
+        paper_id_to_keywords = {}
+        for source in paper_search_sources:
+            paper_id = source['paper_id']
+            keyword = source['search_keyword']
+            if paper_id not in paper_id_to_keywords:
+                paper_id_to_keywords[paper_id] = set()
+            paper_id_to_keywords[paper_id].add(keyword)
+
+        # 添加到论文对象
+        for paper in all_papers:
+            paper_id = paper.get('id')
+            if paper_id in paper_id_to_keywords:
+                paper['search_keywords'] = list(paper_id_to_keywords[paper_id])
 
         # === 阶段3 输出 ===
         print(f"[阶段3] 输出:")
@@ -923,6 +1018,23 @@ class ReviewTaskExecutor:
 
         all_papers = search_result['all_papers']
 
+        # 打印筛选前的参考文献列表（前100篇）
+        print(f"\n[阶段4] 筛选前的参考文献列表（前100篇）:")
+        print(f"{'序号':<6}{'标题':<60}{'年份':<8}{'被引':<8}{'语言':<6}{'来源'}")
+        print("-" * 120)
+        for i, paper in enumerate(all_papers[:100], 1):
+            title = paper.get('title', '')[:57] + '...' if len(paper.get('title', '')) > 57 else paper.get('title', '')
+            year = paper.get('year', 'N/A')
+            cited = paper.get('cited_by_count', 0)
+            # 根据标题内容判断语言（更可靠）
+            title_full = paper.get('title', '')
+            has_chinese = any('\u4e00' <= char <= '\u9fff' for char in title_full)
+            lang = '英文' if not has_chinese else '中文'
+            venue = (paper.get('journal', '') or paper.get('venue', ''))[:20]
+            print(f"{i:<6}{title:<60}{year:<8}{cited:<8}{lang:<6}{venue}")
+        if len(all_papers) > 100:
+            print(f"... 共 {len(all_papers)} 篇文献")
+
         task_manager.update_task_status(
             task_id,
             TaskStatus.PROCESSING,
@@ -946,22 +1058,216 @@ class ReviewTaskExecutor:
 
         filtered_papers = []
         removed_count = 0
+        removed_details = []
 
         for paper in unique_papers:
             # 计算质量得分
             quality_score = quality_filter.get_paper_quality_score(paper)
 
             # 过滤低质量文献
-            if quality_score >= 30:  # 质量得分阈值
+            if quality_score >= 10:  # 质量得分阈值降低到10，更宽松
                 paper['quality_score'] = quality_score
                 filtered_papers.append(paper)
             else:
                 removed_count += 1
+                removed_details.append({
+                    'title': paper.get('title', '')[:50],
+                    'score': quality_score,
+                    'year': paper.get('year'),
+                    'cited': paper.get('cited_by_count', 0),
+                    'venue': (paper.get('journal', '') or paper.get('venue', ''))[:30]
+                })
 
         print(f"[阶段4] 质量过滤: 移除 {removed_count} 篇低质量文献")
         print(f"[阶段4] 保留文献数: {len(filtered_papers)} 篇")
 
-        # 3. 增强相关性评分（添加到论文中）
+        # 打印被过滤文献的详细信息（前20篇）
+        if removed_details:
+            print(f"\n[阶段4] 被过滤文献列表（前20篇）:")
+            print(f"{'得分':<8}{'年份':<8}{'被引':<8}{'标题':<45}{'来源'}")
+            print("-" * 100)
+            for detail in removed_details[:20]:
+                print(f"{detail['score']:<8.1f}{detail['year']:<8}{detail['cited']:<8}{detail['title']:<45}{detail['venue']}")
+            if len(removed_details) > 20:
+                print(f"... 共 {len(removed_details)} 篇被过滤")
+
+        # 3. 主题相关性检查（按小节分别判断）
+        print(f"\n[阶段4] 开始主题相关性检查（按小节分别判断）...")
+        task_manager.update_task_status(
+            task_id,
+            TaskStatus.PROCESSING,
+            progress={"step": "topic_relevance_check", "message": f"按小节检查文献主题相关性..."}
+        )
+
+        # 获取按小节分组的论文
+        papers_by_section = search_result.get('sections', {})
+        section_keywords = framework.get('section_keywords', {})
+
+        # 为每个小节创建论文到小节的映射（一篇论文可能属于多个小节）
+        paper_to_sections = {}
+        for section_title, papers in papers_by_section.items():
+            for paper in papers:
+                paper_id = paper.get('id')
+                if paper_id:
+                    if paper_id not in paper_to_sections:
+                        paper_to_sections[paper_id] = []
+                    paper_to_sections[paper_id].append(section_title)
+
+        # 为当前filtered_papers添加section信息
+        for paper in filtered_papers:
+            paper_id = paper.get('id')
+            paper['sections'] = paper_to_sections.get(paper_id, ['未知小节'])
+
+        # 按小节分组进行相关性判断
+        relevant_papers = []
+        topic_irrelevant_count = 0
+        topic_irrelevant_details = []
+        seen_paper_ids = set()  # 用于去重（一篇论文可能在多个小节中被判断）
+
+        try:
+            import httpx
+            api_key = os.getenv("DEEPSEEK_API_KEY")
+            client = httpx.AsyncClient(timeout=120.0)
+
+            # 对每个小节分别处理
+            for section_title, section_papers in papers_by_section.items():
+                if section_title in ['引言', '结论']:
+                    continue
+
+                # 获取该小节的质量过滤后的论文
+                section_filtered_papers = []
+                for paper in filtered_papers:
+                    paper_id = paper.get('id')
+                    # 检查这篇论文是否属于当前小节
+                    for sp in section_papers:
+                        if sp.get('id') == paper_id:
+                            section_filtered_papers.append(paper)
+                            break
+
+                if not section_filtered_papers:
+                    continue
+
+                print(f"\n[阶段4] 判断小节 '{section_title}' 的文献相关性...")
+
+                # 获取该小节的关键词
+                keywords_for_section = section_keywords.get(section_title, [])
+                keywords_str = ", ".join(keywords_for_section) if keywords_for_section else "无"
+
+                # 构建该小节的文献列表
+                papers_text = ""
+                for i, paper in enumerate(section_filtered_papers, 1):
+                    title = paper.get('title', '')
+                    venue = paper.get('journal', '') or paper.get('venue', '')
+                    papers_text += f"{i}. 标题: {title}\n   来源: {venue}\n\n"
+
+                prompt = f"""请判断以下文献是否适合用于撰写以下小节的内容。
+
+研究总主题: {topic}
+
+当前小节: {section_title}
+小节关键词: {keywords_str}
+
+文献列表:
+{papers_text}
+
+请对每篇文献进行判断，返回格式如下（严格按格式，不要有多余文字）：
+相关: [序号列表，用逗号分隔]
+不相关: [序号列表，用逗号分隔]
+
+例如：
+相关: 1,2,4,7,10
+不相关: 3,5,6,8,9
+
+判断标准：
+1. 文献需要与当前小节主题相关，而不仅仅是与总主题相关
+2. 如果小节讨论的是通用方法（如"DMAIC在质量管理领域的研究进展"），则其他行业的相关文献也可以保留
+3. 如果小节讨论的是特定领域（如"芯片行业的质量管理进展"），则只保留该领域的文献
+4. 如果文献明显属于完全无关的领域（如物理学、化学、生物学、医学、玄学等），则判定为不相关
+"""
+
+                # 调用LLM判断
+                response = await client.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.3,
+                        "max_tokens": 1000
+                    }
+                )
+
+                result = response.json()
+                content = result['choices'][0]['message']['content'].strip()
+
+                # 解析结果
+                relevant_indices = []
+                irrelevant_indices = []
+
+                for line in content.split('\n'):
+                    if line.startswith('相关:'):
+                        indices_str = line.replace('相关:', '').strip()
+                        relevant_indices = [int(x.strip()) for x in indices_str.split(',') if x.strip().isdigit()]
+                    elif line.startswith('不相关:'):
+                        indices_str = line.replace('不相关:', '').strip()
+                        irrelevant_indices = [int(x.strip()) for x in indices_str.split(',') if x.strip().isdigit()]
+
+                # 收集结果
+                for idx, paper in enumerate(section_filtered_papers, 1):
+                    paper_id = paper.get('id')
+                    if idx in relevant_indices:
+                        if paper_id not in seen_paper_ids:
+                            seen_paper_ids.add(paper_id)
+                            relevant_papers.append(paper)
+                    elif idx in irrelevant_indices:
+                        # 只有当这篇论文在所有小节中都被判断为不相关时才移除
+                        # 这里简化处理：如果在任何一个小节中被认为相关就保留
+                        # 所以我们只记录，但不立即移除
+                        pass
+
+            # 现在，找出那些在所有小节中都没被选中的论文
+            all_filtered_ids = set(p.get('id') for p in filtered_papers)
+            relevant_ids = set(p.get('id') for p in relevant_papers)
+            always_irrelevant_ids = all_filtered_ids - relevant_ids
+
+            for paper in filtered_papers:
+                paper_id = paper.get('id')
+                if paper_id in always_irrelevant_ids:
+                    topic_irrelevant_count += 1
+                    topic_irrelevant_details.append({
+                        'title': paper.get('title', '')[:50],
+                        'year': paper.get('year'),
+                        'cited': paper.get('cited_by_count', 0),
+                        'venue': (paper.get('journal', '') or paper.get('venue', ''))[:30],
+                        'sections': paper.get('sections', [])
+                    })
+
+            await client.aclose()
+
+        except Exception as e:
+            print(f"[阶段4] LLM检查出错，保留所有文献: {e}")
+            import traceback
+            traceback.print_exc()
+            relevant_papers = filtered_papers[:]
+
+        filtered_papers = relevant_papers
+
+        print(f"\n[阶段4] 主题相关性检查完成:")
+        print(f"  - 移除 {topic_irrelevant_count} 篇主题不相关的文献")
+        print(f"  - 保留 {len(filtered_papers)} 篇文献")
+
+        # 打印主题不相关的文献
+        if topic_irrelevant_details:
+            print(f"\n[阶段4] 主题不相关文献列表（前20篇）:")
+            print(f"{'年份':<8}{'被引':<8}{'标题':<45}{'来源':<25}{'所属小节'}")
+            print("-" * 120)
+            for detail in topic_irrelevant_details[:20]:
+                sections_str = ", ".join(detail.get('sections', []))[:30]
+                print(f"{detail['year']:<8}{detail['cited']:<8}{detail['title']:<45}{detail['venue']:<25}{sections_str}")
+            if len(topic_irrelevant_details) > 20:
+                print(f"... 共 {len(topic_irrelevant_details)} 篇被移除")
+
+        # 5. 增强相关性评分（添加到论文中）
         section_keywords = framework.get('section_keywords', {})
         topic_keywords = []
         for keywords in section_keywords.values():
@@ -975,19 +1281,24 @@ class ReviewTaskExecutor:
             )
             paper['relevance_score'] = score
 
-        # 4. 按相关性评分排序
+        # 6. 按相关性评分排序
         filtered_papers.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
 
         print(f"[阶段4] 已添加相关性评分并排序")
 
-        # 5. 统计信息
-        stats = self.filter_service.get_statistics(filtered_papers)
+        # 7. 统计信息
+        try:
+            stats = self.filter_service.get_statistics(filtered_papers)
 
-        print(f"\n[阶段4] 质量过滤完成:")
-        print(f"  - 总文献数: {len(filtered_papers)}")
-        print(f"  - 英文文献: {stats['english_count']}")
-        print(f"  - 近5年文献: {stats['recent_count']} ({stats['recent_ratio']:.1%})")
-        print(f"  - 平均被引: {stats['avg_citations']:.1f}")
+            print(f"\n[阶段4] 质量过滤完成:")
+            print(f"  - 总文献数: {len(filtered_papers)}")
+            print(f"  - 英文文献: {stats.get('english_count', 0)}")
+            print(f"  - 近5年文献: {stats.get('recent_count', 0)} ({stats.get('recent_ratio', 0):.1%})")
+            print(f"  - 平均被引: {stats.get('avg_citations', 0):.1f}")
+        except Exception as e:
+            print(f"\n[阶段4] 质量过滤完成:")
+            print(f"  - 总文献数: {len(filtered_papers)}")
+            print(f"  - 统计信息获取失败: {e}")
 
         # 打印筛选后的参考文献列表（前50篇）
         print(f"\n[阶段4] 筛选后的参考文献列表（前50篇）:")
@@ -997,7 +1308,10 @@ class ReviewTaskExecutor:
             title = paper.get('title', '')[:57] + '...' if len(paper.get('title', '')) > 57 else paper.get('title', '')
             year = paper.get('year', 'N/A')
             cited = paper.get('cited_by_count', 0)
-            lang = '英文' if paper.get('lang') == 'en' else '中文'
+            # 根据标题内容判断语言（更可靠）
+            title_full = paper.get('title', '')
+            has_chinese = any('\u4e00' <= char <= '\u9fff' for char in title_full)
+            lang = '英文' if not has_chinese else '中文'
             print(f"{i:<6}{title:<60}{year:<8}{cited:<8}{lang}")
         if len(filtered_papers) > 50:
             print(f"... (还有 {len(filtered_papers) - 50} 篇文献未显示)")
@@ -1020,7 +1334,11 @@ class ReviewTaskExecutor:
 
         return {
             'all_papers': filtered_papers,
-            'total_count': len(filtered_papers)
+            'total_count': len(filtered_papers),
+            'quality_filtered_count': removed_count,
+            'quality_filtered_details': removed_details,
+            'topic_irrelevant_count': topic_irrelevant_count,
+            'topic_irrelevant_details': topic_irrelevant_details
         }
 
     def _calculate_paper_stats(self, papers: list) -> dict:
@@ -1312,12 +1630,29 @@ class ReviewTaskExecutor:
 4. **结论待定**：结论部分需要根据实际文献内容来定，大纲中只需说明
 5. **搜索关键词**：每个章节需要生成2-3个搜索关键词
 
-**搜索关键词生成规则**：
+**搜索关键词生成规则**（非常重要）：
 - 从论文主题和章节标题中提取关键词
 - 关键词应该是可以在文献数据库（如知网、Web of Science）中搜索的术语
 - 关键词应该在论文的"标题"或"关键词"字段中出现
-- 例如：主题"基于DMAIC的高通芯片质量管理研究"，章节"DMAIC在质量管理领域的研究进展"
-  - 搜索关键词：["DMAIC", "质量管理", "高通芯片"]
+- **根据章节性质决定是否加特定领域限定**：
+  * 如果章节讨论的是**通用方法论**（如"DMAIC在质量管理领域的研究进展"），关键词不要加特定行业限定，这样可以搜到其他行业的相关文献
+    - 正确示例（通用方法章节）：["DMAIC质量管理", "质量改进方法", "质量管理框架"]
+  * 如果章节讨论的是**特定领域应用**（如"芯片行业的质量管理进展"），关键词必须加领域限定
+    - 正确示例（特定领域章节）：["芯片质量管理", "高通芯片质量控制", "芯片制造质量改进"]
+- 避免使用单个通用词汇（如"LLM"、"evaluation"、"质量"等单独使用）
+- 每个搜索关键词都应该是一个完整的短语
+
+例如：
+- 主题："Enhancing LLM-based Evaluation of Low-Resource Code via Code Translation"
+- 搜索关键词应该是：
+  ["LLM-based code evaluation", "low-resource programming languages", "code translation for LLM evaluation"]
+
+再例如：
+- 主题："基于DMAIC的高通芯片质量管理研究"
+- 章节1："DMAIC在质量管理领域的研究进展"（通用方法）
+- 搜索关键词：["DMAIC质量管理", "质量改进方法", "质量管理框架"]
+- 章节2："芯片行业的质量管理实践"（特定领域）
+- 搜索关键词：["芯片质量管理", "高通芯片质量控制", "芯片制造质量改进"]
 
 输出格式（JSON）：
 {
@@ -1359,7 +1694,7 @@ class ReviewTaskExecutor:
                     {"role": "user", "content": user_prompt}
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.5,
+                temperature=0.3,  # 生成大纲需要结构化输出
                 max_tokens=2000
             )
 
@@ -1442,9 +1777,57 @@ class ReviewTaskExecutor:
                 }
             }
 
+    def _is_generic_methodology_section(self, section_title: str) -> bool:
+        """
+        判断章节是否讨论通用方法论（不需要加特定领域限定）
+
+        Returns:
+            True 如果是通用方法论章节，False 如果是特定领域章节
+        """
+        generic_indicators = [
+            # 中文通用方法论标识
+            "研究进展", "综述", "方法", "方法论", "理论基础", "基本概念",
+            "技术进展", "应用案例", "效果评估", "挑战与展望", "未来方向",
+            "研究现状", "理论框架", "研究方法", "关键技术",
+            # 英文通用方法论标识
+            "research progress", "review", "methodology", "theoretical basis",
+            "basic concepts", "technical progress", "application", "case study",
+            "evaluation", "challenges", "future directions", "state of the art",
+            "theoretical framework", "research method", "key technology"
+        ]
+
+        specific_indicators = [
+            # 中文特定领域标识（通常出现在标题中）
+            "在", "应用于", "用于", "行业", "领域", "场景", "环境",
+            # 英文特定领域标识
+            "in", "for", "applied to", "industry", "domain", "scenario", "environment"
+        ]
+
+        section_lower = section_title.lower()
+
+        # 检查是否有特定领域标识
+        for indicator in specific_indicators:
+            if indicator in section_lower:
+                return False
+
+        # 检查是否有通用方法论标识
+        for indicator in generic_indicators:
+            if indicator.lower() in section_lower:
+                return True
+
+        # 默认：如果标题比较短且抽象，认为是通用的
+        if len(section_title) < 10 and not any(c in section_title for c in "的之在用于"):
+            return True
+
+        return False
+
     def _auto_generate_keywords(self, topic: str, section_title: str) -> list:
         """
         自动生成搜索关键词（当LLM没有生成时使用）
+
+        根据章节性质决定是否加领域限定：
+        - 通用方法论章节：只使用章节关键词，不加特定领域限定
+        - 特定领域章节：加上领域限定
 
         Args:
             topic: 论文主题
@@ -1455,30 +1838,98 @@ class ReviewTaskExecutor:
         """
         keywords = []
 
-        # 从主题中提取关键词
+        # 判断主题语言
+        is_english_topic = self._is_english(topic)
+
+        # 判断是否是通用方法论章节
+        is_generic = self._is_generic_methodology_section(section_title)
+
+        # 从主题中提取核心关键词
         topic_keywords = self._extract_topic_keywords(topic)
-        if topic_keywords:
-            keywords.append(topic_keywords[0])  # 取第一个最重要的关键词
 
         # 从章节标题中提取关键词
         section_keywords = self._extract_chinese_words(section_title)
-        if section_keywords:
-            # 取前2个最重要的词
-            keywords.extend(section_keywords[:2])
+        if is_english_topic:
+            section_keywords = self._extract_topic_keywords(section_title)
+
+        if is_generic:
+            # 通用方法论章节：优先使用章节关键词
+            print(f"[自动生成关键词] 章节 '{section_title}' 是通用方法论，不加领域限定")
+
+            if is_english_topic:
+                # 英文：使用章节关键词
+                if section_keywords:
+                    # 直接使用章节关键词组合
+                    if len(section_keywords) >= 2:
+                        keywords.append(" ".join(section_keywords[:3]))
+                    keywords.extend(section_keywords[:3])
+                else:
+                    keywords.append(section_title)
+            else:
+                # 中文：使用章节关键词
+                if section_keywords:
+                    if len(section_keywords) >= 2:
+                        keywords.append("".join(section_keywords[:3]))
+                    keywords.extend(section_keywords[:3])
+                else:
+                    keywords.append(section_title)
+        else:
+            # 特定领域章节：加上领域限定
+            print(f"[自动生成关键词] 章节 '{section_title}' 是特定领域，加领域限定")
+
+            if is_english_topic:
+                # 英文主题：生成组合短语
+                if topic_keywords:
+                    # 用主题的前2-3个词作为基础
+                    base_topic = " ".join(topic_keywords[:3]) if len(topic_keywords) >= 2 else topic
+
+                    # 生成带章节限定的关键词
+                    if section_keywords:
+                        for sec_kw in section_keywords[:2]:
+                            keywords.append(f"{sec_kw} {base_topic}")
+
+                    # 添加主题本身作为关键词
+                    keywords.append(base_topic)
+
+                    # 添加更具体的组合
+                    if len(topic_keywords) >= 2:
+                        keywords.append(f"{topic_keywords[0]} {topic_keywords[1]}")
+            else:
+                # 中文主题：生成组合短语
+                if topic_keywords:
+                    # 用主题的前2-3个词作为基础
+                    base_topic = "".join(topic_keywords[:3]) if len(topic_keywords) >= 2 else topic
+
+                    # 生成带章节限定的关键词
+                    if section_keywords:
+                        for sec_kw in section_keywords[:2]:
+                            keywords.append(f"{sec_kw}{base_topic}")
+
+                    # 添加主题本身作为关键词
+                    keywords.append(base_topic)
+
+                    # 添加更具体的组合
+                    if len(topic_keywords) >= 2:
+                        keywords.append(f"{topic_keywords[0]}{topic_keywords[1]}")
+
+        # 如果关键词太少，添加章节标题
+        if len(keywords) < 2:
+            keywords.append(section_title)
+            if section_title != topic:
+                keywords.append(topic)
 
         # 去重并限制数量
         keywords = list(set(keywords))[:3]
 
-        # 如果还是不足2个，补充通用的章节关键词
-        if len(keywords) < 2:
-            generic_keywords = ["研究", "应用", "方法", "现状", "进展"]
-            for kw in generic_keywords:
-                if kw not in keywords:
-                    keywords.append(kw)
-                    if len(keywords) >= 3:
-                        break
+        # 确保至少有2个关键词
+        result = keywords[:3]
+        while len(result) < 2:
+            result.append(section_title if section_title else topic)
 
-        return keywords[:3]
+        print(f"[自动生成关键词] 主题: {topic}, 章节: {section_title}")
+        print(f"[自动生成关键词] 生成: {result}")
+
+        return result
 
     def _extract_topic_keywords(self, topic: str) -> list:
         """从主题中提取关键词"""
@@ -1944,6 +2395,225 @@ class ReviewTaskExecutor:
             print(f"[搜索API] {source} 搜索失败: {e}")
             return []
 
+    # ==================== 共同方法：文献搜索和筛选 ====================
+
+    async def _search_and_filter_papers(
+        self,
+        topic: str,
+        params: dict,
+        task_id: str,
+        progress_callback=None
+    ) -> dict:
+        """
+        共同方法：执行阶段1-4（文献搜索和筛选）
+
+        这个方法被 execute_task 和 search_papers_only 共同使用
+
+        Args:
+            topic: 论文主题
+            params: 参数配置
+            task_id: 任务ID
+            progress_callback: 进度回调函数（可选）
+
+        Returns:
+            {
+                'framework': 综述框架,
+                'all_papers': 搜索到的所有文献,
+                'filtered_papers': 筛选后的文献,
+                'stats': 统计信息,
+                'search_result': 搜索结果（包含按小节分组）
+            }
+        """
+        def add_log(message):
+            """添加日志"""
+            print(message)
+            if progress_callback:
+                progress_callback(message)
+
+        # === 阶段1: 生成大纲和搜索关键词 ===
+        task_manager.update_task_status(
+            task_id,
+            TaskStatus.PROCESSING,
+            progress={"step": "generating_outline", "message": "正在生成大纲和搜索关键词..."}
+        )
+
+        print("\n" + "=" * 80)
+        print("[阶段1] 生成综述大纲和搜索关键词")
+        print("=" * 80)
+
+        outline = await self._generate_review_outline(topic)
+        framework = {'outline': outline}
+
+        print(f"[阶段1] 大纲和关键词生成完成:")
+        print(f"  - 引言: {outline.get('introduction', {}).get('focus', '')[:50]}...")
+        print(f"  - 主体章节: {len(outline.get('body_sections', []))} 个")
+
+        # 从大纲中提取搜索关键词
+        section_keywords = {}
+        for section in outline.get('body_sections', []):
+            if isinstance(section, dict):
+                title = section.get('title', '')
+                search_keywords = section.get('search_keywords', [])
+                section_keywords[title] = search_keywords
+                print(f"    - {title}")
+                print(f"      搜索关键词: {', '.join(search_keywords)}")
+
+        print(f"  - 结论: 待定（根据文献内容生成）")
+
+        # 获取场景特异性指导（保留这个功能）
+        from services.hybrid_classifier import FrameworkGenerator
+        gen = FrameworkGenerator()
+        analysis_result = await gen.generate_framework(topic, enable_llm_validation=True)
+        specificity_guidance = analysis_result.get('specificity_guidance', {})
+
+        # 将关键词整合到 framework
+        framework['section_keywords'] = section_keywords
+        framework['specificity_guidance'] = specificity_guidance
+
+        # 准备搜索查询（将关键词转换为查询格式）
+        search_queries = []
+        for keywords in section_keywords.values():
+            for kw in keywords:
+                search_queries.append({'query': kw, 'lang': 'mixed'})
+
+        # 记录阶段1完成
+        stage_recorder.record_outline_generation(
+            task_id=task_id,
+            topic=topic,
+            outline=outline,
+            framework_type=framework.get('outline', {}).get('structure', ''),
+            classification={
+                'type': framework.get('outline', {}).get('type_name', ''),
+                'key_elements': framework.get('outline', {}).get('key_elements', {}),
+                'search_queries_count': len(search_queries)
+            }
+        )
+
+        # === 阶段2: 搜索词优化（基本语言优化） ===
+        task_manager.update_task_status(
+            task_id,
+            TaskStatus.PROCESSING,
+            progress={"step": "optimizing_keywords", "message": "正在优化搜索关键词..."}
+        )
+
+        print("\n" + "=" * 80)
+        print("[阶段2] 搜索词优化（基本语言优化）")
+        print("=" * 80)
+
+        optimized_queries = self._optimize_search_queries_basic(
+            search_queries=search_queries,
+            topic=topic
+        )
+
+        print(f"[阶段2] 搜索词优化完成:")
+        print(f"  - 原始搜索词: {len(search_queries)} 个")
+        print(f"  - 优化后搜索词: {len(optimized_queries)} 个")
+
+        # === 阶段3: 按小节搜索文献 ===
+        print("\n" + "=" * 80)
+        print("[阶段3] 按小节搜索文献")
+        print("=" * 80)
+
+        search_result = await self._search_literature_by_sections(
+            topic=topic,
+            optimized_queries=optimized_queries,
+            params=params,
+            framework=framework,
+            task_id=task_id
+        )
+
+        all_papers = search_result['all_papers']
+
+        if not all_papers:
+            raise Exception(f'未找到关于「{topic}」的相关文献')
+
+        print(f"[阶段3] 搜索完成:")
+        print(f"  - 总文献数: {len(all_papers)}")
+        print(f"  - 小节数: {len(search_result['sections'])}")
+
+        # === 记录阶段3完成 ===
+        stage_recorder.update_task_status(task_id, status="processing", current_stage="文献搜索")
+        # 计算文献摘要统计
+        papers_summary = search_result.get('stats', {})
+        papers_summary['sections'] = {
+            title: len(papers) for title, papers in search_result['sections'].items()
+        }
+        # 收集文献样本（前20篇）
+        papers_sample = all_papers[:20] if all_papers else []
+        stage_recorder.record_paper_search(
+            task_id=task_id,
+            outline=framework,
+            search_queries_count=len(optimized_queries),
+            papers_count=len(all_papers),
+            papers_summary=papers_summary,
+            papers_sample=papers_sample
+        )
+
+        # === 阶段4: 质量过滤 ===
+        task_manager.update_task_status(
+            task_id,
+            TaskStatus.PROCESSING,
+            progress={"step": "filtering", "message": "正在进行质量过滤..."}
+        )
+
+        print("\n" + "=" * 80)
+        print("[阶段4] 质量过滤")
+        print("=" * 80)
+
+        filter_result = await self._filter_papers_by_quality(
+            search_result=search_result,
+            topic=topic,
+            framework=framework,
+            params=params,
+            task_id=task_id
+        )
+
+        filtered_papers = filter_result['all_papers']
+
+        if not filtered_papers:
+            raise Exception(f'筛选后没有足够的文献')
+
+        print(f"[阶段4] 质量过滤完成:")
+        print(f"  - 筛选后文献数: {len(filtered_papers)}")
+
+        # === 记录阶段4完成 ===
+        stage_recorder.update_task_status(task_id, status="processing", current_stage="文献筛选")
+        # 获取筛选详情（从filter_result中）
+        quality_filtered_count = filter_result.get('quality_filtered_count', 0)
+        quality_filtered_details = filter_result.get('quality_filtered_details', [])
+        topic_irrelevant_count = filter_result.get('topic_irrelevant_count', 0)
+        topic_irrelevant_details = filter_result.get('topic_irrelevant_details', [])
+
+        # 计算筛选后的统计信息
+        filter_stats = self.filter_service.get_statistics(filtered_papers)
+
+        stage_recorder.record_paper_filter(
+            task_id=task_id,
+            input_papers_count=len(all_papers),
+            quality_filtered_count=quality_filtered_count,
+            quality_filtered_details=quality_filtered_details[:50],  # 限制存储数量
+            topic_irrelevant_count=topic_irrelevant_count,
+            topic_irrelevant_details=topic_irrelevant_details[:50],  # 限制存储数量
+            output_papers_count=len(filtered_papers),
+            output_papers_summary=filter_stats
+        )
+
+        # 计算最终统计信息
+        stats = filter_stats
+
+        print(f"\n[阶段1-4] 完成:")
+        print(f"  - 搜索到文献: {len(all_papers)} 篇")
+        print(f"  - 筛选后文献: {len(filtered_papers)} 篇")
+
+        return {
+            'framework': framework,
+            'all_papers': all_papers,
+            'filtered_papers': filtered_papers,
+            'stats': stats,
+            'search_result': search_result,
+            'specificity_guidance': specificity_guidance
+        }
+
     # ==================== 查找文献（不生成综述）====================
 
     async def search_papers_only(
@@ -1973,13 +2643,18 @@ class ReviewTaskExecutor:
                 'filtered_papers': 筛选后的文献,
                 'statistics': 统计信息,
                 'search_queries_results': 搜索查询结果,
-                'logs': 过程日志
+                'logs': 过程日志,
+                'task_id': 任务ID
             }
         """
+        import uuid
         logs = []
         framework = None
         all_papers = []
         filtered_papers = []
+
+        # 生成任务ID
+        task_id = str(uuid.uuid4())[:8]
 
         def add_log(message):
             """添加日志"""
@@ -1988,110 +2663,28 @@ class ReviewTaskExecutor:
             if progress_callback:
                 progress_callback(message)
 
+        # 创建任务记录
+        stage_recorder.create_task(task_id, topic, params)
+        stage_recorder.update_task_status(task_id, status="processing", current_stage="初始化")
+
         try:
-            # === 阶段1: 生成大纲和搜索关键词 ===
-            add_log("\n" + "=" * 80)
-            add_log("[阶段1] 生成综述大纲和搜索关键词")
-            add_log("=" * 80)
-
-            outline = await self._generate_review_outline(topic)
-            framework = {'outline': outline}
-
-            add_log(f"[阶段1] 大纲和关键词生成完成:")
-            add_log(f"  - 引言: {outline.get('introduction', {}).get('focus', '')[:50]}...")
-            add_log(f"  - 主体章节: {len(outline.get('body_sections', []))} 个")
-
-            # 从大纲中提取搜索关键词
-            section_keywords = {}
-            for section in outline.get('body_sections', []):
-                if isinstance(section, dict):
-                    title = section.get('title', '')
-                    search_keywords = section.get('search_keywords', [])
-                    section_keywords[title] = search_keywords
-                    add_log(f"    - {title}")
-                    add_log(f"      搜索关键词: {', '.join(search_keywords)}")
-
-            add_log(f"  - 结论: 待定（根据文献内容生成）")
-
-            # 获取场景特异性指导
-            from services.hybrid_classifier import FrameworkGenerator
-            gen = FrameworkGenerator()
-            analysis_result = await gen.generate_framework(topic, enable_llm_validation=True)
-            specificity_guidance = analysis_result.get('specificity_guidance', {})
-
-            # 将关键词整合到 framework
-            framework['section_keywords'] = section_keywords
-            framework['specificity_guidance'] = specificity_guidance
-
-            # 准备搜索查询
-            search_queries = []
-            for keywords in section_keywords.values():
-                for kw in keywords:
-                    search_queries.append({'query': kw, 'lang': 'mixed'})
-
-            # === 阶段2: 搜索词优化 ===
-            add_log("\n" + "=" * 80)
-            add_log("[阶段2] 搜索词优化（基本语言优化）")
-            add_log("=" * 80)
-
-            optimized_queries = self._optimize_search_queries_basic(
-                search_queries=search_queries,
-                topic=topic
-            )
-
-            add_log(f"[阶段2] 搜索词优化完成:")
-            add_log(f"  - 原始搜索词: {len(search_queries)} 个")
-            add_log(f"  - 优化后搜索词: {len(optimized_queries)} 个")
-
-            # === 阶段3: 按小节搜索文献 ===
-            add_log("\n" + "=" * 80)
-            add_log("[阶段3] 按小节搜索文献")
-            add_log("=" * 80)
-
-            search_result = await self._search_literature_by_sections(
+            # === 执行阶段1-4：文献搜索和筛选（共同逻辑）===
+            search_result = await self._search_and_filter_papers(
                 topic=topic,
-                optimized_queries=optimized_queries,
                 params=params,
-                framework=framework,
-                task_id=None  # 不使用任务管理器
+                task_id=task_id,
+                progress_callback=progress_callback
             )
 
+            framework = search_result['framework']
             all_papers = search_result['all_papers']
-
-            if not all_papers:
-                raise Exception(f'未找到关于「{topic}」的相关文献')
-
-            add_log(f"[阶段3] 搜索完成:")
-            add_log(f"  - 总文献数: {len(all_papers)}")
-            add_log(f"  - 小节数: {len(search_result['sections'])}")
-
-            # === 阶段4: 质量过滤 ===
-            add_log("\n" + "=" * 80)
-            add_log("[阶段4] 质量过滤")
-            add_log("=" * 80)
-
-            filter_result = await self._filter_papers_by_quality(
-                search_result=search_result,
-                topic=topic,
-                framework=framework,
-                params=params,
-                task_id=None  # 不使用任务管理器
-            )
-
-            filtered_papers = filter_result['all_papers']
-
-            if not filtered_papers:
-                raise Exception(f'筛选后没有足够的文献')
-
-            add_log(f"[阶段4] 质量过滤完成:")
-            add_log(f"  - 筛选后文献数: {len(filtered_papers)}")
-
-            # 计算统计信息
-            stats = self.filter_service.get_statistics(filtered_papers)
+            filtered_papers = search_result['filtered_papers']
+            stats = search_result['stats']
+            search_result_data = search_result['search_result']
 
             # 准备搜索查询结果（用于前端展示）
             search_queries_results = []
-            for section_title, papers in search_result['sections'].items():
+            for section_title, papers in search_result_data['sections'].items():
                 search_queries_results.append({
                     'section': section_title,
                     'query': section_title,  # 使用小节标题作为查询
@@ -2106,13 +2699,22 @@ class ReviewTaskExecutor:
             add_log(f"  - 筛选后文献: {len(filtered_papers)} 篇")
             add_log(f"  - 目标引用数: {params.get('target_count', 50)} 篇")
 
+            # === 任务完成 ===
+            stage_recorder.update_task_status(
+                task_id,
+                status="completed",
+                current_stage="完成",
+                completed_at=datetime.now()
+            )
+
             return {
                 'framework': framework,
                 'all_papers': all_papers,
                 'filtered_papers': filtered_papers,
                 'statistics': stats,
                 'search_queries_results': search_queries_results,
-                'logs': logs
+                'logs': logs,
+                'task_id': task_id  # 返回任务ID
             }
 
         except Exception as e:
@@ -2120,6 +2722,16 @@ class ReviewTaskExecutor:
             error_msg = f"[错误] {str(e)}"
             add_log(error_msg)
             traceback.print_exc()
+
+            # === 任务失败 ===
+            stage_recorder.update_task_status(
+                task_id,
+                status="failed",
+                current_stage="失败",
+                error_message=str(e),
+                completed_at=datetime.now()
+            )
+
             raise
 
 

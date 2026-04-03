@@ -11,6 +11,7 @@ export interface Paper {
   concepts: string[];
   relevance_score?: number;  // 相关性得分
   cited?: boolean;  // 是否被引用
+  search_keywords?: string[];  // 匹配的搜索关键词列表
 }
 
 export interface Statistics {
@@ -137,6 +138,22 @@ export interface TopicClassification {
   type_name: string;
   classification_reason: string;
   framework: ReviewFramework;
+  outline?: {
+    introduction: {
+      focus: string;
+      key_papers: string[];
+    };
+    body_sections: Array<{
+      title: string;
+      focus: string;
+      key_points: string[];
+      comparison_points: string[];
+      search_keywords: string[];
+    }>;
+    conclusion: {
+      focus: string;
+    };
+  };
   search_queries: Array<{
     query: string;
     section: string;
@@ -157,5 +174,21 @@ export interface SmartAnalyzeResponse {
     circles?: CircleResult[];
     review_framework?: ReviewFramework;
     framework_type: string;
+  };
+}
+
+// 搜索关键词统计相关类型
+export interface KeywordStat {
+  keyword: string;
+  matched_papers_count: number;
+  paper_ids: string[];
+}
+
+export interface SearchSourcesResponse {
+  success: boolean;
+  data: {
+    task_id: string;
+    total_records: number;
+    keyword_stats: KeywordStat[];
   };
 }

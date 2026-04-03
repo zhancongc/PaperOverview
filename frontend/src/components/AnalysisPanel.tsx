@@ -17,7 +17,7 @@ export function AnalysisPanel({ classification, frameworkType }: AnalysisPanelPr
     )
   }
 
-  const { type_name, classification_reason } = classification
+  const { type_name, classification_reason, outline, search_queries } = classification
 
   return (
     <div className="analysis-panel">
@@ -43,6 +43,51 @@ export function AnalysisPanel({ classification, frameworkType }: AnalysisPanelPr
                '通用结构'}
           </p>
         </div>
+
+        {/* 显示大纲信息 */}
+        {outline && (
+          <div className="outline-info">
+            <h4>📝 生成大纲：</h4>
+            <div className="outline-sections">
+              <div className="outline-section">
+                <h5>引言</h5>
+                <p>{outline.introduction?.focus || 'N/A'}</p>
+              </div>
+              {outline.body_sections && outline.body_sections.length > 0 && (
+                <div className="outline-body">
+                  <h5>主体章节 ({outline.body_sections.length} 个)</h5>
+                  <ul>
+                    {outline.body_sections.map((section, index) => (
+                      <li key={index}>
+                        <strong>{section.title}</strong>
+                        {section.search_keywords && section.search_keywords.length > 0 && (
+                          <span className="keywords-badge">
+                            关键词: {section.search_keywords.join(', ')}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 显示搜索关键词 */}
+        {search_queries && search_queries.length > 0 && (
+          <div className="search-queries-info">
+            <h4>🔍 搜索关键词 ({search_queries.length} 个)</h4>
+            <div className="keywords-list">
+              {search_queries.map((query, index) => (
+                <div key={index} className="keyword-item">
+                  <span className="keyword-section">{query.section}</span>
+                  <span className="keyword-text">{query.query}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

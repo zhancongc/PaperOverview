@@ -522,7 +522,7 @@ class StructuredReviewGenerator:
                     {"role": "system", "content": "你是一位学术写作专家。"},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7,
+                temperature=0.3,  # 争议分析需要准确识别不同观点
                 max_tokens=3000
             )
 

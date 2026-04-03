@@ -158,7 +158,7 @@ class PaperQualityFilter:
         Returns:
             质量得分
         """
-        score = 50.0  # 基础分
+        score = 30.0  # 基础分降低到30
 
         title = paper.get('title', '')
         venue = paper.get('journal', '') or paper.get('venue', '')
@@ -168,31 +168,41 @@ class PaperQualityFilter:
 
         # 被引量加分（最高30分）
         if cited > 0:
-            score += min(cited / 5, 30)
+            score += min(cited / 3, 30)  # 提高被引量的加分比例
 
-        # 年份加分（近10年加分，最高10分）
-        if year is not None and year >= 2015:
-            score += 10
+        # 年份加分（近10年加分，最高15分）
+        if year is not None:
+            if year >= 2022:
+                score += 15  # 近4年加分更多
+            elif year >= 2015:
+                score += 10
 
-        # 作者数量加分（有作者加分，最高5分）
+        # 作者数量加分（有作者加分，最高10分）
         if authors and len(authors) > 0:
-            score += min(len(authors), 5)
+            score += min(len(authors) * 2, 10)
 
-        # 来源质量（有来源加分，最高5分）
-        if venue and len(venue) > 10:
-            score += 5
+        # 来源质量（有来源加分，最高10分）
+        if venue:
+            if len(venue) > 15:
+                score += 10
+            elif len(venue) > 5:
+                score += 5
 
-        # 标题长度（适中长度加分，最高5分）
+        # 标题长度（适中长度加分，最高10分）
         title_len = len(title)
-        if 10 <= title_len <= 100:
-            score += 5
+        if 10 <= title_len <= 200:
+            score += 10
         elif title_len > 5:
-            score += 2
+            score += 5
 
-        # 低质量模式扣分
-        is_low, _ = self.is_low_quality_paper(paper)
+        # 低质量模式扣分（不再直接设为0分，而是扣减分数）
+        is_low, reason = self.is_low_quality_paper(paper)
         if is_low:
-            score = 0  # 低质量文献直接0分
+            # 根据扣分原因不同，扣减不同分数
+            if '会议通知' in reason or 'r\\W' in reason or '征稿' in reason:
+                score = 0  # 严重低质量直接0分
+            else:
+                score = max(score - 30, 10)  # 其他低质量扣30分，最低保留10分
 
         return min(score, 100)
 

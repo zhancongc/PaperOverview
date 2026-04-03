@@ -231,7 +231,7 @@ class CitationSplitter:
                     {"role": "system", "content": "你是一位学术写作专家，擅长优化综述的引用表述。"},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.5,
+                temperature=0.3,  # 引用分割需要准确理解原文
                 max_tokens=500
             )
 

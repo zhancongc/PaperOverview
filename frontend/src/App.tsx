@@ -8,7 +8,6 @@ import type {
   TabType
 } from './types'
 import { TopicInput } from './components/TopicInput'
-import { ConfigPanel } from './components/ConfigPanel'
 import { TabNavigation } from './components/TabNavigation'
 import { AnalysisPanel } from './components/AnalysisPanel'
 import { ReviewPanel } from './components/ReviewPanel'
@@ -16,6 +15,7 @@ import { PapersList } from './components/PapersList'
 import { HistoryList } from './components/HistoryList'
 import { SearchQueriesPanel } from './components/SearchQueriesPanel'
 import { LogsPanel } from './components/LogsPanel'
+import { SettingsModal } from './components/SettingsModal'
 import './App.css'
 
 function App() {
@@ -39,6 +39,10 @@ function App() {
   // 查找文献结果
   const [searchPapersLogs, setSearchPapersLogs] = useState<string[]>([])
   const [searchPapersResult, setSearchPapersResult] = useState<any>(null)
+  const [currentSearchTaskId, setCurrentSearchTaskId] = useState<string | null>(null)
+
+  // 设置弹窗状态
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // 配置参数
   const [targetCount, setTargetCount] = useState(50)
@@ -147,6 +151,7 @@ function App() {
 
         // 保存结果
         setSearchPapersResult(data)
+        setCurrentSearchTaskId(data.task_id || null)
 
         // 更新文献列表
         if (data.all_papers) {
@@ -341,24 +346,16 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>📚 论文综述生成器</h1>
-        <p className="subtitle">基于AI的智能文献综述生成工具</p>
+        <div className="header-title">
+          <h1>📚 论文综述生成器</h1>
+          <p className="subtitle">基于AI的智能文献综述生成工具</p>
+        </div>
+        <button className="settings-btn" onClick={() => setSettingsOpen(true)}>
+          ⚙️ 设置
+        </button>
       </header>
 
       <main className="app-main">
-        <ConfigPanel
-          targetCount={targetCount}
-          recentYearsRatio={recentYearsRatio}
-          englishRatio={englishRatio}
-          searchYears={searchYears}
-          maxSearchQueries={maxSearchQueries}
-          onTargetCountChange={setTargetCount}
-          onRecentYearsRatioChange={setRecentYearsRatio}
-          onEnglishRatioChange={setEnglishRatio}
-          onSearchYearsChange={setSearchYears}
-          onMaxSearchQueriesChange={setMaxSearchQueries}
-          disabled={loading || analyzing}
-        />
         <TopicInput
           value={topic}
           onChange={setTopic}
@@ -389,6 +386,7 @@ function App() {
               searchQueries={searchQueries}
               allPapersCount={papers.length}
               citedPapersCount={statistics?.total || 0}
+              taskId={taskId || currentSearchTaskId || undefined}
             />
           )}
 
@@ -424,6 +422,22 @@ function App() {
       <footer className="app-footer">
         <p>© 2024 论文综述生成器 | 基于 FastAPI + React 构建</p>
       </footer>
+
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        targetCount={targetCount}
+        recentYearsRatio={recentYearsRatio}
+        englishRatio={englishRatio}
+        searchYears={searchYears}
+        maxSearchQueries={maxSearchQueries}
+        onTargetCountChange={setTargetCount}
+        onRecentYearsRatioChange={setRecentYearsRatio}
+        onEnglishRatioChange={setEnglishRatio}
+        onSearchYearsChange={setSearchYears}
+        onMaxSearchQueriesChange={setMaxSearchQueries}
+        disabled={loading || analyzing}
+      />
     </div>
   )
 }

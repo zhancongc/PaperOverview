@@ -241,7 +241,7 @@ class AIToneEliminator:
                     {"role": "system", "content": "你是一位学术写作专家，擅长润色和优化综述文本。"},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.5,
+                temperature=0.4,  # 综述润色需要保持原意，适度优化
                 max_tokens=3000
             )
 
