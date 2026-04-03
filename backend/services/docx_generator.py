@@ -153,50 +153,48 @@ class DocxGenerator:
         p = doc.add_paragraph()
         self._add_formatted_runs(p, line)
 
+    def _strip_markdown_formatting(self, text: str) -> str:
+        """
+        移除所有 Markdown 格式符号，只保留纯文本
+
+        Args:
+            text: 原始文本（可能包含 Markdown 格式）
+
+        Returns:
+            纯文本（移除所有 Markdown 符号）
+        """
+        # 移除粗体标记 **text** 和 __text__
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+        text = re.sub(r'__(.+?)__', r'\1', text)
+
+        # 移除斜体标记 *text* 和 _text_
+        text = re.sub(r'\*(.+?)\*', r'\1', text)
+        text = re.sub(r'_(.+?)_', r'\1', text)
+
+        # 移除行内代码标记 `text`
+        text = re.sub(r'`(.+?)`', r'\1', text)
+
+        # 移除删除线标记 ~~text~~
+        text = re.sub(r'~~(.+?)~~', r'\1', text)
+
+        # 移除未配对的 Markdown 符号（单独出现的 * _ ~ |）
+        text = text.replace('*', '')
+        text = text.replace('_', '')
+        text = text.replace('~', '')
+        text = text.replace('|', '')
+
+        # 移除引用标记 [n]
+        text = re.sub(r'\[(\d+)\]', r'[\1]', text)  # 保留引用格式
+
+        # 移除链接标记 [text](url)
+        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+
+        return text
+
     def _add_formatted_runs(self, paragraph, text):
-        """解析并添加带格式的文本"""
-        i = 0
-        while i < len(text):
-            # 检查粗体 **text** 或 __text__
-            if (text[i:i+2] == '**' or text[i:i+2] == '__') and i + 2 < len(text):
-                end_marker = text[i]
-                end_pos = text.find(end_marker * 2, i + 2)
-                if end_pos != -1:
-                    if i > 0:
-                        paragraph.add_run(text[:i])
-                    bold_text = text[i+2:end_pos]
-                    paragraph.add_run(bold_text).bold = True
-                    text = text[end_pos+2:]
-                    i = 0
-                    continue
+        """解析并添加带格式的文本（纯文本模式，不保留 Markdown 格式）"""
+        # 直接使用纯文本，移除所有 Markdown 格式符号
+        clean_text = self._strip_markdown_formatting(text)
 
-            # 检查斜体 *text* 或 _text_
-            if text[i] in ('*', '_') and i + 1 < len(text):
-                end_pos = text.find(text[i], i + 1)
-                if end_pos != -1:
-                    if i > 0:
-                        paragraph.add_run(text[:i])
-                    italic_text = text[i+1:end_pos]
-                    paragraph.add_run(italic_text).italic = True
-                    text = text[end_pos+1:]
-                    i = 0
-                    continue
-
-            # 检查行内代码 `text`
-            if text[i] == '`' and i + 1 < len(text):
-                end_pos = text.find('`', i + 1)
-                if end_pos != -1:
-                    if i > 0:
-                        paragraph.add_run(text[:i])
-                    code_text = text[i+1:end_pos]
-                    run = paragraph.add_run(code_text)
-                    run.font.name = 'Consolas'
-                    run.font.size = Pt(10)
-                    text = text[end_pos+1:]
-                    i = 0
-                    continue
-
-            i += 1
-
-        if text:
-            paragraph.add_run(text)
+        if clean_text:
+            paragraph.add_run(clean_text)

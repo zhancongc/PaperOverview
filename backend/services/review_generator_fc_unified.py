@@ -406,6 +406,30 @@ class ReviewGeneratorFCUnified:
                 else:
                     content = new_content
 
+                # === 验证补充后的内容完整性 ===
+                # 检查是否包含占位符文本
+                fatal_placeholders = [
+                    '中间部分省略',
+                    'middle omitted',
+                    'content omitted',
+                    '...（中间部分省略）...',
+                    '省略'
+                ]
+
+                found_placeholders = []
+                for placeholder in fatal_placeholders:
+                    if placeholder in content:
+                        found_placeholders.append(placeholder)
+
+                if found_placeholders:
+                    print(f"  - ⚠️ 警告：补充内容包含占位符 {found_placeholders}，保留原内容")
+                    # 保留原内容，不替换
+                    content = current_content
+                # 检查补充后内容是否过短
+                elif len(content) < 500:
+                    print(f"  - ⚠️ 警告：补充后内容过短 ({len(content)} 字符)，保留原内容")
+                    content = current_content
+
                 # 验证并修正补充后的引用
                 content, cited_indices, _ = self._validate_and_fix_citations(content, len(papers))
                 cited_papers = []
@@ -418,6 +442,34 @@ class ReviewGeneratorFCUnified:
                 print(f"  - ✓ 补充后引用: {final_stats['total']} 篇")
                 print(f"    - 近5年: {final_stats['recent']} 篇 ({final_stats['recent_ratio']:.1%})")
                 print(f"    - 英文: {final_stats['english']} 篇 ({final_stats['english_ratio']:.1%})")
+
+        # === 致命错误检查：验证内容完整性 ===
+        # 检查是否包含"中间部分省略"等占位符文本
+        fatal_placeholders = [
+            '中间部分省略',
+            'middle omitted',
+            'content omitted',
+            '省略',
+            '...'
+        ]
+
+        found_placeholders = []
+        for placeholder in fatal_placeholders:
+            if placeholder in content:
+                found_placeholders.append(placeholder)
+
+        if found_placeholders:
+            print(f"\n[致命错误] 检测到内容占位符: {found_placeholders}")
+            print(f"[致命错误] 综述内容不完整，无法使用")
+            print(f"[致命错误] 可能原因：内容过长被截断")
+            # 返回空内容，强制重新生成
+            return "", []
+
+        # 检查内容是否过短（可能生成失败）
+        if len(content) < 500:
+            print(f"\n[致命错误] 生成内容过短: {len(content)} 字符")
+            print(f"[致命错误] 可能原因：LLM 生成失败或被截断")
+            return "", []
 
         # 添加标题和参考文献
         final_content = f"# {topic}\n\n{content}"
@@ -835,15 +887,9 @@ class ReviewGeneratorFCUnified:
             abstract = (paper.get("abstract") or "")[:200]  # 处理 None 情况
             papers_info.append(f"[{idx}] {paper.get('title', '')}\n摘要：{abstract}...")
 
-        # 如果内容太长（>8000字符），只发送前半部分和后半部分
+        # 如果内容太长，发送完整内容但要求LLM专注于在末尾补充引用
+        # 注意：不要使用"中间部分省略"这样的占位符
         content_to_send = current_content
-        if len(current_content) > 8000:
-            # 发送前4000字符 + 后4000字符
-            content_to_send = f"""{current_content[:4000]}
-
-...（中间部分省略）...
-
-{current_content[-4000:]}"""
 
         return f"""请在以下综述内容中补充引用这些论文：
 
