@@ -407,35 +407,70 @@ class ReviewTaskExecutor:
             # 确保数据库session总是被关闭
             db_session.close()
 
-        # 按小节保留专属文献（不做小节间去重）
-        print(f"\n[阶段3] 按小节保留专属文献...")
+        # 小节间去重：保留文献数量少的小节的文献
+        print(f"\n[阶段3] 小节间去重...")
 
-        papers_by_section = {}
+        # 计算每个小节的文献数量
+        section_paper_counts = {
+            title: len(papers) for title, papers in raw_papers_by_section.items()
+        }
+
+        # 收集所有 paper_id 及其所属小节
+        paper_id_to_sections = {}  # {paper_id: [(section_title, paper), ...]}
         for section_title, section_papers in raw_papers_by_section.items():
-            papers_by_section[section_title] = section_papers
-            print(f"[阶段3] 小节 '{section_title}': {len(section_papers)} 篇专属文献")
-
-        # 检查小节间是否有重复文献
-        all_paper_ids = []
-        for section_title, section_papers in papers_by_section.items():
             for paper in section_papers:
                 paper_id = paper.get('id')
                 if paper_id:
-                    all_paper_ids.append((section_title, paper_id))
+                    if paper_id not in paper_id_to_sections:
+                        paper_id_to_sections[paper_id] = []
+                    paper_id_to_sections[paper_id].append((section_title, paper))
 
-        # 统计重复的 paper_id
-        from collections import Counter
-        paper_id_counts = Counter([pid for _, pid in all_paper_ids])
-        duplicate_ids = {pid: count for pid, count in paper_id_counts.items() if count > 1}
+        # 找出重复的 paper_id（出现在多个小节）
+        duplicate_paper_ids = {
+            pid: sections for pid, sections in paper_id_to_sections.items()
+            if len(sections) > 1
+        }
 
-        if duplicate_ids:
-            print(f"[阶段3] ⚠️ 发现小节间重复文献:")
-            for paper_id, count in list(duplicate_ids.items())[:5]:
-                sections_with_id = [st for st, pid in all_paper_ids if pid == paper_id]
-                print(f"    - paper_id={paper_id}: 出现{count}次，小节: {sections_with_id}")
-            print(f"    - 总计 {len(duplicate_ids)} 个重复的 paper_id")
+        if duplicate_paper_ids:
+            print(f"[阶段3] 发现 {len(duplicate_paper_ids)} 个重复的 paper_id，正在去重...")
+
+            # 对于每个重复的 paper_id，只保留文献数量少的小节的文献
+            papers_to_remove = set()  # {(section_title, paper_id), ...}
+
+            for paper_id, sections in duplicate_paper_ids.items():
+                # 按小节文献数量升序排序（文献少的优先保留）
+                sections_sorted = sorted(sections, key=lambda x: section_paper_counts[x[0]])
+
+                # 保留第一个（文献数量最少的小节），删除其余的
+                kept_section, kept_paper = sections_sorted[0]
+                removed_sections = sections_sorted[1:]
+
+                for removed_section, _ in removed_sections:
+                    papers_to_remove.add((removed_section, paper_id))
+
+                if len(removed_sections) > 0:
+                    removed_section_names = [s[0] for s in removed_sections]
+                    print(f"  - paper_id={paper_id[:20]}...: 保留 '{kept_section}'，删除 {removed_section_names}")
+
+            # 执行去重
+            papers_by_section = {}
+            for section_title, section_papers in raw_papers_by_section.items():
+                # 过滤掉需要删除的文献
+                filtered_papers = []
+                for paper in section_papers:
+                    paper_id = paper.get('id')
+                    if (section_title, paper_id) not in papers_to_remove:
+                        filtered_papers.append(paper)
+
+                papers_by_section[section_title] = filtered_papers
+                removed_count = len(section_papers) - len(filtered_papers)
+                if removed_count > 0:
+                    print(f"[阶段3] 小节 '{section_title}': 删除 {removed_count} 篇重复文献，保留 {len(filtered_papers)} 篇")
+                else:
+                    print(f"[阶段3] 小节 '{section_title}': {len(filtered_papers)} 篇（无重复）")
         else:
             print(f"[阶段3] ✓ 没有发现小节间重复文献")
+            papers_by_section = raw_papers_by_section
 
         # 合并所有文献（用于统计，但不用于分配）
         all_papers = []
