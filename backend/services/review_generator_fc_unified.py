@@ -57,6 +57,16 @@ class ReviewGeneratorFCUnified:
         print("综述生成 - Function Calling 统一版本")
         print("=" * 80)
 
+        # === 去重：基于标题去重，保留被引量高的版本 ===
+        original_count = len(papers)
+        papers = self._deduplicate_papers_by_title(papers)
+        dedup_count = original_count - len(papers)
+
+        if dedup_count > 0:
+            print(f"[去重] 原始文献数: {original_count}")
+            print(f"[去重] 去重后文献数: {len(papers)}")
+            print(f"[去重] 移除重复文献: {dedup_count} 篇")
+
         # 准备论文标题列表（轻量级）
         paper_titles_list = self._format_paper_titles_list(papers)
         print(f"\n[准备] 论文标题列表 ({len(papers)} 篇):")
@@ -890,6 +900,71 @@ class ReviewGeneratorFCUnified:
             lines.append(ref_entry)
 
         return "\n".join(lines)
+
+    def _deduplicate_papers_by_title(self, papers: List[Dict]) -> List[Dict]:
+        """
+        基于标题去重，保留被引量高的版本
+
+        去重策略：
+        1. 标题归一化（小写、去除特殊字符）
+        2. 优先保留被引量高的
+        3. 被引量相同时，优先保留有 DOI 的
+        4. 被引量和 DOI 都相同时，优先保留年份新的
+
+        Args:
+            papers: 论文列表
+
+        Returns:
+            去重后的论文列表
+        """
+        seen_titles = {}
+        unique_papers = []
+
+        for paper in papers:
+            title = paper.get("title", "").strip().lower()
+            # 去除特殊字符和空格，但保留基本单词分隔符
+            title = ''.join(c if c.isalnum() or c.isspace() else ' ' for c in title)
+            title = ' '.join(title.split())  # 标准化空格
+
+            if not title or len(title) < 10:  # 跳过过短的标题
+                continue
+
+            if title not in seen_titles:
+                seen_titles[title] = len(unique_papers)
+                unique_papers.append(paper)
+            else:
+                # 发现重复，比较被引量、DOI、年份
+                existing_idx = seen_titles[title]
+                existing_paper = unique_papers[existing_idx]
+
+                existing_citations = existing_paper.get("cited_by_count", 0)
+                current_citations = paper.get("cited_by_count", 0)
+
+                existing_doi = existing_paper.get("doi", "")
+                current_doi = paper.get("doi", "")
+
+                existing_year = existing_paper.get("year", 0)
+                current_year = paper.get("year", 0)
+
+                # 决定是否替换
+                should_replace = False
+
+                # 优先保留被引量高的
+                if current_citations > existing_citations:
+                    should_replace = True
+                # 被引量相同时，优先保留有 DOI 的
+                elif current_citations == existing_citations:
+                    if current_doi and not existing_doi:
+                        should_replace = True
+                    # 都有或都没有 DOI 时，优先保留年份新的
+                    elif current_year > existing_year:
+                        should_replace = True
+
+                if should_replace:
+                    unique_papers[existing_idx] = paper
+                    print(f"[去重] 替换重复文献: {paper.get('title', 'N/A')[:50]}... (被引: {current_citations} > {existing_citations})")
+
+        return unique_papers
 
 
 # 便捷函数
