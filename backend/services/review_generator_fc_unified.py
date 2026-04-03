@@ -108,7 +108,7 @@ class ReviewGeneratorFCUnified:
                 tools=self._get_tools_definition(len(papers)),
                 tool_choice="auto",
                 temperature=0.7,
-                max_tokens=16000  # 确保完整输出
+                max_tokens=8192  # DeepSeek 最大值
             )
 
             assistant_message = response.choices[0].message
@@ -325,7 +325,7 @@ class ReviewGeneratorFCUnified:
                         {"role": "user", "content": supplement_message}
                     ],
                     temperature=0.3,
-                    max_tokens=16000  # 确保完整输出
+                    max_tokens=8192  # DeepSeek 最大值
                 )
 
                 content = supplement_response.choices[0].message.content
