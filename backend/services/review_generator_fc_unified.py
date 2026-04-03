@@ -235,8 +235,11 @@ class ReviewGeneratorFCUnified:
             # 返回空内容
             return "", []
 
-        # 提取引用的论文
-        cited_indices = self._extract_cited_indices(content)
+        # === 引用验证和修正 ===
+        # 验证并修正内容中的引用，确保所有引用都在有效范围内
+        content, cited_indices, fix_logs = self._validate_and_fix_citations(content, len(papers))
+
+        # 提取引用的论文（使用修正后的 cited_indices）
         cited_papers = []
 
         for idx in cited_indices:
@@ -403,8 +406,8 @@ class ReviewGeneratorFCUnified:
                 else:
                     content = new_content
 
-                # 重新提取引用
-                cited_indices = self._extract_cited_indices(content)
+                # 验证并修正补充后的引用
+                content, cited_indices, _ = self._validate_and_fix_citations(content, len(papers))
                 cited_papers = []
                 for idx in cited_indices:
                     if 1 <= idx <= len(papers):
@@ -796,6 +799,64 @@ class ReviewGeneratorFCUnified:
         matches = re.findall(pattern, content)
         indices = [int(m) for m in matches]
         return sorted(set(indices))
+
+    def _validate_and_fix_citations(self, content: str, paper_count: int) -> tuple[str, List[int], List[str]]:
+        """
+        验证并修正内容中的引用
+
+        Args:
+            content: 生成的综述内容
+            paper_count: 论文总数（最大有效引用编号）
+
+        Returns:
+            (修正后的内容, 有效引用列表, 修正日志)
+        """
+        import re
+
+        # 查找所有引用模式，包括 [1], [1,2], [1, 2, 3] 等
+        citation_pattern = r'\[(\d+(?:\s*,\s*\d+)*)\]'
+        fix_logs = []
+
+        def replace_citation(match):
+            citation_str = match.group(1)
+            # 解析引用编号
+            cited_nums = [int(n.strip()) for n in citation_str.split(',')]
+
+            # 过滤出有效的引用编号
+            valid_nums = [n for n in cited_nums if 1 <= n <= paper_count]
+            invalid_nums = [n for n in cited_nums if n > paper_count or n < 1]
+
+            # 如果有无效引用，记录并修正
+            if invalid_nums:
+                original = f'[{citation_str}]'
+                if valid_nums:
+                    replacement = f'[{", ".join(map(str, valid_nums))}]'
+                    fix_logs.append(f'修正引用: {original} -> {replacement} (移除无效引用 {invalid_nums})')
+                    return replacement
+                else:
+                    fix_logs.append(f'移除无效引用: {original} (全部超出范围 {invalid_nums})')
+                    return ''  # 完全移除
+
+            return match.group(0)  # 保持原样
+
+        # 应用修正
+        fixed_content = re.sub(citation_pattern, replace_citation, content)
+
+        # 提取修正后的有效引用
+        cited_indices = self._extract_cited_indices(fixed_content)
+
+        # 打印修正日志
+        if fix_logs:
+            print(f'\n[引用验证] 发现并修正 {len(fix_logs)} 处引用问题:')
+            for log in fix_logs[:10]:  # 只显示前10条
+                print(f'  - {log}')
+            if len(fix_logs) > 10:
+                print(f'  - ... 还有 {len(fix_logs) - 10} 处修正')
+            print(f'[引用验证] 修正后有效引用: {len(cited_indices)} 篇')
+        else:
+            print(f'\n[引用验证] ✓ 所有引用均在有效范围内 [1-{paper_count}]')
+
+        return fixed_content, cited_indices, fix_logs
 
     def _estimate_context_tokens(self, messages: List[Any]) -> int:
         """估算上下文的 token 数量"""
