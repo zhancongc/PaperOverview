@@ -2327,8 +2327,9 @@ class ReviewTaskExecutor:
         try:
             from services.contextual_keyword_translator import translate_keywords_contextual
 
-            # 收集需要翻译的中文关键词
-            zh_keywords = [q['query'] for q in unique_optimized if q.get('lang') == 'zh']
+            # 收集需要翻译的中文关键词（包括 'zh' 和 'mixed' 语言标记）
+            # 注意：'mixed' 语言的关键词可能是中英混合（如 "CAS核心算法"），需要翻译处理
+            zh_keywords = [q['query'] for q in unique_optimized if q.get('lang') in ('zh', 'mixed')]
 
             if zh_keywords:
                 # 使用上下文感知翻译（传入研究方向以提高相关性）
@@ -2350,10 +2351,23 @@ class ReviewTaskExecutor:
                             break
 
                     if original_config:
+                        # 后处理：提取英文部分（去除中文字符）
+                        import re
+                        # 提取英文单词和常见符号（AND, OR等）
+                        english_parts = re.findall(r'[a-zA-Z]{2,}|\bAND\b|\bOR\b', translated_query)
+                        if english_parts:
+                            # 重构为纯英文查询
+                            cleaned_query = ' '.join(english_parts)
+                            # 清理多余的空格
+                            cleaned_query = ' '.join(cleaned_query.split())
+                        else:
+                            # 如果没有英文部分，跳过
+                            continue
+
                         # 为每个英文数据源添加翻译后的查询
                         for source in english_sources:
                             translated_queries.append({
-                                'query': translated_query,
+                                'query': cleaned_query,
                                 'lang': 'en',
                                 'source': source,
                                 'original_query': original_query,

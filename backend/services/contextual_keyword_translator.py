@@ -420,9 +420,13 @@ class ContextualKeywordTranslator:
             keywords, context, research_direction_id
         )
 
-        # 如果有关键词被扩展，使用扩展后的版本
+        # 保存原始关键词到扩展关键词的映射
+        original_to_expanded = {}
         if expanded_keywords != keywords:
             print(f"[上下文翻译] 最终关键词: {expanded_keywords}")
+            for orig, exp in zip(keywords, expanded_keywords):
+                if orig != exp:
+                    original_to_expanded[orig] = exp
             keywords = expanded_keywords
 
         # 第二步：识别主题领域
@@ -457,7 +461,18 @@ class ContextualKeywordTranslator:
 
         print(f"[上下文翻译] 翻译完成: {len(translations)} 个关键词")
 
-        return translations
+        # 将翻译结果的键从扩展后的关键词改回原始关键词
+        # 这样调用者可以使用原始关键词查找翻译结果
+        final_translations = {}
+        for orig_keyword, expanded_keyword in original_to_expanded.items():
+            if expanded_keyword in translations:
+                final_translations[orig_keyword] = translations[expanded_keyword]
+        # 对于没有被扩展的关键词，直接使用翻译结果
+        for kw in keywords:
+            if kw in translations and kw not in original_to_expanded.values():
+                final_translations[kw] = translations[kw]
+
+        return final_translations
 
     async def _translate_with_llm(
         self,
