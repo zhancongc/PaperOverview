@@ -101,6 +101,20 @@ class ReviewTaskExecutor:
             # 计算目标引用数
             target_citation_count = params.get('target_count', 50)
 
+            # === 智能调整目标引用数 ===
+            # 如果候选文献数量不足，按比例调整目标引用数
+            available_papers = len(filtered_papers)
+            if available_papers < target_citation_count:
+                # 至少引用 70% 的候选文献，但不超过目标引用数
+                # 使用 round() 四舍五入而不是 int() 向下取整
+                adjusted_target = max(
+                    round(available_papers * 0.7),  # 至少引用 70%
+                    min(20, available_papers)  # 至少引用 20 篇
+                )
+                print(f"\n[阶段5] ⚠️  候选文献数 ({available_papers}) < 目标引用数 ({target_citation_count})")
+                print(f"[阶段5] 调整目标引用数为: {adjusted_target} 篇")
+                target_citation_count = adjusted_target
+
             print(f"\n[阶段5] 生成综述（Function Calling 统一版本）")
             print(f"[阶段5] 候选文献数: {total_count} 篇")
             print(f"[阶段5] 目标引用数: {target_citation_count} 篇")
@@ -143,13 +157,19 @@ class ReviewTaskExecutor:
             # 使用 Function Calling 统一版本生成器
             fc_generator = ReviewGeneratorFCUnified(api_key=api_key)
 
+            # 确保最小引用数不超过可用文献数
+            min_citation_count = min(
+                params.get('target_count', 50),
+                len(filtered_papers)
+            )
+
             # 一次性生成完整综述
             review, cited_papers = await fc_generator.generate_review(
                 topic=topic,
                 papers=filtered_papers,
                 framework=framework,
                 target_citation_count=target_citation_count,
-                min_citation_count=params.get('target_count', 50),
+                min_citation_count=min_citation_count,
                 recent_years_ratio=params.get('recent_years_ratio', 0.5),
                 english_ratio=params.get('english_ratio', 0.3),
                 specificity_guidance=specificity_guidance,
@@ -436,6 +456,15 @@ class ReviewTaskExecutor:
                     if query_key not in seen_queries:
                         seen_queries.add(query_key)
                         unique_optimized_queries.append(q)
+
+                # 优先使用英文查询（将英文查询移到前面）
+                en_queries = [q for q in unique_optimized_queries if q.get('lang') == 'en']
+                zh_queries = [q for q in unique_optimized_queries if q.get('lang') != 'en']
+                unique_optimized_queries = en_queries + zh_queries
+
+                print(f"[阶段3] 优化查询顺序调整:")
+                print(f"  - 英文查询: {len(en_queries)} 个（优先）")
+                print(f"  - 其他查询: {len(zh_queries)} 个")
 
                 # === 渐进式搜索策略 ===
                 # 第1轮：使用原始关键词搜索
@@ -775,6 +804,23 @@ class ReviewTaskExecutor:
         print(f"  - 小节分布:")
         for section_title, papers in papers_by_section.items():
             print(f"    - {section_title}: {len(papers)} 篇")
+
+        # === 验证搜索结果与题目主题一致性 ===
+        print(f"\n[阶段3] 验证搜索结果与题目主题一致性...")
+        try:
+            relevance_score = self._validate_search_relevance(topic, all_papers)
+            print(f"[阶段3] 主题相关性得分: {relevance_score:.1%}")
+
+            if relevance_score < 0.3:
+                print(f"[阶段3] ⚠️  警告: 搜索结果与题目相关性过低（{relevance_score:.1%} < 30%）")
+                print(f"[阶段3] 可能原因:")
+                print(f"[阶段3]   1. 关键词翻译不准确")
+                print(f"[阶段3]   2. 题目与搜索结果不匹配")
+                print(f"[阶段3]   3. 需要重新定义搜索策略")
+                print(f"[阶段3] 建议: 请检查题目和关键词是否一致")
+                # 不中断流程，但给出警告
+        except Exception as e:
+            print(f"[阶段3] 主题相关性验证失败: {e}")
 
         # AMiner论文详情补充
         all_papers = await self._enrich_aminer_papers(all_papers)
@@ -1153,14 +1199,87 @@ class ReviewTaskExecutor:
                 keywords_for_section = section_keywords.get(section_title, [])
                 keywords_str = ", ".join(keywords_for_section) if keywords_for_section else "无"
 
+                # === 第一步：基于标题的快速筛选 ===
+                print(f"[阶段4] 步骤1: 基于标题快速筛选...")
+                from services.title_relevance_checker import batch_check_titles
+                from services.contextual_keyword_translator import DomainKnowledge
+
+                # 识别领域
+                domain = DomainKnowledge.identify_domain(topic)
+
+                # 批量检查标题相关性
+                title_relevant, title_irrelevant, title_uncertain = batch_check_titles(
+                    section_filtered_papers,
+                    topic,
+                    domain
+                )
+
+                print(f"[阶段4] 标题检查结果:")
+                print(f"  - 明显相关: {len(title_relevant)} 篇")
+                print(f"  - 明显不相关: {len(title_irrelevant)} 篇")
+                print(f"  - 需要进一步判断: {len(title_uncertain)} 篇")
+
+                # 显示明显不相关的文献样本
+                if title_irrelevant:
+                    print(f"[阶段4] 明显不相关的文献样本（前3篇）:")
+                    for paper in title_irrelevant[:3]:
+                        reason = paper.get('_title_check', {}).get('reason', '')
+                        title = paper.get('title', '')[:60]
+                        print(f"  - {title}")
+                        print(f"    原因: {reason}")
+
+                # 第二步：只对不确定的文献使用 LLM 判断
+                llm_papers = title_uncertain.copy()
+
+                # 明确相关的文献直接保留
+                for paper in title_relevant:
+                    paper_id = paper.get('id')
+                    if paper_id and paper_id not in seen_paper_ids:
+                        seen_paper_ids.add(paper_id)
+                        relevant_papers.append(paper)
+
+                if not llm_papers:
+                    print(f"[阶段4] 所有文献通过标题检查完成，跳过 LLM 判断")
+                    continue
+
+                print(f"[阶段4] 步骤2: 对 {len(llm_papers)} 篇文献使用 LLM 判断...")
+
                 # 构建该小节的文献列表
                 papers_text = ""
-                for i, paper in enumerate(section_filtered_papers, 1):
+                for i, paper in enumerate(llm_papers, 1):
                     title = paper.get('title', '')
                     venue = paper.get('journal', '') or paper.get('venue', '')
                     papers_text += f"{i}. 标题: {title}\n   来源: {venue}\n\n"
 
                 prompt = f"""请判断以下文献是否适合用于撰写以下小节的内容。
+
+**重要提示**: 首先检查文献标题是否与小节主题相关。标题是最重要的判断依据。
+
+研究总主题: {topic}
+当前小节: {section_title}
+小节关键词: {keywords_str}
+
+文献列表:
+{papers_text}
+
+请对每篇文献进行判断，返回格式如下（严格按格式，不要有多余文字）：
+相关: [序号列表，用逗号分隔]
+不相关: [序号列表，用逗号分隔]
+
+例如：
+相关: 1,2,4,7,10
+不相关: 3,5,6,8,9
+
+判断标准：
+1. **标题匹配度**：文献标题是否包含与小节主题相关的关键词
+2. **主题一致性**：文献的研究内容是否能支持本小节的论述
+3. **领域适配性**：
+   - 如果小节讨论的是通用方法，其他行业的应用文献也可以保留
+   - 如果小节讨论的是特定领域，则优先保留该领域的文献
+4. **无关性判断**：只有在文献明显**无法为本小节提供任何有价值的信息**时，才判定为不相关
+   - 例如：小节讨论"数学软件"，而文献是"烹饪食谱"或"电影评论"
+   - **重要**：不要仅仅因为文献属于某个特定领域（如物理、化学、生物）就判定为不相关
+   - **跨学科研究**：如果题目本身涉及多个领域，应该保留相关领域的文献
 
 研究总主题: {topic}
 
@@ -1179,10 +1298,15 @@ class ReviewTaskExecutor:
 不相关: 3,5,6,8,9
 
 判断标准：
-1. 文献需要与当前小节主题相关，而不仅仅是与总主题相关
-2. 如果小节讨论的是通用方法（如"DMAIC在质量管理领域的研究进展"），则其他行业的相关文献也可以保留
-3. 如果小节讨论的是特定领域（如"芯片行业的质量管理进展"），则只保留该领域的文献
-4. 如果文献明显属于完全无关的领域（如物理学、化学、生物学、医学、玄学等），则判定为不相关
+1. **标题匹配度**：文献标题是否包含与小节主题相关的关键词
+2. **主题一致性**：文献的研究内容是否能支持本小节的论述
+3. **领域适配性**：
+   - 如果小节讨论的是通用方法，其他行业的应用文献也可以保留
+   - 如果小节讨论的是特定领域，则优先保留该领域的文献
+4. **无关性判断**：只有在文献明显**无法为本小节提供任何有价值的信息**时，才判定为不相关
+   - 例如：小节讨论"数学软件"，而文献是"烹饪食谱"或"电影评论"
+   - **重要**：不要仅仅因为文献属于某个特定领域（如物理、化学、生物）就判定为不相关
+   - **跨学科研究**：如果题目本身涉及多个领域，应该保留相关领域的文献
 """
 
                 # 调用LLM判断
@@ -1212,18 +1336,14 @@ class ReviewTaskExecutor:
                         indices_str = line.replace('不相关:', '').strip()
                         irrelevant_indices = [int(x.strip()) for x in indices_str.split(',') if x.strip().isdigit()]
 
-                # 收集结果
-                for idx, paper in enumerate(section_filtered_papers, 1):
+                # 收集结果（注意：这里使用 llm_papers，因为只有不确定的论文被送到了 LLM）
+                for idx, paper in enumerate(llm_papers, 1):
                     paper_id = paper.get('id')
                     if idx in relevant_indices:
                         if paper_id not in seen_paper_ids:
                             seen_paper_ids.add(paper_id)
                             relevant_papers.append(paper)
-                    elif idx in irrelevant_indices:
-                        # 只有当这篇论文在所有小节中都被判断为不相关时才移除
-                        # 这里简化处理：如果在任何一个小节中被认为相关就保留
-                        # 所以我们只记录，但不立即移除
-                        pass
+                    # 不相关的论文不需要处理，因为它们已经被标记为不相关了
 
             # 现在，找出那些在所有小节中都没被选中的论文
             all_filtered_ids = set(p.get('id') for p in filtered_papers)
@@ -1579,9 +1699,13 @@ class ReviewTaskExecutor:
 
         return errors
 
-    async def _generate_review_outline(self, topic: str) -> dict:
+    async def _generate_review_outline(self, topic: str, research_direction: str = "") -> dict:
         """
         生成综述大纲
+
+        Args:
+            topic: 论文主题
+            research_direction: 研究方向（可选，用于提高搜索相关性）
 
         Returns:
             {
@@ -1609,6 +1733,8 @@ class ReviewTaskExecutor:
         print("=" * 80)
         print(f"[阶段1] 输入:")
         print(f"  - 主题: {topic}")
+        if research_direction:
+            print(f"  - 研究方向: {research_direction}")
 
         import os
         from openai import AsyncOpenAI
@@ -1682,7 +1808,15 @@ class ReviewTaskExecutor:
 
         user_prompt = f"""请为以下研究主题设计综述大纲：
 
-**主题**：{topic}
+**主题**：{topic}"""
+
+        if research_direction:
+            user_prompt += f"""
+
+**研究方向**：{research_direction}
+（重要：生成的大纲和搜索关键词应该围绕这个研究方向展开）"""
+
+        user_prompt += """
 
 请输出JSON格式的大纲："""
 
@@ -1954,10 +2088,119 @@ class ReviewTaskExecutor:
         words = re.findall(r'[\u4e00-\u9fff]{2,4}', text)
         return words
 
+    def _validate_search_relevance(self, topic: str, papers: list) -> float:
+        """
+        验证搜索结果与题目主题的一致性
+
+        Args:
+            topic: 论文题目
+            papers: 搜索到的文献列表
+
+        Returns:
+            相关性得分 (0-1)
+        """
+        from services.contextual_keyword_translator import DomainKnowledge
+
+        # 第一步：识别题目领域
+        domain = DomainKnowledge.identify_domain(topic)
+
+        if not domain:
+            # 无法识别领域，使用通用验证
+            return self._generic_relevance_check(topic, papers)
+
+        # 第二步：获取领域约束
+        domain_info = DomainKnowledge.DOMAINS.get(domain, {})
+        related_terms = domain_info.get("related_concepts", [])
+        exclude_terms = domain_info.get("exclude_terms", [])
+
+        print(f"[相关性验证] 识别领域: {domain_info.get('name', domain)}")
+        print(f"[相关性验证] 相关术语: {related_terms[:5]}...")
+        print(f"[相关性验证] 排除术语: {exclude_terms[:5]}...")
+
+        # 第三步：检查前20篇文献
+        sample_papers = papers[:20] if len(papers) >= 20 else papers
+
+        relevant_count = 0
+        exclude_count = 0
+        total_count = len(sample_papers)
+
+        for paper in sample_papers:
+            title = paper.get('title', '').lower()
+
+            # 检查是否包含相关术语
+            is_relevant = False
+            for term in related_terms:
+                if term.lower() in title:
+                    is_relevant = True
+                    relevant_count += 1
+                    break
+
+            # 检查是否包含排除术语
+            for term in exclude_terms:
+                if term.lower() in title:
+                    exclude_count += 1
+                    break
+
+        # 计算相关性得分
+        if total_count > 0:
+            relevance_score = relevant_count / total_count
+        else:
+            relevance_score = 0.0
+
+        print(f"[相关性验证] 相关文献: {relevant_count}/{total_count}")
+        print(f"[相关性验证] 排除文献: {exclude_count} 篇")
+
+        # 如果排除文献太多，降低得分
+        if exclude_count > total_count * 0.5:
+            relevance_score *= 0.5
+            print(f"[相关性验证] 排除文献过多，得分减半")
+
+        return relevance_score
+
+    def _generic_relevance_check(self, topic: str, papers: list) -> float:
+        """
+        通用相关性检查（当无法识别领域时）
+
+        Args:
+            topic: 论文题目
+            papers: 搜索到的文献列表
+
+        Returns:
+            相关性得分 (0-1)
+        """
+        # 提取题目中的关键词
+        topic_words = set()
+        # 英文单词
+        import re
+        english_words = re.findall(r'[a-zA-Z]{3,}', topic)
+        topic_words.update([w.lower() for w in english_words])
+        # 中文词汇
+        chinese_words = self._extract_chinese_words(topic)
+        topic_words.update(chinese_words)
+
+        # 检查前20篇文献
+        sample_papers = papers[:20] if len(papers) >= 20 else papers
+
+        relevant_count = 0
+        total_count = len(sample_papers)
+
+        for paper in sample_papers:
+            title = paper.get('title', '').lower()
+            # 检查是否包含题目中的关键词
+            for word in topic_words:
+                if word in title:
+                    relevant_count += 1
+                    break
+
+        if total_count > 0:
+            return relevant_count / total_count
+        return 0.0
+
     async def _optimize_search_queries_basic(
         self,
         search_queries: list,
-        topic: str
+        topic: str,
+        research_direction: str = ""
     ) -> list:
         """
         基本搜索词优化（语言优化 + 翻译扩展）
@@ -1965,6 +2208,7 @@ class ReviewTaskExecutor:
         Args:
             search_queries: 原始搜索查询列表
             topic: 论文主题
+            research_direction: 研究方向（可选，用于提高翻译相关性）
 
         Returns:
             优化后的搜索查询列表
@@ -1983,32 +2227,91 @@ class ReviewTaskExecutor:
         optimized = []
 
         # 数据源语言映射
-        english_sources = ['openalex', 'crossref', 'datacite']
-        chinese_sources = ['aminer', 'semantic_scholar', 'chinese_doi']
+        # Semantic Scholar 主要是英文数据库（虽然也有一定中文支持）
+        english_sources = ['openalex', 'crossref', 'datacite', 'semantic_scholar']
+        chinese_sources = ['aminer', 'chinese_doi']
 
-        # 为每个原始查询生成基本优化版本
+        # === 关键词组合逻辑 ===
+        # 将原始查询按章节分组，然后生成组合查询
+        section_queries = {}  # {章节标题: [查询1, 查询2, ...]}
+
         for query_item in search_queries:
             query = query_item.get('query', '')
+            section = query_item.get('section', 'default')
 
-            # 判断查询是否是英文
-            if self._is_english(query):
-                # 英文查询：添加到英文数据源
-                for source in english_sources:
+            if section not in section_queries:
+                section_queries[section] = []
+            section_queries[section].append(query)
+
+        print(f"[阶段2] 关键词组合:")
+        print(f"  章节: {len(section_queries)} 个")
+
+        # 为每个章节生成组合查询
+        combination_count = 0
+        for section, queries in section_queries.items():
+            print(f"  - {section}: {len(queries)} 个关键词")
+
+            if len(queries) == 1:
+                # 单个关键词：直接使用
+                query = queries[0]
+                lang = 'en' if self._is_english(query) else 'zh'
+
+                # 根据语言分配数据源
+                sources = english_sources if lang == 'en' else chinese_sources
+                for source in sources:
                     optimized.append({
                         'query': query,
-                        'lang': 'en',
+                        'lang': lang,
                         'source': source,
-                        'original_query': query
+                        'original_query': query,
+                        'is_combination': False
                     })
-            else:
-                # 中文查询：添加到中文数据源
-                for source in chinese_sources:
+
+            elif len(queries) >= 2:
+                # 多个关键词：生成 AND 组合查询
+                print(f"    生成 AND 组合查询...")
+
+                # 提取核心关键词（通常是前2个）
+                primary_kw = queries[0]
+                secondary_kw = queries[1]
+
+                # 生成 AND 查询
+                combined_query = f'{primary_kw} AND {secondary_kw}'
+
+                lang = 'en' if self._is_english(combined_query) else 'zh'
+                sources = english_sources if lang == 'en' else chinese_sources
+
+                for source in sources:
                     optimized.append({
-                        'query': query,
-                        'lang': 'zh',
+                        'query': combined_query,
+                        'lang': lang,
                         'source': source,
-                        'original_query': query
+                        'original_query': f'{primary_kw} + {secondary_kw}',
+                        'is_combination': True
                     })
+
+                combination_count += 1
+                print(f"      {combined_query}")
+
+                # 如果有第3个关键词，生成三词组合
+                if len(queries) >= 3:
+                    tertiary_kw = queries[2]
+                    combined_query_3 = f'{primary_kw} AND {secondary_kw} AND {tertiary_kw}'
+
+                    for source in sources:
+                        optimized.append({
+                            'query': combined_query_3,
+                            'lang': lang,
+                            'source': source,
+                            'original_query': f'{primary_kw} + {secondary_kw} + {tertiary_kw}',
+                            'is_combination': True
+                        })
+
+                    print(f"      {combined_query_3}")
+                    combination_count += 1
+
+        print(f"  总组合查询数: {combination_count}")
+        print(f"  总优化查询数: {len(optimized)}")
 
         # 去重
         seen = set()
@@ -2019,23 +2322,55 @@ class ReviewTaskExecutor:
                 seen.add(key)
                 unique_optimized.append(item)
 
-        # === 翻译扩展 ===
-        print(f"[阶段2] 翻译扩展:")
+        # === 翻译扩展（使用上下文感知翻译）===
+        print(f"[阶段2] 翻译扩展（上下文感知）:")
         try:
-            from services.keyword_translator import translate_search_queries
+            from services.contextual_keyword_translator import translate_keywords_contextual
 
-            # 启用翻译功能
-            translated_queries = await translate_search_queries(
-                queries=unique_optimized,
-                translate=True
-            )
+            # 收集需要翻译的中文关键词
+            zh_keywords = [q['query'] for q in unique_optimized if q.get('lang') == 'zh']
 
-            # 合并原文和翻译后的查询
-            unique_optimized = translated_queries
+            if zh_keywords:
+                # 使用上下文感知翻译（传入研究方向以提高相关性）
+                translations = await translate_keywords_contextual(
+                    keywords=zh_keywords,
+                    topic=topic,
+                    target_lang='en',
+                    research_direction_id=research_direction
+                )
+
+                # 为每个翻译生成查询
+                translated_queries = []
+                for original_query, translated_query in translations.items():
+                    # 找到原始查询的配置
+                    original_config = None
+                    for q in unique_optimized:
+                        if q['query'] == original_query:
+                            original_config = q
+                            break
+
+                    if original_config:
+                        # 为每个英文数据源添加翻译后的查询
+                        for source in english_sources:
+                            translated_queries.append({
+                                'query': translated_query,
+                                'lang': 'en',
+                                'source': source,
+                                'original_query': original_query,
+                                'is_translation': True,
+                                'context_aware': True  # 标记为上下文感知翻译
+                            })
+
+                # 合并原文和翻译后的查询
+                unique_optimized.extend(translated_queries)
+
+                print(f"[阶段2] 上下文翻译完成: {len(translations)} 个关键词")
+            else:
+                print(f"[阶段2] 没有中文关键词需要翻译")
 
         except Exception as e:
-            print(f"[阶段2] 翻译扩展失败: {e}")
-            print(f"[阶段2] 使用原文查询继续")
+            print(f"[阶段2] 上下文翻译失败: {e}")
+            print(f"[阶段2] 回退到原文查询")
 
         # === 阶段2 输出 ===
         print(f"[阶段2] 输出:")
@@ -2185,8 +2520,9 @@ class ReviewTaskExecutor:
         optimized = []
 
         # 数据源语言映射
-        english_sources = ['openalex', 'crossref', 'datacite']
-        chinese_sources = ['aminer', 'semantic_scholar', 'chinese_doi']
+        # Semantic Scholar 主要是英文数据库（虽然也有一定中文支持）
+        english_sources = ['openalex', 'crossref', 'datacite', 'semantic_scholar']
+        chinese_sources = ['aminer', 'chinese_doi']
 
         # 获取学术用语库的同义词
         synonym_keywords = await self._get_synonyms_from_term_library(topic)
@@ -2282,7 +2618,11 @@ class ReviewTaskExecutor:
             return []
 
     def _to_english_query(self, query: str) -> str:
-        """将查询转换为英文"""
+        """将查询转换为英文
+
+        注意：此方法已被弃用，翻译应该在阶段2（关键词优化）时完成。
+        这里只保留基本功能作为后备方案。
+        """
         # 如果已经是英文，直接返回
         if self._is_english(query):
             return query
@@ -2292,7 +2632,8 @@ class ReviewTaskExecutor:
         if english_words:
             return ' '.join(english_words)
 
-        # 如果没有英文，返回空
+        # 如果没有英文，返回空（不应该到达这里，因为翻译应该在阶段2完成）
+        print(f"[警告] 查询 '{query}' 在阶段2没有被翻译，搜索可能失败")
         return ''
 
     def _to_chinese_query(self, query: str) -> str:
@@ -2464,7 +2805,14 @@ class ReviewTaskExecutor:
         print("[阶段1] 生成综述大纲和搜索关键词")
         print("=" * 80)
 
-        outline = await self._generate_review_outline(topic)
+        # 获取研究方向参数
+        research_direction = params.get('research_direction', '')
+        if research_direction:
+            print(f"[阶段1] 使用研究方向: {research_direction}")
+        else:
+            print(f"[阶段1] 未指定研究方向，将由LLM自动推断")
+
+        outline = await self._generate_review_outline(topic, research_direction)
         framework = {'outline': outline}
 
         print(f"[阶段1] 大纲和关键词生成完成:")
@@ -2495,9 +2843,54 @@ class ReviewTaskExecutor:
 
         # 准备搜索查询（将关键词转换为查询格式）
         search_queries = []
+
+        # 1. 添加大纲中的中文关键词
         for keywords in section_keywords.values():
             for kw in keywords:
                 search_queries.append({'query': kw, 'lang': 'mixed'})
+
+        # 2. 添加英文关键词（直接调用 LLM 生成）
+        # 从主题中提取研究对象
+        research_object = topic.split('的')[0] if '的' in topic else topic
+        optimization_goal = '算法实现及应用' if '算法实现及应用' in topic or 'algorithm implementation' in topic.lower() else ''
+        methodology = 'symbolic computation' if 'symbolic' in topic.lower() or '符号' in topic else ''
+
+        keywords_data = await gen._generate_dynamic_keywords(
+            title=topic,
+            research_object=research_object,
+            optimization_goal=optimization_goal,
+            methodology=methodology
+        )
+
+        # 提取英文关键词
+        object_keywords = keywords_data.get('object_keywords', [])
+        method_keywords = keywords_data.get('method_keywords', [])
+        goal_keywords = keywords_data.get('goal_keywords', [])
+
+        all_english_keywords = object_keywords + method_keywords + goal_keywords
+
+        # 过滤掉过于通用的单个词和包含未扩展 CAS 的关键词
+        generic_single_words = {'algorithm', 'method', 'system', 'approach', 'technique', 'model'}
+        filtered_english_keywords = []
+        for kw in all_english_keywords:
+            # 过滤条件：
+            # 1. 不是单个通用词
+            # 2. 长度大于3
+            # 3. 如果包含 CAS，必须同时包含 Computer Algebra（已扩展）
+            is_generic = kw.lower() in generic_single_words
+            is_too_short = len(kw) <= 3
+            has_unexpanded_cas = 'CAS' in kw and 'Computer Algebra' not in kw
+
+            if not is_generic and not is_too_short and not has_unexpanded_cas:
+                filtered_english_keywords.append(kw)
+
+        print(f"[阶段1] LLM 生成的英文关键词: {len(filtered_english_keywords)} 个")
+        for kw in filtered_english_keywords[:8]:
+            print(f"  - {kw}")
+
+        # 添加英文关键词到搜索查询
+        for kw in filtered_english_keywords:
+            search_queries.append({'query': kw, 'lang': 'en'})
 
         # 记录阶段1完成
         stage_recorder.record_outline_generation(
@@ -2525,7 +2918,8 @@ class ReviewTaskExecutor:
 
         optimized_queries = await self._optimize_search_queries_basic(
             search_queries=search_queries,
-            topic=topic
+            topic=topic,
+            research_direction=research_direction
         )
 
         print(f"[阶段2] 搜索词优化完成:")

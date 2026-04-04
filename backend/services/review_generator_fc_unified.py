@@ -107,8 +107,8 @@ class ReviewGeneratorFCUnified:
 
         # 根据论文数量动态设置迭代次数
         # 现在使用批量获取，只需要 1 次工具调用即可获取所有需要的论文详情
-        # 设置 5 轮应该足够（包括可能的搜索等额外操作）
-        max_iterations = 5
+        # 设置 8 轮应该足够（包括可能的搜索等额外操作）
+        max_iterations = 8
         iteration = 0
         content = None  # 初始化 content 变量
 
@@ -232,8 +232,21 @@ class ReviewGeneratorFCUnified:
         if content is None:
             print(f"[错误] 生成失败：LLM 没有返回任何内容")
             print(f"[错误] 可能原因：达到最大迭代次数 ({max_iterations}) 但 LLM 仍在调用工具")
-            # 返回空内容
-            return "", []
+            print(f"[错误] 已访问论文数: {len(accessed_papers)} 篇")
+
+            # 如果已经访问了一些论文，尝试生成简化版综述
+            if len(accessed_papers) >= 5:
+                print(f"[补救] 尝试生成简化版综述（基于已访问的 {len(accessed_papers)} 篇论文）")
+                content = await self._generate_fallback_review(
+                    topic,
+                    list(accessed_papers.values()),
+                    framework,
+                    client,
+                    model
+                )
+            else:
+                # 返回空内容
+                return "", []
 
         # === 引用验证和修正 ===
         # 验证并修正内容中的引用，确保所有引用都在有效范围内
@@ -731,18 +744,21 @@ class ReviewGeneratorFCUnified:
 - **不要过度引用同一篇论文**：同一篇论文不要被引用超过2次
 - **优先引用高被引论文**（可通过工具查看 cited_by_count）
 - **每个小节至少引用 8-10 篇论文**
+- **正文中引用格式**：使用"作者(年份)"格式，如"Zhang et al. (2023)提出..."或"(Zhang et al., 2023)"
+- **禁止在正文中直接使用论文标题作为引用方式**
 
 **工具调用要求**（必须严格遵守）：
 - **首先判断综述需要引用哪些论文**
 - **一次性调用 get_multiple_paper_details 工具，传入所有需要引用的论文索引**
 - **这是唯一的工具调用，获取足够数量的论文详情后开始撰写**
-- 目标是获取至少 {target_citation_count} 篇论文的详情
+- 目标是获取 {target_citation_count} 篇论文的详情（如果候选文献不足，请尽可能多地引用相关文献）
 
 **重要：主动引用策略**
 - 根据主题和大纲，主动判断需要引用哪些论文
-- 每个小节至少需要引用 8-10 篇论文
+- 每个小节尽可能多地引用相关文献（建议 5-8 篇）
 - 一次性获取所有相关论文的详情，然后开始撰写
 - 即使某个观点看起来很明显，也要找到相关文献来支持
+- **如果候选文献数量不足 {target_citation_count} 篇，请尽可能多地引用所有可用的高质量文献**
 
 **语言要求**：
 - 只使用中文撰写
@@ -1318,6 +1334,82 @@ class ReviewGeneratorFCUnified:
                     print(f"[去重] 替换重复文献: {paper.get('title', 'N/A')[:50]}... (被引: {current_citations} > {existing_citations})")
 
         return unique_papers
+
+    async def _generate_fallback_review(
+        self,
+        topic: str,
+        papers: List[Dict],
+        framework: dict,
+        client: Any,
+        model: str
+    ) -> str:
+        """
+        生成简化版综述（用于主流程失败时的补救）
+
+        Args:
+            topic: 论文主题
+            papers: 已访问的论文列表
+            framework: 框架信息
+            client: OpenAI 客户端
+            model: 模型名称
+
+        Returns:
+            简化版综述内容
+        """
+        print(f"[简化版综述] 基于 {len(papers)} 篇论文生成")
+
+        outline = framework.get('outline', {})
+        body_sections = outline.get('body_sections', [])
+
+        # 构建简化版综述
+        fallback_prompt = f"""请基于以下论文列表，生成一篇简化的文献综述。
+
+**论文主题**: {topic}
+
+**可用论文** ({len(papers)} 篇):
+{chr(10).join(f"{i}. {p.get('title', 'N/A')} ({p.get('year', 'N/A')})" for i, p in enumerate(papers, 1))}
+
+**综述要求**:
+1. **引言**: 简要介绍研究背景和意义（2-3段）
+2. **主体内容**: 根据以下章节结构撰写（每章节2-3段）
+{chr(10).join(f"- {s.get('title', '')}: {s.get('focus', '')}" for s in body_sections[:3])}
+3. **结论**: 总结研究现状和未来方向（1-2段）
+
+**引用格式**:
+- 使用 "[数字]" 格式引用论文
+- 例如："Zhang et al. [1] 提出了..."
+- 不要编造未列出的论文引用
+
+**语言要求**:
+- 只使用中文
+- 学术化表达
+
+**重要**: 由于文献数量有限，请尽可能充分利用现有文献，生成一篇连贯的综述。
+"""
+
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "你是一个学术写作专家。"},
+                    {"role": "user", "content": fallback_prompt}
+                ],
+                temperature=0.5,
+                max_tokens=8000
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            if content:
+                print(f"[简化版综述] 生成成功，长度: {len(content)} 字符")
+            else:
+                print(f"[简化版综述] 生成失败：LLM 没有返回内容")
+
+            return content
+
+        except Exception as e:
+            print(f"[简化版综述] 生成失败: {e}")
+            return ""
 
 
 # 便捷函数
