@@ -30,19 +30,44 @@ class SemanticScholarService:
         query: str,
         years_ago: int = 5,
         limit: int = 100,
-        min_citations: int = 0
+        min_citations: int = 0,
+        venue: str = None,
+        fields: str = None,
+        year_start: int = None,
+        year_end: int = None,
+        sort: str = None,
+        open_access_pdf: bool = False
     ) -> List[Dict]:
         """
-        搜索论文
+        搜索论文（支持高级搜索）
 
         Args:
-            query: 搜索关键词
-            years_ago: 近N年
-            limit: 返回数量
+            query: 搜索关键词（支持布尔查询：AND, OR, NOT）
+            years_ago: 近N年（当 year_start/year_end 未设置时使用）
+            limit: 返回数量（默认100，最大100）
             min_citations: 最小被引量
+            venue: 期刊/会议名称过滤
+            fields: 自定义返回字段（逗号分隔）
+            year_start: 起始年份（如 2021）
+            year_end: 结束年份（如 2024）
+            sort: 排序方式（citationCount:desc, citationCount:asc, publicationDate:desc, publicationDate:asc）
+            open_access_pdf: 是否只返回有开放获取PDF的论文
 
         Returns:
             论文列表
+
+        高级查询示例:
+            # 按年份范围搜索并按引用量排序
+            search_papers("large language model", year_start="2021", year_end="2024", sort="citationCount:desc")
+
+            # 搜索特定期刊
+            search_papers("attention mechanism", venue="Nature")
+
+            # 布尔查询
+            search_papers("(transformer OR attention) AND (vision OR language)")
+
+            # 只获取开放获取论文
+            search_papers("machine learning", open_access_pdf=True)
         """
         # 速率限制：等待足够时间再发送请求
         import asyncio
@@ -52,24 +77,55 @@ class SemanticScholarService:
                 wait_time = self.request_delay - elapsed
                 await asyncio.sleep(wait_time)
 
-        # 计算截止年份
+        # 计算年份范围
         current_year = datetime.now().year
-        start_year = current_year - years_ago
+        if year_start is None:
+            year_start = current_year - years_ago
+        if year_end is None:
+            year_end = current_year
 
-        # Semantic Scholar 使用年份范围过滤
-        year_range = f"{start_year}-{current_year}"
+        # 默认返回字段
+        default_fields = "paperId,title,authors,year,citationCount,externalIds,publicationDate,journal,abstract,venue,publicationVenue"
+        if fields:
+            default_fields = fields
 
+        # 构建查询参数
         params = {
             "query": query,
-            "fields": "paperId,title,authors,year,citationCount,externalIds,publicationDate,journal,abstract",
+            "fields": default_fields,
             "limit": min(limit, 100),  # Semantic Scholar 默认最大100
-            "year": year_range
         }
+
+        # 年份过滤
+        if year_start and year_end:
+            params["year"] = f"{year_start}-{year_end}"
+        elif year_start:
+            params["minYear"] = year_start
+        elif year_end:
+            params["maxYear"] = year_end
+
+        # 期刊/会议过滤
+        if venue:
+            params["venue"] = venue
+
+        # 排序
+        if sort:
+            params["sort"] = sort
+
+        # 开放获取过滤
+        if open_access_pdf:
+            params["openAccessPdf"] = ""
 
         # 如果有 API key，添加到请求头
         headers = {}
         if self.api_key:
             headers["x-api-key"] = self.api_key
+
+        print(f"[Semantic Scholar] 搜索参数: query=\"{query[:50]}...\", year={year_start}-{year_end}, limit={limit}")
+        if sort:
+            print(f"[Semantic Scholar] 排序: {sort}")
+        if venue:
+            print(f"[Semantic Scholar] 期刊: {venue}")
 
         # 重试机制
         for attempt in range(self.max_retries):
@@ -213,5 +269,197 @@ class SemanticScholarService:
         non_ascii = sum(1 for c in text if ord(c) > 127)
         return non_ascii / len(text) < 0.3
 
+    async def search_by_venue(
+        self,
+        query: str,
+        venue: str,
+        years_ago: int = 5,
+        limit: int = 100,
+        min_citations: int = 0,
+        sort: str = "citationCount:desc"
+    ) -> List[Dict]:
+        """
+        在特定期刊/会议中搜索论文
+
+        Args:
+            query: 搜索关键词
+            venue: 期刊/会议名称（如 "Nature", "NeurIPS", "ICML"）
+            years_ago: 近N年
+            limit: 返回数量
+            min_citations: 最小被引量
+            sort: 排序方式
+
+        Returns:
+            论文列表
+        """
+        return await self.search_papers(
+            query=query,
+            venue=venue,
+            years_ago=years_ago,
+            limit=limit,
+            min_citations=min_citations,
+            sort=sort
+        )
+
+    async def search_recent_highly_cited(
+        self,
+        query: str,
+        year_start: int = None,
+        year_end: int = None,
+        min_citations: int = 10,
+        limit: int = 50
+    ) -> List[Dict]:
+        """
+        搜索近期高被引论文
+
+        Args:
+            query: 搜索关键词
+            year_start: 起始年份（默认为3年前）
+            year_end: 结束年份（默认为当前年份）
+            min_citations: 最小被引量（默认10）
+            limit: 返回数量
+
+        Returns:
+            论文列表（按引用量降序）
+        """
+        current_year = datetime.now().year
+        if year_start is None:
+            year_start = current_year - 3
+        if year_end is None:
+            year_end = current_year
+
+        return await self.search_papers(
+            query=query,
+            year_start=year_start,
+            year_end=year_end,
+            min_citations=min_citations,
+            limit=limit,
+            sort="citationCount:desc"
+        )
+
+    async def search_top_venues(
+        self,
+        query: str,
+        venues: List[str],
+        years_ago: int = 5,
+        limit_per_venue: int = 20
+    ) -> List[Dict]:
+        """
+        在多个顶级期刊/会议中搜索论文
+
+        Args:
+            query: 搜索关键词
+            venues: 期刊/会议列表（如 ["Nature", "Science", "Cell"]）
+            years_ago: 近N年
+            limit_per_venue: 每个期刊返回的论文数量
+
+        Returns:
+            论文列表
+        """
+        all_papers = []
+        seen_ids = set()
+
+        for venue in venues:
+            papers = await self.search_by_venue(
+                query=query,
+                venue=venue,
+                years_ago=years_ago,
+                limit=limit_per_venue
+            )
+
+            # 去重
+            for paper in papers:
+                paper_id = paper.get("id")
+                if paper_id and paper_id not in seen_ids:
+                    seen_ids.add(paper_id)
+                    all_papers.append(paper)
+
+        # 按引用量排序
+        all_papers.sort(key=lambda p: p.get("cited_by_count", 0), reverse=True)
+        return all_papers
+
     async def close(self):
         await self.client.aclose()
+
+
+# ==================== 高级搜索示例 ====================
+
+async def example_advanced_search():
+    """Semantic Scholar 高级搜索示例"""
+    import os
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+    service = SemanticScholarService(api_key=api_key)
+
+    try:
+        print("=" * 80)
+        print("Semantic Scholar 高级搜索示例")
+        print("=" * 80)
+
+        # 示例1: 搜索2021-2024年的LLM论文，按引用量排序
+        print("\n[示例1] 搜索2021-2024年的LLM高被引论文")
+        papers = await service.search_papers(
+            query="large language model",
+            year_start=2021,
+            year_end=2024,
+            limit=20,
+            sort="citationCount:desc"
+        )
+        print(f"找到 {len(papers)} 篇论文")
+        for i, p in enumerate(papers[:5], 1):
+            print(f"  {i}. [{p.get('year')}] {p.get('title')[:60]}... (引用: {p.get('cited_by_count')})")
+
+        # 示例2: 在特定期刊中搜索
+        print("\n[示例2] 在 Nature 中搜索 transformer 论文")
+        papers = await service.search_by_venue(
+            query="transformer architecture",
+            venue="Nature",
+            years_ago=5,
+            limit=10
+        )
+        print(f"找到 {len(papers)} 篇论文")
+        for i, p in enumerate(papers[:3], 1):
+            print(f"  {i}. {p.get('title')[:60]}...")
+
+        # 示例3: 布尔查询
+        print("\n[示例3] 布尔查询: (transformer OR attention) AND vision")
+        papers = await service.search_papers(
+            query="(transformer OR attention) AND vision",
+            years_ago=3,
+            limit=10,
+            sort="citationCount:desc"
+        )
+        print(f"找到 {len(papers)} 篇论文")
+        for i, p in enumerate(papers[:3], 1):
+            print(f"  {i}. {p.get('title')[:60]}...")
+
+        # 示例4: 搜索顶级期刊
+        print("\n[示例4] 在顶级期刊中搜索 symbolic computation")
+        top_venues = [
+            "Journal of Symbolic Computation",
+            "Journal of the ACM",
+            "SIAM Journal on Computing"
+        ]
+        papers = await service.search_top_venues(
+            query="symbolic computation OR computer algebra",
+            venues=top_venues,
+            years_ago=10,
+            limit_per_venue=10
+        )
+        print(f"找到 {len(papers)} 篇论文")
+        for i, p in enumerate(papers[:5], 1):
+            venue = p.get('venue', 'Unknown')
+            print(f"  {i}. [{venue}] {p.get('title')[:60]}...")
+
+        print("\n" + "=" * 80)
+
+    finally:
+        await service.close()
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(example_advanced_search())
