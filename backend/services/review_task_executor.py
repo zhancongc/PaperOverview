@@ -21,13 +21,26 @@ class ReviewTaskExecutor:
     """综述生成任务执行器"""
 
     def __init__(self):
+        self.filter_service = PaperFilterService()
+        self.record_service = ReviewRecordService()
+        self._legacy_initialized = False
+
+    def _ensure_legacy_services(self):
+        """惰性初始化旧方法需要的服务（仅被 search_papers_only 等旧端点调用）"""
+        if self._legacy_initialized:
+            return
+        from services.scholarflux_wrapper import ScholarFlux
+        from services.smart_paper_search import SmartPaperSearchService
+        from services.paper_field_classifier import EnhancedPaperFilterService
+        from services.reference_validator import ReferenceValidator
+        from services.citation_order_checker import CitationOrderChecker
+        from database import get_db
         self.scholarflux = ScholarFlux()
         self.search_service = SmartPaperSearchService(self.scholarflux, get_db)
-        self.filter_service = PaperFilterService()
         self.enhanced_filter_service = EnhancedPaperFilterService()
-        self.record_service = ReviewRecordService()
         self.validator = ReferenceValidator()
         self.citation_checker = CitationOrderChecker()
+        self._legacy_initialized = True
 
     async def execute_task(self, task_id: str, db_session: Session):
         """
@@ -3046,6 +3059,9 @@ class ReviewTaskExecutor:
             if progress_callback:
                 progress_callback(message)
 
+        # 确保旧服务已初始化
+        self._ensure_legacy_services()
+
         # === 阶段1: 生成大纲和搜索关键词 ===
         task_manager.update_task_status(
             task_id,
@@ -3329,6 +3345,9 @@ class ReviewTaskExecutor:
         framework = None
         all_papers = []
         filtered_papers = []
+
+        # 确保旧服务已初始化
+        self._ensure_legacy_services()
 
         # 生成任务ID
         task_id = str(uuid.uuid4())[:8]
