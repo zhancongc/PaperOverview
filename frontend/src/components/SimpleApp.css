@@ -1,0 +1,855 @@
+/* ==================== 学术风格设计 - 红白配色 ==================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+Pro:wght@300;400;600;700&display=swap');
+
+:root {
+  --academic-red: #D63031;
+  --academic-red-dark: #B71C1C;
+  --academic-red-light: #FF5252;
+  --cream-white: #FFFBF5;
+  --pure-white: #FFFFFF;
+  --ink-black: #1A1A1A;
+  --charcoal: #2D3436;
+  --text-gray: #636E72;
+  --light-gray: #DFE6E9;
+  --border-gray: #E8ECEF;
+}
+
+.simple-home {
+  min-height: 100vh;
+  background: var(--cream-white);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 装饰性背景元素 */
+.simple-home::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  right: -20%;
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(214, 48, 49, 0.05) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.simple-home::after {
+  content: '';
+  position: fixed;
+  bottom: -30%;
+  left: -10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(214, 48, 49, 0.03) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==================== 顶部导航栏 ==================== */
+
+.home-nav {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  padding: 1.5rem 3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-gray);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  position: relative;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+}
+
+.logo-icon {
+  font-size: 1.75rem;
+  filter: drop-shadow(0 2px 4px rgba(214, 48, 49, 0.2));
+}
+
+.logo-text {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ink-black);
+  letter-spacing: -0.02em;
+}
+
+.nav-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.auth-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.nav-btn {
+  padding: 0.65rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.nav-btn-login {
+  background: transparent;
+  color: var(--charcoal);
+  border: 1.5px solid var(--light-gray);
+}
+
+.nav-btn-login:hover {
+  background: var(--cream-white);
+  border-color: var(--academic-red);
+  color: var(--academic-red);
+  transform: translateY(-1px);
+}
+
+.nav-btn-register {
+  background: var(--academic-red);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(214, 48, 49, 0.25);
+}
+
+.nav-btn-register:hover {
+  background: var(--academic-red-dark);
+  box-shadow: 0 6px 20px rgba(214, 48, 49, 0.35);
+  transform: translateY(-2px);
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  background: var(--cream-white);
+  border: 1px solid var(--border-gray);
+  border-radius: 10px;
+  color: var(--charcoal);
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: 'Source Sans Pro', sans-serif;
+}
+
+.user-info:hover {
+  background: white;
+  border-color: var(--academic-red);
+  box-shadow: 0 2px 8px rgba(214, 48, 49, 0.1);
+}
+
+.user-avatar {
+  font-size: 1.3rem;
+}
+
+.user-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.nav-btn-logout {
+  padding: 0.6rem 1.25rem;
+  background: white;
+  color: var(--text-gray);
+  border: 1.5px solid var(--light-gray);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.nav-btn-logout:hover {
+  background: var(--cream-white);
+  border-color: var(--academic-red);
+  color: var(--academic-red);
+}
+
+/* ==================== 主内容区 - 大气布局 ==================== */
+
+.home-container {
+  width: 100%;
+  max-width: 1200px;
+  background: transparent;
+  border-radius: 0;
+  padding: 4rem 3rem;
+  margin: 0 auto;
+  box-shadow: none;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+/* Hero 区域 - 左右分栏 */
+
+.home-hero-wrapper {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 4rem;
+  align-items: center;
+  margin-bottom: 5rem;
+}
+
+.home-hero {
+  text-align: left;
+  margin-bottom: 0;
+}
+
+.hero-accent {
+  display: inline-block;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--academic-red);
+  margin-bottom: 1.25rem;
+  padding: 0.4rem 1rem;
+  background: rgba(214, 48, 49, 0.08);
+  border-radius: 50px;
+}
+
+.home-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--ink-black);
+  margin: 0 0 1.5rem 0;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.home-title .highlight {
+  color: var(--academic-red);
+  position: relative;
+  display: inline-block;
+}
+
+.home-subtitle {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 1.15rem;
+  color: var(--text-gray);
+  margin: 0;
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+/* Hero 右侧装饰 */
+
+.hero-visual {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.visual-card {
+  background: white;
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-gray);
+  position: relative;
+  overflow: hidden;
+}
+
+.visual-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--academic-red) 0%, var(--academic-red-light) 100%);
+}
+
+.visual-icon-large {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.visual-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.visual-stat {
+  text-align: center;
+}
+
+.visual-stat-number {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--academic-red);
+  display: block;
+}
+
+.visual-stat-label {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.85rem;
+  color: var(--text-gray);
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+/* ==================== 输入区域 ==================== */
+
+.home-input-section {
+  background: white;
+  border-radius: 24px;
+  padding: 3rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-gray);
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.input-section-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.input-section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--ink-black);
+  margin-bottom: 0.5rem;
+}
+
+.input-section-subtitle {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.95rem;
+  color: var(--text-gray);
+}
+
+.home-input {
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  font-size: 1rem;
+  border: 2px solid var(--border-gray);
+  border-radius: 16px;
+  outline: none;
+  transition: all 0.3s;
+  margin-bottom: 1.5rem;
+  box-sizing: border-box;
+  font-family: 'Source Sans Pro', sans-serif;
+  background: var(--cream-white);
+}
+
+.home-input:focus {
+  border-color: var(--academic-red);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(214, 48, 49, 0.1);
+}
+
+.home-input::placeholder {
+  color: #B2BEC3;
+}
+
+.home-input:disabled {
+  background: var(--light-gray);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.home-button {
+  width: 100%;
+  padding: 1.15rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--academic-red) 0%, var(--academic-red-dark) 100%);
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'Source Sans Pro', sans-serif;
+  letter-spacing: 0.02em;
+  box-shadow: 0 8px 24px rgba(214, 48, 49, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.home-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.home-button:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.home-button:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(214, 48, 49, 0.45);
+}
+
+.home-button:active:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.home-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ==================== 错误提示 ==================== */
+
+.home-error {
+  padding: 1rem 1.25rem;
+  background: rgba(214, 48, 49, 0.08);
+  border: 1px solid rgba(214, 48, 49, 0.2);
+  color: var(--academic-red-dark);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-weight: 600;
+}
+
+/* ==================== 进度条 ==================== */
+
+.home-progress {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--cream-white);
+  border-radius: 16px;
+  border: 1px solid var(--border-gray);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--light-gray);
+  border-radius: 50px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--academic-red) 0%, var(--academic-red-light) 100%);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50px;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-message {
+  text-align: center;
+  color: var(--charcoal);
+  font-size: 0.95rem;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-weight: 600;
+}
+
+/* ==================== 特性展示 - 三列布局 ==================== */
+
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  padding-top: 0;
+  border-top: none;
+  margin-top: 5rem;
+}
+
+.feature-item {
+  text-align: left;
+  background: white;
+  padding: 2rem;
+  border-radius: 20px;
+  border: 1px solid var(--border-gray);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--academic-red);
+  transform: scaleX(0);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feature-item:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  border-color: rgba(214, 48, 49, 0.2);
+}
+
+.feature-item:hover::before {
+  transform: scaleX(1);
+}
+
+.feature-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1.25rem;
+  display: block;
+  filter: drop-shadow(0 4px 8px rgba(214, 48, 49, 0.2));
+}
+
+.feature-title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  color: var(--ink-black);
+  margin-bottom: 0.5rem;
+  font-size: 1.25rem;
+}
+
+.feature-desc {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.95rem;
+  color: var(--text-gray);
+  line-height: 1.7;
+}
+
+/* ==================== 竞品对比 ==================== */
+
+.comparison-section {
+  margin-top: 2.5rem;
+  text-align: center;
+}
+
+.comparison-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--ink-black);
+  margin-bottom: 3rem;
+  letter-spacing: -0.02em;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1.25rem;
+}
+
+.comparison-card {
+  background: white;
+  border-radius: 20px;
+  padding: 1.75rem 1.5rem;
+  border: 2px solid var(--border-gray);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.comparison-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+.comparison-card.highlight {
+  border-color: var(--academic-red);
+  background: linear-gradient(180deg, rgba(214, 48, 49, 0.05) 0%, white 100%);
+  box-shadow: 0 8px 24px rgba(214, 48, 49, 0.15);
+}
+
+.comparison-card.highlight:hover {
+  box-shadow: 0 16px 40px rgba(214, 48, 49, 0.25);
+}
+
+.comparison-card-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-gray);
+}
+
+.comparison-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.comparison-card-title {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--charcoal);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.comparison-card.highlight .comparison-card-title {
+  color: var(--academic-red);
+}
+
+.comparison-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.comparison-item {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: left;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.comparison-item:hover {
+  background: var(--cream-white);
+}
+
+.comparison-item.positive {
+  color: var(--charcoal);
+  font-weight: 500;
+}
+
+.comparison-item.negative {
+  color: var(--text-gray);
+}
+
+/* ==================== 页脚 ==================== */
+
+.home-footer {
+  text-align: center;
+  padding: 2.5rem 3rem;
+  color: var(--text-gray);
+  font-size: 0.9rem;
+  font-family: 'Source Sans Pro', sans-serif;
+  border-top: 1px solid var(--border-gray);
+  background: white;
+  margin-top: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.footer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.footer-copyright {
+  margin: 0;
+  font-weight: 600;
+  color: var(--charcoal);
+}
+
+.footer-icp {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-gray);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-icp:hover {
+  color: var(--academic-red);
+}
+
+/* ==================== 响应式设计 ==================== */
+
+@media (min-width: 1400px) {
+  .home-container {
+    max-width: 1400px;
+    padding: 5rem 4rem;
+  }
+
+  .home-title {
+    font-size: 4rem;
+  }
+}
+
+@media (max-width: 1200px) {
+  .comparison-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  .home-hero-wrapper {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+
+  .home-hero {
+    text-align: center;
+  }
+
+  .home-subtitle {
+    margin: 0 auto;
+  }
+
+  .hero-visual {
+    order: -1;
+  }
+
+  .home-features {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .comparison-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .comparison-title {
+    font-size: 1.875rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-nav {
+    padding: 1rem 1.5rem;
+  }
+
+  .logo-text {
+    font-size: 1.1rem;
+  }
+
+  .nav-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .home-container {
+    padding: 2.5rem 1.5rem;
+  }
+
+  .home-title {
+    font-size: 2.5rem;
+  }
+
+  .home-input-section {
+    padding: 2rem 1.5rem;
+  }
+
+  .input-section-title {
+    font-size: 1.5rem;
+  }
+
+  .home-features {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: flex-start;
+    text-align: left;
+    gap: 1.25rem;
+    padding: 1.5rem;
+  }
+
+  .feature-icon {
+    font-size: 2rem;
+    margin-bottom: 0;
+  }
+
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-title {
+    font-size: 1.625rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-nav {
+    padding: 0.875rem 1rem;
+  }
+
+  .auth-buttons {
+    gap: 0.5rem;
+  }
+
+  .nav-btn {
+    padding: 0.4rem 0.875rem;
+    font-size: 0.8rem;
+  }
+
+  .logo-text {
+    font-size: 1rem;
+  }
+
+  .home-container {
+    padding: 2rem 1rem;
+  }
+
+  .home-title {
+    font-size: 2.1rem;
+  }
+
+  .home-input-section {
+    padding: 1.75rem 1.25rem;
+    border-radius: 20px;
+  }
+
+  .home-footer {
+    padding: 2rem 1.5rem;
+  }
+}

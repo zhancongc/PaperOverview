@@ -9,17 +9,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from services.task_manager import TaskManager, TaskStatus, task_manager
-from services.smart_paper_search import SmartPaperSearchService
 from services.paper_filter import PaperFilterService
-from services.paper_field_classifier import EnhancedPaperFilterService
-from services.review_generator import ReviewGeneratorService
-from services.review_generator_fc_unified import ReviewGeneratorFCUnified
-from services.reference_validator import ReferenceValidator
+from services.smart_review_generator_final import SmartReviewGeneratorFinal
+from services.semantic_scholar_search import SemanticScholarService
+from services.citation_validator_v2 import CitationValidatorV2
 from services.review_record_service import ReviewRecordService
-from services.citation_order_checker import CitationOrderChecker
-from services.scholarflux_wrapper import ScholarFlux
 from services.stage_recorder import stage_recorder
-from database import get_db
 
 
 class ReviewTaskExecutor:
@@ -36,7 +31,10 @@ class ReviewTaskExecutor:
 
     async def execute_task(self, task_id: str, db_session: Session):
         """
-        执行综述生成任务
+        执行综述生成任务（2 阶段流程）
+
+        阶段1: Semantic Scholar 搜索文献
+        阶段2: SmartReviewGeneratorFinal 生成综述
 
         Args:
             task_id: 任务ID
@@ -50,7 +48,6 @@ class ReviewTaskExecutor:
         # 尝试获取执行槽位（并发控制）
         acquired = await task_manager.acquire_slot(task_id)
         if not acquired:
-            # 无法获取槽位，等待当前任务完成后再重试
             print(f"[TaskExecutor] 无法获取执行槽位，任务 {task_id} 将等待")
             task_manager.update_task_status(
                 task_id,
@@ -62,10 +59,8 @@ class ReviewTaskExecutor:
         params = task.params
         topic = task.topic
 
-        # 创建任务记录（使用stage_recorder）
+        # 创建任务记录
         stage_recorder.create_task(task_id, topic, params)
-
-        # 更新状态为处理中
         task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
 
         try:
@@ -78,117 +73,131 @@ class ReviewTaskExecutor:
                 english_ratio=params.get('english_ratio', 0.3)
             )
 
-            # === 执行阶段1-4：文献搜索和筛选（共同逻辑）===
-            search_result = await self._search_and_filter_papers(
-                topic=topic,
-                params=params,
-                task_id=task_id
+            # =====================================================
+            # 阶段1: Semantic Scholar 搜索文献
+            # =====================================================
+            print("\n" + "=" * 80)
+            print(f"[阶段1] 搜索文献: {topic}")
+            print("=" * 80)
+
+            task_manager.update_task_status(
+                task_id,
+                TaskStatus.PROCESSING,
+                progress={"step": "searching", "message": "正在搜索文献..."}
             )
 
-            framework = search_result['framework']
-            all_papers = search_result['all_papers']
-            filtered_papers = search_result['filtered_papers']
-            stats = search_result['stats']
-            specificity_guidance = search_result['specificity_guidance']
-            total_count = len(filtered_papers)
+            semantic_scholar_api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+            ss_service = SemanticScholarService(api_key=semantic_scholar_api_key)
 
-            # === 阶段5: 生成综述（Function Calling 统一版本） ===
+            try:
+                # 用主题搜索，按引用量排序，取尽可能多的论文
+                all_papers = await ss_service.search_papers(
+                    query=topic,
+                    years_ago=params.get('search_years', 10),
+                    limit=100,
+                    sort="citationCount:desc"
+                )
+
+                # 如果结果不足，用简化关键词再搜一次
+                if len(all_papers) < 30:
+                    # 取主题核心部分作为补充查询
+                    simple_query = topic.split('的')[0] if '的' in topic else topic
+                    if simple_query != topic:
+                        print(f"[阶段1] 结果不足({len(all_papers)}篇)，用简化关键词补充搜索: {simple_query}")
+                        extra_papers = await ss_service.search_papers(
+                            query=simple_query,
+                            years_ago=params.get('search_years', 10),
+                            limit=100,
+                            sort="citationCount:desc"
+                        )
+                        # 去重合并
+                        seen_ids = {p.get('id') for p in all_papers}
+                        for p in extra_papers:
+                            if p.get('id') not in seen_ids:
+                                seen_ids.add(p.get('id'))
+                                all_papers.append(p)
+
+                print(f"[阶段1] 搜索完成: 共 {len(all_papers)} 篇文献")
+
+            finally:
+                await ss_service.close()
+
+            if not all_papers:
+                raise Exception(f'未找到关于「{topic}」的相关文献')
+
+            MIN_PAPERS_THRESHOLD = 20
+            if len(all_papers) < MIN_PAPERS_THRESHOLD:
+                raise Exception(f'搜索到的文献数量不足，只有 {len(all_papers)} 篇，至少需要 {MIN_PAPERS_THRESHOLD} 篇')
+
+            # 记录阶段1完成
+            stage_recorder.record_paper_search(
+                task_id=task_id,
+                outline={'topic': topic},
+                search_queries_count=1,
+                papers_count=len(all_papers),
+                papers_summary=self.filter_service.get_statistics(all_papers),
+                papers_sample=all_papers[:20]
+            )
+            stage_recorder.update_task_status(task_id, status="processing", current_stage="文献搜索完成")
+
+            # =====================================================
+            # 阶段2: SmartReviewGeneratorFinal 生成综述
+            # =====================================================
             api_key = os.getenv("DEEPSEEK_API_KEY")
-
             if not api_key:
                 raise Exception("DEEPSEEK_API_KEY not configured")
 
-            # 计算目标引用数
-            target_citation_count = params.get('target_count', 50)
-
-            # === 智能调整目标引用数 ===
-            # 如果候选文献数量不足，按比例调整目标引用数
-            available_papers = len(filtered_papers)
-            if available_papers < target_citation_count:
-                # 至少引用 70% 的候选文献，但不超过目标引用数
-                # 使用 round() 四舍五入而不是 int() 向下取整
-                adjusted_target = max(
-                    round(available_papers * 0.7),  # 至少引用 70%
-                    min(20, available_papers)  # 至少引用 20 篇
-                )
-                print(f"\n[阶段5] ⚠️  候选文献数 ({available_papers}) < 目标引用数 ({target_citation_count})")
-                print(f"[阶段5] 调整目标引用数为: {adjusted_target} 篇")
-                target_citation_count = adjusted_target
-
-            print(f"\n[阶段5] 生成综述（Function Calling 统一版本）")
-            print(f"[阶段5] 候选文献数: {total_count} 篇")
-            print(f"[阶段5] 目标引用数: {target_citation_count} 篇")
-            print(f"[阶段5] 使用渐进式信息披露，LLM按需选择最相关的文献")
+            print("\n" + "=" * 80)
+            print(f"[阶段2] 生成综述（最终版）")
+            print(f"[阶段2] 候选文献: {len(all_papers)} 篇")
+            print("=" * 80)
 
             task_manager.update_task_status(
                 task_id,
                 TaskStatus.PROCESSING,
-                progress={"step": "generating", "message": f"正在生成综述（从{total_count}篇候选中选择）..."}
+                progress={"step": "generating", "message": f"正在生成综述（{len(all_papers)}篇文献）..."}
             )
 
-            # 检查参考文献数量
-            MIN_PAPERS_THRESHOLD = 20
-            if len(filtered_papers) < MIN_PAPERS_THRESHOLD:
-                error_msg = f"参考文献数量不足，筛选后只有 {len(filtered_papers)} 篇，至少需要 {MIN_PAPERS_THRESHOLD} 篇才能生成综述"
-                print(f"[错误] {error_msg}")
-
-                task_manager.update_task_status(
-                    task_id,
-                    TaskStatus.FAILED,
-                    error=error_msg
-                )
-
-                # 记录失败状态
-                stage_recorder.record_review_generation(
-                    task_id=task_id,
-                    papers_count=len(filtered_papers),
-                    review_length=0,
-                    citation_count=0,
-                    cited_papers_count=0,
-                    validation_result=None,
-                    review=None,
-                    papers_summary=None,
-                    status="failed",
-                    error_message=error_msg
-                )
-
-                raise ValueError(error_msg)
-
-            # 使用 Function Calling 统一版本生成器
-            fc_generator = ReviewGeneratorFCUnified(api_key=api_key)
-
-            # 确保最小引用数不超过可用文献数
-            min_citation_count = min(
-                params.get('target_count', 50),
-                len(filtered_papers)
+            final_generator = SmartReviewGeneratorFinal(
+                deepseek_api_key=api_key,
+                deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
             )
 
-            # 一次性生成完整综述
-            review, cited_papers = await fc_generator.generate_review(
+            result = await final_generator.generate_review_from_papers(
                 topic=topic,
-                papers=filtered_papers,
-                framework=framework,
-                target_citation_count=target_citation_count,
-                min_citation_count=min_citation_count,
-                recent_years_ratio=params.get('recent_years_ratio', 0.5),
-                english_ratio=params.get('english_ratio', 0.3),
-                specificity_guidance=specificity_guidance,
-                model=params.get('review_model', 'deepseek-reasoner'),  # 默认使用 reasoner 支持长综述生成，思考模式已关闭
-                enable_reasoning=params.get('enable_reasoning', False)  # 默认关闭思考模式
+                papers=all_papers,
+                model=params.get('review_model', 'deepseek-reasoner')
             )
 
-            # 5. 最终验证
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.PROCESSING,
-                progress={"step": "validating", "message": "正在验证引用..."}
-            )
+            review = result["review"]
+            cited_papers = result["cited_papers"]
+            final_validation = result.get("validation", {"valid": True, "issues": []})
 
-            # Function Calling 版本已经在内部处理了引用验证和补充
-            # 这里只做最终验证
-            final_validation = self.validator.validate_review(review=review, papers=cited_papers)
+            # === 额外校验：使用 CitationValidatorV2 ===
+            print("\n[校验] 使用 CitationValidatorV2 进行额外引用校验...")
+            validator_v2 = CitationValidatorV2()
+            validation_result = validator_v2.validate_and_fix(review, cited_papers)
 
-            # 6. 计算统计信息
+            if not validation_result.valid:
+                print(f"[校验] 发现问题: {validation_result.issues}")
+                if validation_result.fixed_content:
+                    print("[校验] 使用修复后的综述内容")
+                    review = validation_result.fixed_content
+                if validation_result.fixed_references:
+                    print(f"[校验] 使用修复后的参考文献 ({len(validation_result.fixed_references)} 篇)")
+                    cited_papers = validation_result.fixed_references
+                final_validation = {
+                    "valid": validation_result.valid,
+                    "issues": validation_result.issues
+                }
+            else:
+                print("[校验] ✓ 引用规范校验通过")
+                # 使用 v2 改进版格式化参考文献（处理 arXiv ID、Unicode 等）
+                improved_refs = validator_v2.format_references_ieee_improved(cited_papers)
+                if "## References" in review:
+                    review = review[:review.index("## References")] + "## References\n\n" + improved_refs
+                    print("[校验] 使用改进版 IEEE 格式化参考文献")
+            # 统计信息
             stats = self.filter_service.get_statistics(cited_papers)
 
             # 标记文献是否被引用
@@ -198,53 +207,48 @@ class ReviewTaskExecutor:
                     paper['relevance_score'] = 0
                 paper['cited'] = paper.get('id') in cited_paper_ids
 
-            # 7. 最终验证
-            final_validation = self.validator.validate_review(review=review, papers=cited_papers)
-
-            # === 记录阶段5完成 ===
+            # 记录阶段2完成
             stage_recorder.update_task_status(task_id, status="processing", current_stage="生成综述")
 
-            # 准备文献摘要（只包含核心字段，避免存储过多数据）
             papers_summary = []
             for p in cited_papers:
                 url = p.get('url') or ''
                 papers_summary.append({
                     'id': p.get('id'),
-                    'title': p.get('title', '')[:200],  # 限制标题长度
-                    'authors': p.get('authors', [])[:5],  # 限制作者数量
+                    'title': p.get('title', '')[:200],
+                    'authors': p.get('authors', [])[:5],
                     'year': p.get('year'),
-                    'venue': (p.get('journal', '') or p.get('venue', ''))[:100],  # 限制来源长度
+                    'venue': (p.get('journal', '') or p.get('venue', ''))[:100],
                     'cited_by_count': p.get('cited_by_count', 0),
-                    'url': url[:500] if url else ''  # 限制URL长度
+                    'url': url[:500] if url else ''
                 })
 
-            # 准备候选文献池摘要（筛选前的所有论文）
             candidate_pool_summary = []
             for p in all_papers:
                 url = p.get('url') or ''
                 candidate_pool_summary.append({
                     'id': p.get('id'),
-                    'title': p.get('title', '')[:200],  # 限制标题长度
-                    'authors': p.get('authors', [])[:5],  # 限制作者数量
+                    'title': p.get('title', '')[:200],
+                    'authors': p.get('authors', [])[:5],
                     'year': p.get('year'),
-                    'venue': (p.get('journal', '') or p.get('venue', ''))[:100],  # 限制来源长度
+                    'venue': (p.get('journal', '') or p.get('venue', ''))[:100],
                     'cited_by_count': p.get('cited_by_count', 0),
-                    'url': url[:500] if url else ''  # 限制URL长度
+                    'url': url[:500] if url else ''
                 })
 
             stage_recorder.record_review_generation(
                 task_id=task_id,
                 papers_count=len(all_papers),
                 review_length=len(review),
-                citation_count=review.count('['),  # 粗略估计引用次数
+                citation_count=review.count('['),
                 cited_papers_count=len(cited_papers),
                 validation_result=final_validation,
-                review=review,  # 存储完整综述内容
-                papers_summary=papers_summary,  # 存储文献摘要
-                candidate_pool_summary=candidate_pool_summary  # 存储候选文献池摘要
+                review=review,
+                papers_summary=papers_summary,
+                candidate_pool_summary=candidate_pool_summary
             )
 
-            # 8. 保存记录
+            # 保存数据库记录
             record = self.record_service.update_success(
                 db_session=db_session,
                 record=record,
@@ -264,14 +268,12 @@ class ReviewTaskExecutor:
                     "papers": cited_papers,
                     "candidate_pool": all_papers,
                     "statistics": stats,
-                    "analysis": framework,
                     "cited_papers_count": len(cited_papers),
                     "validation": final_validation,
                     "created_at": record.created_at.isoformat()
                 }
             )
 
-            # 更新阶段记录器中的任务状态
             stage_recorder.update_task_status(
                 task_id,
                 status="completed",
@@ -284,7 +286,6 @@ class ReviewTaskExecutor:
             import traceback
             traceback.print_exc()
 
-            # 确保槽位被释放（如果还没被释放）
             if task_id in task_manager._running_tasks:
                 task_manager.release_slot(task_id)
 
@@ -294,7 +295,6 @@ class ReviewTaskExecutor:
                 error=str(e)
             )
 
-            # 更新阶段记录器中的任务状态
             stage_recorder.update_task_status(
                 task_id,
                 status="failed",
@@ -303,7 +303,6 @@ class ReviewTaskExecutor:
                 completed_at=datetime.now()
             )
 
-            # 更新数据库记录为失败
             try:
                 if 'record' in locals():
                     self.record_service.update_failure(
