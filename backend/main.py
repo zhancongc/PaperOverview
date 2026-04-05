@@ -655,7 +655,8 @@ async def get_task_review(task_id: str):
             "papers": task.result.get("papers", []),
             "cited_papers_count": task.result.get("cited_papers_count", 0),
             "created_at": task.result.get("created_at", ""),
-            "statistics": task.result.get("statistics", {})
+            "statistics": task.result.get("statistics", {}),
+            "record_id": task.result.get("id")
         }
     }
 

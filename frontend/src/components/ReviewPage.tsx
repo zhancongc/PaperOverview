@@ -39,6 +39,7 @@ export function ReviewPage() {
               title: res.data.topic,
               content: res.data.review,
               papers: res.data.papers || [],
+              recordId: res.data.record_id,
             })
           } else {
             setError('综述不存在或尚未完成')

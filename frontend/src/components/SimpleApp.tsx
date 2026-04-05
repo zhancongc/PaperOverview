@@ -74,51 +74,69 @@ export function SimpleApp() {
       }
 
       const taskId = submitResponse.data.task_id
+      const startTime = Date.now()
+      let pollCount = 0
 
       // 轮询任务状态
-      const pollInterval = setInterval(async () => {
+      const doPoll = async () => {
         try {
           const statusResponse = await api.getTaskStatus(taskId)
 
           if (!statusResponse.success) {
             setError('查询任务状态失败')
             setIsGenerating(false)
-            clearInterval(pollInterval)
             return
           }
 
           const taskInfo = statusResponse.data
 
-          // 更新进度
-          if (taskInfo.progress) {
-            setProgress({
-              step: taskInfo.progress.step,
-              message: taskInfo.progress.message
-            })
+          // 计算预期剩余时间
+          const elapsedMinutes = (Date.now() - startTime) / 1000 / 60
+          let expectedRemainingMinutes = Math.max(0, Math.round(5 - elapsedMinutes))
+
+          // 更新进度消息
+          let progressMessage = taskInfo.progress?.message || '正在处理...'
+          if (expectedRemainingMinutes > 0) {
+            progressMessage += `（预期还有${expectedRemainingMinutes}分钟）`
           }
+
+          // 更新进度
+          setProgress({
+            step: taskInfo.progress?.step || 'processing',
+            message: progressMessage
+          })
 
           // 检查是否完成
           if (taskInfo.status === 'completed' && taskInfo.result) {
-            clearInterval(pollInterval)
             setProgress({ step: 'completed', message: '生成完成！正在跳转...' })
 
             // 跳转到综述展示页面（通过 task_id 访问，可分享）
             setTimeout(() => {
               navigate(`/review/${taskId}`)
             }, 500)
+            return
 
           } else if (taskInfo.status === 'failed') {
-            clearInterval(pollInterval)
             setError(taskInfo.error || '任务执行失败')
             setIsGenerating(false)
+            return
           }
+
+          // 继续轮询：前2分钟15秒一次，之后5秒一次
+          pollCount++
+          const elapsed = Date.now() - startTime
+          const nextInterval = elapsed < 2 * 60 * 1000 ? 15000 : 5000
+          setTimeout(doPoll, nextInterval)
+
         } catch (err) {
-          clearInterval(pollInterval)
           setError('查询任务状态出错')
           setIsGenerating(false)
           console.error(err)
         }
-      }, 2000)
+      }
+
+      // 开始第一次轮询
+      setTimeout(doPoll, 1000)
 
     } catch (err) {
       setError('提交任务失败，请检查后端服务是否正常运行')

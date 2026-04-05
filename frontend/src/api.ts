@@ -133,6 +133,7 @@ export const api = {
     cited_papers_count: number;
     created_at: string;
     statistics: any;
+    record_id?: number;
   } }> {
     const response = await axios.get(`${API_BASE}/tasks/${taskId}/review`);
     return response.data;

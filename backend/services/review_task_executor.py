@@ -168,7 +168,7 @@ class ReviewTaskExecutor:
             task_manager.update_task_status(
                 task_id,
                 TaskStatus.PROCESSING,
-                progress={"step": "generating", "message": f"正在生成综述（{len(all_papers)}篇文献）..."}
+                progress={"step": "generating", "message": "正在生成综述..."}
             )
 
             final_generator = SmartReviewGeneratorFinal(
