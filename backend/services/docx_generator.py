@@ -106,6 +106,26 @@ class DocxGenerator:
                 i += 1
                 continue
 
+            # 表格检测
+            if '|' in line and line.count('|') >= 2:
+                # 可能是表格，先尝试收集表格行
+                table_lines = []
+                j = i
+                while j < len(lines):
+                    current_line = lines[j].rstrip()
+                    if '|' in current_line and current_line.count('|') >= 2:
+                        table_lines.append(current_line)
+                        j += 1
+                    else:
+                        break
+
+                # 检查是否是有效表格
+                if len(table_lines) >= 1:
+                    # 处理表格，保留所有行（包括分隔线），在 _add_table 中处理
+                    self._add_table(doc, table_lines)
+                    i = j
+                    continue
+
             # 引用块
             if line.startswith('>'):
                 quote_text = line.lstrip('>').strip()
@@ -134,6 +154,67 @@ class DocxGenerator:
             # 普通段落（处理行内格式）
             self._add_formatted_paragraph(doc, line)
             i += 1
+
+    def _add_table(self, doc, table_lines: List[str]):
+        """添加 Markdown 表格到文档"""
+        if not table_lines:
+            return
+
+        # 解析每一行，获取单元格数据，同时过滤分隔线
+        table_data = []
+        header_found = False
+
+        for line in table_lines:
+            # 分割单元格，移除首尾的 |
+            cells = [cell.strip() for cell in line.split('|')]
+            # 移除空的首尾单元格
+            if cells and not cells[0]:
+                cells = cells[1:]
+            if cells and not cells[-1]:
+                cells = cells[:-1]
+
+            # 检查是否是分隔线（只包含 -、:、空格的单元格）
+            is_separator = False
+            if cells:
+                all_sep_cells = True
+                for cell in cells:
+                    cleaned = cell.replace('-', '').replace(':', '').replace(' ', '')
+                    if len(cleaned) > 0:
+                        all_sep_cells = False
+                        break
+                if all_sep_cells:
+                    is_separator = True
+
+            if not is_separator and cells:
+                table_data.append(cells)
+
+        if not table_data:
+            return
+
+        # 创建 Word 表格
+        rows = len(table_data)
+        cols = max(len(row) for row in table_data) if table_data else 0
+
+        if cols == 0:
+            return
+
+        table = doc.add_table(rows=rows, cols=cols)
+        table.style = 'Table Grid'
+
+        # 填充表格数据
+        for row_idx, row_data in enumerate(table_data):
+            for col_idx, cell_text in enumerate(row_data):
+                if col_idx < cols:
+                    cell = table.rows[row_idx].cells[col_idx]
+                    # 清理单元格文本（移除 Markdown 格式）
+                    clean_text = self._strip_markdown_formatting(cell_text)
+                    # 添加到单元格
+                    paragraph = cell.paragraphs[0]
+                    paragraph.text = clean_text
+                    # 第一行（表头）加粗
+                    if row_idx == 0:
+                        for run in paragraph.runs:
+                            run.bold = True
 
     def _add_list_item(self, doc, line, ordered=False):
         """添加列表项"""
