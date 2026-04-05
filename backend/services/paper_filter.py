@@ -19,6 +19,10 @@ class PaperFilterService:
         """
         筛选并排序论文
 
+        筛选原则：
+        1. 主题不相关 → 一票否决
+        2. 主题相关 → 按优先级排序：年份 > 被引量
+
         Args:
             papers: 原始论文列表
             target_count: 目标数量（默认50篇）
@@ -31,9 +35,20 @@ class PaperFilterService:
         if not papers:
             return []
 
-        # 计算每篇论文的相关性评分
-        scored_papers = []
+        # ========== 第一步：主题相关性一票否决 ==========
+        relevant_papers = []
         for paper in papers:
+            if self._is_topic_relevant(paper, topic_keywords):
+                relevant_papers.append(paper)
+
+        print(f"[筛选] 原始论文: {len(papers)} 篇，主题相关: {len(relevant_papers)} 篇")
+
+        if not relevant_papers:
+            return []
+
+        # ========== 第二步：对主题相关的论文评分 ==========
+        scored_papers = []
+        for paper in relevant_papers:
             score = self._calculate_relevance_score(paper, topic_keywords)
             scored_papers.append({**paper, '_relevance_score': score})
 
@@ -69,7 +84,7 @@ class PaperFilterService:
                     selected.add(paper_id)
                     result.append(paper)
 
-        # 如果不足目标数量，从所有论文中补充
+        # 如果不足目标数量，从所有相关论文中补充
         if len(result) < target_count:
             for paper in scored_papers:
                 paper_id = paper.get("id")
@@ -85,6 +100,56 @@ class PaperFilterService:
                 paper['relevance_score'] = paper.pop('_relevance_score')
 
         return result[:target_count]
+
+    def _is_topic_relevant(self, paper: Dict, topic_keywords: List[str] | None) -> bool:
+        """
+        判断论文是否与主题相关（一票否决制）
+
+        Args:
+            paper: 论文信息
+            topic_keywords: 主题关键词列表
+
+        Returns:
+            True 如果主题相关，False 如果不相关
+        """
+        # 如果没有关键词，默认都相关
+        if not topic_keywords:
+            return True
+
+        title_lower = (paper.get("title") or "").lower()
+        abstract_lower = (paper.get("abstract") or "").lower()
+
+        # 检查标题中是否有关键词匹配
+        for kw in topic_keywords:
+            if kw is None:
+                continue
+            kw_lower = kw.lower()
+            if kw_lower in title_lower:
+                return True
+
+        # 检查摘要中是否有关键词匹配（至少2个）
+        matched_abstract = 0
+        for kw in topic_keywords:
+            if kw is None:
+                continue
+            kw_lower = kw.lower()
+            if kw_lower in abstract_lower:
+                matched_abstract += 1
+                if matched_abstract >= 2:
+                    return True
+
+        # 检查概念标签中是否有关键词匹配
+        concepts = paper.get("concepts", [])
+        for concept in concepts:
+            if concept is None:
+                continue
+            concept_lower = concept.lower()
+            for kw in topic_keywords:
+                if kw is not None and kw.lower() in concept_lower:
+                    return True
+
+        # 没有任何匹配，一票否决
+        return False
 
     def _calculate_relevance_score(self, paper: Dict, topic_keywords: List[str] | None) -> float:
         """

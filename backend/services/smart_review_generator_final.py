@@ -693,7 +693,8 @@ class SmartReviewGeneratorFinal:
 
         description_parts.append("**文献纳入标准**：")
         description_parts.append(
-            "1) 主题相关性（首要标准）：论文标题或摘要需与研究主题高度相关，这是文献入选的先决条件；"
+            "1) 主题相关性（一票否决制）：论文标题或摘要需与研究主题高度相关，"
+            "不相关文献直接排除，这是文献入选的先决条件；"
         )
         description_parts.append(
             f"2) 时间新近度（高优先级）：在主题相关的文献中，优先选择近 5 年发表的研究（目标占比 {int(recent_years_ratio * 100)}%），"
