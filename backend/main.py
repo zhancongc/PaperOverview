@@ -1,24 +1,35 @@
 """
 FastAPI 主应用
 """
+import os
+from dotenv import load_dotenv
+
+# 加载环境变量（必须在所有导入之前）
+load_dotenv()  # 加载 .env
+load_dotenv('.env.auth', override=True)  # 加载 .env.auth
+
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
-import os
 import asyncio
-from dotenv import load_dotenv
 from datetime import datetime
 from urllib.parse import quote
 
 from database import db, get_db
+
+# 集成 auth-kit - 必须先注入依赖再导入路由
+from authkit.database import init_database as init_auth_database, get_db as auth_get_db
+import authkit.routers.auth
+authkit.routers.auth.set_get_db(auth_get_db)
+
+from authkit.routers import router as auth_router
 from models import ReviewRecord
 from services.scholarflux_wrapper import ScholarFlux
 from services.smart_paper_search import SmartPaperSearchService
 from services.paper_filter import PaperFilterService
-from services.review_generator import ReviewGeneratorService
 from services.topic_analyzer import ThreeCirclesReviewGenerator
 from services.hybrid_classifier import FrameworkGenerator
 from services.docx_generator import DocxGenerator
@@ -28,18 +39,23 @@ from services.task_manager import TaskManager, TaskStatus, task_manager
 from services.review_task_executor import ReviewTaskExecutor
 from config import Config, UserConfig
 
-load_dotenv()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时执行
     db.connect()
+
     # 创建数据库表
     from models import Base
     db.create_tables()
     print("[Startup] 数据库表已创建/更新")
+
+    # 初始化 auth-kit 数据库（使用 PostgreSQL）
+    auth_db_url = os.getenv("AUTH_DATABASE_URL", "postgresql://postgres:security@localhost/paper")
+    init_auth_database(auth_db_url)
+    print("[Startup] Auth 数据库已初始化 (PostgreSQL)")
+
     yield
     # 关闭时执行
     print("[Shutdown] 应用关闭")
@@ -57,6 +73,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 集成认证路由
+app.include_router(auth_router)
 
 # 请求模型
 class TopicRequest(BaseModel):
@@ -612,6 +631,35 @@ async def get_task_status(task_id: str):
     }
 
 
+@app.get("/api/tasks/{task_id}/review")
+async def get_task_review(task_id: str):
+    """
+    通过 task_id 获取综述结果
+
+    用于分享链接：/review/{task_id}
+    """
+    task = task_manager.get_task(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    if task.status != TaskStatus.COMPLETED or not task.result:
+        raise HTTPException(status_code=404, detail="综述尚未生成完成")
+
+    return {
+        "success": True,
+        "data": {
+            "task_id": task_id,
+            "topic": task.topic,
+            "review": task.result.get("review", ""),
+            "papers": task.result.get("papers", []),
+            "cited_papers_count": task.result.get("cited_papers_count", 0),
+            "created_at": task.result.get("created_at", ""),
+            "statistics": task.result.get("statistics", {})
+        }
+    }
+
+
 # ==================== 查找文献接口（不生成综述）====================
 
 class SearchPapersOnlyRequest(BaseModel):
@@ -754,7 +802,14 @@ if __name__ == "__main__":
     import uvicorn
     # 启用热重载，修改代码后自动重启服务
     # reload=True 时必须使用字符串格式的应用路径
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, access_log=True)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        access_log=True,
+        reload_excludes=[".venv", "*.pyc", "__pycache__"]
+    )
 
 @app.get("/api/tasks/status")
 async def get_tasks_status():

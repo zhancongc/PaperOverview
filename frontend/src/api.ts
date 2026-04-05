@@ -124,6 +124,20 @@ export const api = {
     return response.data;
   },
 
+  // 通过 task_id 获取综述结果
+  async getTaskReview(taskId: string): Promise<{ success: boolean; data: {
+    task_id: string;
+    topic: string;
+    review: string;
+    papers: any[];
+    cited_papers_count: number;
+    created_at: string;
+    statistics: any;
+  } }> {
+    const response = await axios.get(`${API_BASE}/tasks/${taskId}/review`);
+    return response.data;
+  },
+
   // 三圈分析
   async analyzeThreeCircles(topic: string): Promise<ThreeCirclesResponse> {
     const response = await axios.post(`${API_BASE}/analyze-three-circles`, { topic });

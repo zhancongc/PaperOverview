@@ -102,18 +102,9 @@ export function SimpleApp() {
             clearInterval(pollInterval)
             setProgress({ step: 'completed', message: '生成完成！正在跳转...' })
 
-            const data = taskInfo.result
-
-            // 跳转到综述展示页面
+            // 跳转到综述展示页面（通过 task_id 访问，可分享）
             setTimeout(() => {
-              navigate('/review', {
-                state: {
-                  title: topic,
-                  content: data.review,
-                  papers: data.papers || [],
-                  recordId: data.id
-                }
-              })
+              navigate(`/review/${taskId}`)
             }, 500)
 
           } else if (taskInfo.status === 'failed') {
