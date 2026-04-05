@@ -1322,11 +1322,34 @@ class FrameworkGenerator:
 4. **需要避免的领域**（如果适用）：说明这个题目不属于哪些领域
 5. **场景特异性指导**：该场景的特殊性（对比通用场景）有哪些？在综述中，每节必须至少有一段专门讨论该场景的特殊性。如果找不到直接相关文献，应明确说明"目前缺乏针对该场景的研究，以下文献主要来自相关领域"，不得强行关联。
 
-**注意事项**：
-- 关键词应该具体、准确，避免过于宽泛
-- 如果研究对象是"项目"或"系统"，不要混入制造、工艺等不相关的术语
-- 对于软件开发/项目管理类题目，避免使用"制造工艺"、"生产流程"等制造领域术语
-- 对于AI/机器学习类题目，避免使用传统制造领域的术语
+**关键要求：生成精确、聚焦的关键词**
+
+**什么是精确关键词？**
+- 包含主题特定的技术术语、系统名称、算法名称
+- 直接指向研究的核心对象或方法
+- 示例（针对"计算机代数系统"）：
+  - ✅ Computer Algebra System, Symbolic Computation, Gröbner Basis
+  - ✅ Wolfram Mathematica, Maple Computer Algebra, Risch Algorithm
+  - ✅ Symbolic Integration, Polynomial Factorization
+
+**什么是宽泛关键词？**
+- 脱离主题的通用概念，可用于任何研究领域
+- 缺少领域特定的限定词
+- 示例（针对"计算机代数系统"）：
+  - ❌ algorithm design（太通用，几乎所有算法研究都涉及设计）
+  - ❌ computational complexity（太通用，是通用计算机科学概念）
+  - ❌ software engineering（太通用，与符号计算无关）
+  - ❌ optimization algorithm（太通用，未指明是什么类型的优化）
+
+**判断标准**：
+如果一个关键词去掉领域限定后仍然成立，则过于宽泛。
+- "algorithm design" → 去掉"计算机代数"后仍成立 → 太宽泛
+- "computer algebra algorithm" → 去掉后不成立 → 精确
+
+**特别注意**：
+- 如果主题本身就是"算法设计理论"，则"algorithm design"是精确关键词
+- 如果主题本身就是"软件工程测试"，则"software engineering"是精确关键词
+- 关键在于：关键词必须与当前主题直接相关，而不是通用的背景概念
 
 **输出格式（JSON）**：
 ```json
@@ -1425,12 +1448,10 @@ class FrameworkGenerator:
             # 软件开发/项目领域
             if any(kw in obj_lower for kw in ['软件', '开发', '系统', '平台', 'agent', '智能体', '项目']):
                 object_keywords.extend(['开发', '设计', '实现', '架构'])
-                avoid_domains.extend(['制造', '工艺', '生产', '装配'])
 
             # 数据/AI领域
             if any(kw in obj_lower for kw in ['数据', '算法', '模型', '学习', '智能']):
                 object_keywords.extend(['模型', '算法', '数据'])
-                avoid_domains.extend(['制造工艺', '生产流程'])
 
         if optimization_goal:
             goal_keywords.append(optimization_goal)

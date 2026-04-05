@@ -398,6 +398,9 @@ class ReviewGeneratorFCUnified:
                 print(f"  - 准备补充 {len(to_cite)} 篇论文的引用")
                 print(f"  - 原内容长度: {len(content)} 字符")
 
+                # 保存原始内容以便需要时回退
+                original_content = content
+
                 supplement_response = await self.client.chat.completions.create(
                     model=model,
                     messages=[
@@ -415,17 +418,6 @@ class ReviewGeneratorFCUnified:
                 print(f"  - 补充后长度: {len(new_content)} 字符")
                 print(f"  - 完成原因: {finish_reason}")
 
-                # 检查内容是否变短（可能被截断）
-                if len(new_content) < len(content) * 0.8:
-                    print(f"  - ⚠️ 警告：补充后内容变短，可能被截断，保留原内容")
-                    # 保留原内容，不替换
-                elif finish_reason == "length":
-                    print(f"  - ⚠️ 警告：补充内容因达到max_tokens限制而被截断，保留原内容")
-                    # 保留原内容，不替换
-                else:
-                    content = new_content
-
-                # === 验证补充后的内容完整性 ===
                 # 检查是否包含占位符文本
                 fatal_placeholders = [
                     '中间部分省略',
@@ -437,17 +429,28 @@ class ReviewGeneratorFCUnified:
 
                 found_placeholders = []
                 for placeholder in fatal_placeholders:
-                    if placeholder in content:
+                    if placeholder in new_content:
                         found_placeholders.append(placeholder)
 
+                # 检查内容是否变短（可能被截断）
+                use_new_content = True
                 if found_placeholders:
                     print(f"  - ⚠️ 警告：补充内容包含占位符 {found_placeholders}，保留原内容")
-                    # 保留原内容，不替换
-                    content = current_content
-                # 检查补充后内容是否过短
-                elif len(content) < 500:
-                    print(f"  - ⚠️ 警告：补充后内容过短 ({len(content)} 字符)，保留原内容")
-                    content = current_content
+                    use_new_content = False
+                elif len(new_content) < len(content) * 0.8:
+                    print(f"  - ⚠️ 警告：补充后内容变短，可能被截断，保留原内容")
+                    use_new_content = False
+                elif finish_reason == "length":
+                    print(f"  - ⚠️ 警告：补充内容因达到max_tokens限制而被截断，保留原内容")
+                    use_new_content = False
+                elif len(new_content) < 500:
+                    print(f"  - ⚠️ 警告：补充后内容过短 ({len(new_content)} 字符)，保留原内容")
+                    use_new_content = False
+
+                if use_new_content:
+                    content = new_content
+                else:
+                    content = original_content
 
                 # 验证并修正补充后的引用
                 content, cited_indices, _ = self._validate_and_fix_citations(content, len(papers))
@@ -586,13 +589,16 @@ class ReviewGeneratorFCUnified:
 
             paper = papers[paper_index - 1]
 
+            abstract = paper.get("abstract", "")
+            if abstract is None:
+                abstract = ""
             results.append({
                 "index": paper_index,
                 "title": paper.get("title", ""),
                 "authors": paper.get("authors", [])[:5],  # 最多5个作者
                 "year": paper.get("year"),
                 "venue": paper.get("venue_name", ""),
-                "abstract": paper.get("abstract", "")[:2000],  # 限制摘要长度
+                "abstract": abstract[:2000],  # 限制摘要长度
                 "concepts": paper.get("concepts", [])[:10],  # 最多10个概念
                 "cited_by_count": paper.get("cited_by_count", 0)
             })

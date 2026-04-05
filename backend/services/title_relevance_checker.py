@@ -10,35 +10,29 @@ from typing import List, Dict, Tuple
 class TitleRelevanceChecker:
     """标题相关性检查器"""
 
-    # 明显不相关的领域关键词
+    # 明显不相关的领域关键词（最小化规则）
     IRRELEVANT_DOMAINS = {
         "computer_algebra": {  # 计算机代数系统
             "exclude_keywords": [
-                # 软件工程/程序分析
+                # 只保留真正明确的排除规则
+                # 软件工程/程序分析（与符号执行相关，而非计算机代数）
                 "symbolic execution", "path exploration", "constraint solving",
                 "software testing", "vulnerability detection", "program analysis",
                 "static analysis", "dynamic analysis", "code coverage",
-                # 安全相关
-                "smart contract", "vulnerability", "security analysis",
-                # 生物信息学
-                "protein", "gene", "dna", "bioinformatics", "omics",
-                "neural network", "deep learning",
             ],
             "include_keywords": [
                 "computer algebra", "symbolic computation", "mathematica",
                 "maple", "maxima", "sage", "symbolic integration",
                 "equation solving", "polynomial", "algebra system",
-                "mathematical software", "cas", "formula manipulation",
+                "mathematical software", "formula manipulation",
+                "gröbner basis", "risch algorithm", "symbolic",
             ],
         },
         "symbolic_execution": {  # 符号执行
             "exclude_keywords": [
-                # 数学软件
+                # 只保留数学软件相关（与符号执行明确不同）
                 "mathematica", "maple", "maxima", "sage", "wolfram",
-                "symbolic integration" if "execution" not in "symbolic integration" else "",
                 "equation solving", "algebra system",
-                # 生物信息学
-                "protein", "gene", "dna", "bioinformatics",
             ],
             "include_keywords": [
                 "symbolic execution", "path exploration", "constraint solving",
@@ -48,10 +42,8 @@ class TitleRelevanceChecker:
         },
         "machine_learning": {  # 机器学习
             "exclude_keywords": [
-                # 数学软件
+                # 只保留明确不相关的
                 "mathematica", "maple", "symbolic computation",
-                # 程序分析（除非是 ML for program analysis）
-                "static analysis", "symbolic execution",
             ],
             "include_keywords": [
                 "machine learning", "deep learning", "neural network",
@@ -93,32 +85,31 @@ class TitleRelevanceChecker:
         # 获取领域规则
         domain_rules = cls.IRRELEVANT_DOMAINS.get(domain, {})
 
-        # 第一步：检查是否包含排除关键词
+        # 第一步：检查是否包含排除关键词（使用单词边界检查）
         for exclude_kw in domain_rules.get("exclude_keywords", []):
-            if exclude_kw and exclude_kw.lower() in title_lower:
+            if exclude_kw and cls._keyword_match(title_lower, exclude_kw.lower()):
                 # 特殊处理：如果是复合词，检查是否真的是排除的
                 # 例如 "symbolic integration" 在计算机代数中是相关的
-                if domain == "computer_algebra" and "symbolic" in exclude_kw:
+                if domain == "computer_algebra" and "symbolic" in exclude_kw.lower():
                     # 检查是否同时包含 "execution" 或 "testing"
                     if "execution" in title_lower or "testing" in title_lower:
                         return False, f"包含排除术语 '{exclude_kw}' (与符号执行相关)"
                 else:
                     return False, f"包含排除术语 '{exclude_kw}'"
 
-        # 第二步：检查是否包含相关关键词
+        # 第二步：检查是否包含相关关键词（使用单词边界检查）
         for include_kw in domain_rules.get("include_keywords", []):
-            if include_kw and include_kw.lower() in title_lower:
+            if include_kw and cls._keyword_match(title_lower, include_kw.lower()):
                 return True, f"包含相关术语 '{include_kw}'"
 
         # 第三步：检查主题关键词
         topic_keywords = cls._extract_topic_keywords(topic)
-        title_words = set(title_lower.split())
 
-        # 计算重叠度
+        # 计算重叠度（使用单词边界检查）
         overlap = 0
         matched_words = []
         for kw in topic_keywords:
-            if kw.lower() in title_lower:
+            if cls._keyword_match(title_lower, kw.lower()):
                 overlap += 1
                 matched_words.append(kw)
 
@@ -127,6 +118,28 @@ class TitleRelevanceChecker:
 
         # 如果没有明确匹配，返回不确定
         return None, "无法通过标题确定相关性"
+
+    @classmethod
+    def _keyword_match(cls, text: str, keyword: str) -> bool:
+        """
+        检查关键词是否匹配（使用单词边界，避免部分匹配）
+
+        Args:
+            text: 要检查的文本
+            keyword: 关键词
+
+        Returns:
+            是否匹配
+        """
+        # 对于多词关键词（包含空格），直接检查包含
+        if ' ' in keyword:
+            return keyword in text
+
+        # 对于单词关键词，使用单词边界检查
+        # 使用正则表达式确保匹配的是完整单词
+        import re
+        pattern = r'\b' + re.escape(keyword) + r'\b'
+        return bool(re.search(pattern, text, re.IGNORECASE))
 
     @classmethod
     def _generic_check(cls, title: str, topic: str) -> Tuple[bool, str]:

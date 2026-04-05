@@ -39,9 +39,7 @@ RESEARCH_DIRECTIONS = {
             "system": "计算机系统",
             "theory": "计算机理论",
             "symbolic_computation": "符号计算与计算机代数系统",
-        },
-        # 关联专业领域配置（如果有）
-        "professional_domain": "computer_algebra" if "computer algebra" in str else None
+        }
     },
     "materials": {
         "id": "materials",

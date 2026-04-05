@@ -51,14 +51,14 @@ class DomainKnowledge:
             "name": "计算机代数系统",
             "keywords": ["CAS", "computer algebra", "symbolic computation", "mathematica", "maple", "maxima"],
             "chinese_keywords": ["计算机代数", "符号计算", "代数系统", "数学软件"],
-            "exclude_terms": ["execution", "testing", "verification", "vulnerability", "software analysis"],
+            "exclude_terms": [],  # 移除硬编码排除，让LLM根据语义判断
             "related_concepts": ["symbolic integration", "equation solving", "polynomial", "algorithm", "mathematics education"],
         },
         "symbolic_execution": {
             "name": "符号执行",
             "keywords": ["symbolic execution", "path exploration", "constraint solving", "klee", "angr"],
             "chinese_keywords": ["符号执行", "路径探索", "约束求解", "软件验证"],
-            "exclude_terms": ["mathematica", "maple", "algebra system", "equation solving"],
+            "exclude_terms": [],  # 移除硬编码排除，让LLM根据语义判断
             "related_concepts": ["software testing", "vulnerability detection", "formal verification", "program analysis"],
         },
         "machine_learning": {

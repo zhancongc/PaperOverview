@@ -405,8 +405,13 @@ class ReviewTaskExecutor:
         paper_search_sources = []  # [{"paper_id": "...", "search_keyword": "..."}, ...]
         paper_source_seen = set()  # 用于去重 (paper_id, search_keyword)
 
+        # 跨小节去重：同一篇文献最多出现2次
+        global_paper_occurrence = {}  # {paper_id: occurrence_count}
+        global_paper_to_sections = {}  # {paper_id: [section_titles]}
+        MAX_OCCURRENCE = 2  # 同一篇文献最多出现2次
+
         try:
-            # 按小节搜索文献（先不去重，收集所有文献）
+            # 按小节搜索文献（实时跨小节去重）
             raw_papers_by_section = {}
 
             for section_title in section_titles:
@@ -509,6 +514,21 @@ class ReviewTaskExecutor:
                         query = opt_query['query']
                         lang = opt_query.get('lang', 'mixed')
                         source = opt_query.get('source', 'all')
+                        is_combination = opt_query.get('is_combination', False)
+
+                        # 检查是否为AND组合查询
+                        is_boolean = self._is_boolean_query(query)
+
+                        # 对于AND组合查询，只在支持布尔查询的数据源中使用
+                        if is_boolean and source not in ['semantic_scholar']:
+                            # 检查是否在第一轮（原始关键词搜索）
+                            if round_num == 1 and is_combination:
+                                print(f"[阶段3] 跳过AND组合查询（{source}不支持布尔查询）: {query[:50]}...")
+                                continue
+                            # 如果是后续轮次（同义词扩展等），也跳过布尔查询
+                            if round_num > 1:
+                                print(f"[阶段3] 跳过布尔查询（{source}不支持）: {query[:50]}...")
+                                continue
 
                         task_manager.update_task_status(
                             task_id,
@@ -529,13 +549,32 @@ class ReviewTaskExecutor:
                         # 转换为字典格式
                         db_papers_dict = [p.to_paper_dict() for p in db_papers]
 
+                        # 记录搜索结果
+                        print(f"[阶段3] 关键词：{query}  数据库：{len(db_papers_dict)}篇")
+
                         # 添加数据库搜索结果
                         for paper in db_papers_dict:
                             paper_id = paper.get("id")
                             source_key = (paper_id, query)
+
+                            # 跨小节去重检查：同一篇文献最多出现2次
+                            if paper_id and paper_id in global_paper_occurrence:
+                                current_count = global_paper_occurrence[paper_id]
+                                if current_count >= MAX_OCCURRENCE:
+                                    # 已经出现2次，跳过
+                                    existing_sections = global_paper_to_sections.get(paper_id, [])
+                                    print(f"[阶段3] 跳过重复论文（已出现{current_count}次）: {paper.get('title', '')[:40]}...")
+                                    continue
+
                             if paper_id and paper_id not in section_seen_ids:
                                 section_seen_ids.add(paper_id)
                                 section_papers.append(paper)
+                                # 更新全局出现次数
+                                global_paper_occurrence[paper_id] = global_paper_occurrence.get(paper_id, 0) + 1
+                                # 记录所属小节
+                                if paper_id not in global_paper_to_sections:
+                                    global_paper_to_sections[paper_id] = []
+                                global_paper_to_sections[paper_id].append(section_title)
                                 # 记录搜索来源（去重）
                                 if source_key not in paper_source_seen:
                                     paper_source_seen.add(source_key)
@@ -564,13 +603,33 @@ class ReviewTaskExecutor:
                                 limit=30
                             )
 
+                            # 记录API搜索结果
+                            if api_papers:
+                                print(f"[阶段3] 关键词：{query}  API({source})：{len(api_papers)}篇")
+
                             # 添加API搜索结果（去重）
                             for paper in api_papers:
                                 paper_id = paper.get("id")
                                 source_key = (paper_id, query)
+
+                                # 跨小节去重检查：同一篇文献最多出现2次
+                                if paper_id and paper_id in global_paper_occurrence:
+                                    current_count = global_paper_occurrence[paper_id]
+                                    if current_count >= MAX_OCCURRENCE:
+                                        # 已经出现2次，跳过
+                                        existing_sections = global_paper_to_sections.get(paper_id, [])
+                                        print(f"[阶段3] API跳过重复论文（已出现{current_count}次）: {paper.get('title', '')[:40]}...")
+                                        continue
+
                                 if paper_id and paper_id not in section_seen_ids:
                                     section_seen_ids.add(paper_id)
                                     section_papers.append(paper)
+                                    # 更新全局出现次数
+                                    global_paper_occurrence[paper_id] = global_paper_occurrence.get(paper_id, 0) + 1
+                                    # 记录所属小节
+                                    if paper_id not in global_paper_to_sections:
+                                        global_paper_to_sections[paper_id] = []
+                                    global_paper_to_sections[paper_id].append(section_title)
                                     # 记录搜索来源（去重）
                                     if source_key not in paper_source_seen:
                                         paper_source_seen.add(source_key)
@@ -600,79 +659,38 @@ class ReviewTaskExecutor:
                     elif round_num == 2:
                         print(f"[阶段3] 数量仍不足，准备使用简化查询...")
 
-                        print(f"[阶段3] API补充 '{keyword}': 新增 {len(api_papers)} 篇")
-
                 print(f"[阶段3] 小节 '{section_title}' 搜索到 {len(section_papers)} 篇文献（去重后）")
+                print(f"[阶段3]   - 使用关键词: {', '.join(keywords)}")
+                print(f"[阶段3]   - 关键词数量: {len(keywords)}")
+                print(f"[阶段3]   - 文献数量: {len(section_papers)}")
                 raw_papers_by_section[section_title] = section_papers
 
         finally:
             # 确保数据库session总是被关闭
             db_session.close()
 
-        # 小节间去重：保留文献数量少的小节的文献
-        print(f"\n[阶段3] 小节间去重...")
+        # 小节间去重检查（同一篇文献最多出现2次）
+        print(f"\n[阶段3] 小节间去重检查...")
+        print(f"[阶段3] 提示: 跨小节去重已在搜索时实时进行（每篇文献最多出现{MAX_OCCURRENCE}次）")
 
-        # 计算每个小节的文献数量
-        section_paper_counts = {
-            title: len(papers) for title, papers in raw_papers_by_section.items()
-        }
+        # 统计文献出现次数
+        paper_occurrence_stats = {}
+        for paper_id, sections in global_paper_to_sections.items():
+            paper_occurrence_stats[paper_id] = len(sections)
 
-        # 收集所有 paper_id 及其所属小节
-        paper_id_to_sections = {}  # {paper_id: [(section_title, paper), ...]}
-        for section_title, section_papers in raw_papers_by_section.items():
-            for paper in section_papers:
-                paper_id = paper.get('id')
-                if paper_id:
-                    if paper_id not in paper_id_to_sections:
-                        paper_id_to_sections[paper_id] = []
-                    paper_id_to_sections[paper_id].append((section_title, paper))
+        # 统计出现1次、2次的文献数量
+        once_count = sum(1 for count in paper_occurrence_stats.values() if count == 1)
+        twice_count = sum(1 for count in paper_occurrence_stats.values() if count == 2)
+        more_count = sum(1 for count in paper_occurrence_stats.values() if count > 2)
 
-        # 找出重复的 paper_id（出现在多个小节）
-        duplicate_paper_ids = {
-            pid: sections for pid, sections in paper_id_to_sections.items()
-            if len(sections) > 1
-        }
+        print(f"[阶段3] 文献出现次数统计:")
+        print(f"  - 出现1次: {once_count} 篇")
+        print(f"  - 出现2次: {twice_count} 篇")
+        if more_count > 0:
+            print(f"  - 出现3次以上: {more_count} 篇（异常，应该不会出现）")
 
-        if duplicate_paper_ids:
-            print(f"[阶段3] 发现 {len(duplicate_paper_ids)} 个重复的 paper_id，正在去重...")
-
-            # 对于每个重复的 paper_id，只保留文献数量少的小节的文献
-            papers_to_remove = set()  # {(section_title, paper_id), ...}
-
-            for paper_id, sections in duplicate_paper_ids.items():
-                # 按小节文献数量升序排序（文献少的优先保留）
-                sections_sorted = sorted(sections, key=lambda x: section_paper_counts[x[0]])
-
-                # 保留第一个（文献数量最少的小节），删除其余的
-                kept_section, kept_paper = sections_sorted[0]
-                removed_sections = sections_sorted[1:]
-
-                for removed_section, _ in removed_sections:
-                    papers_to_remove.add((removed_section, paper_id))
-
-                if len(removed_sections) > 0:
-                    removed_section_names = [s[0] for s in removed_sections]
-                    print(f"  - paper_id={paper_id[:20]}...: 保留 '{kept_section}'，删除 {removed_section_names}")
-
-            # 执行去重
-            papers_by_section = {}
-            for section_title, section_papers in raw_papers_by_section.items():
-                # 过滤掉需要删除的文献
-                filtered_papers = []
-                for paper in section_papers:
-                    paper_id = paper.get('id')
-                    if (section_title, paper_id) not in papers_to_remove:
-                        filtered_papers.append(paper)
-
-                papers_by_section[section_title] = filtered_papers
-                removed_count = len(section_papers) - len(filtered_papers)
-                if removed_count > 0:
-                    print(f"[阶段3] 小节 '{section_title}': 删除 {removed_count} 篇重复文献，保留 {len(filtered_papers)} 篇")
-                else:
-                    print(f"[阶段3] 小节 '{section_title}': {len(filtered_papers)} 篇（无重复）")
-        else:
-            print(f"[阶段3] ✓ 没有发现小节间重复文献")
-            papers_by_section = raw_papers_by_section
+        # 跨小节去重已在搜索时完成，直接使用raw_papers_by_section
+        papers_by_section = raw_papers_by_section
 
         # 合并所有文献（用于统计，但不用于分配）
         all_papers = []
@@ -687,7 +705,11 @@ class ReviewTaskExecutor:
         print(f"  - 英文: {stats['english']}")
         print(f"  - 小节分布:")
         for section_title, papers in papers_by_section.items():
-            print(f"    - {section_title}: {len(papers)} 篇")
+            keywords = section_keywords.get(section_title, [])
+            keywords_str = ', '.join(keywords[:3])  # 显示前3个关键词
+            if len(keywords) > 3:
+                keywords_str += f" 等{len(keywords)}个"
+            print(f"    - {section_title}: {len(papers)} 篇 (关键词: {keywords_str})")
 
         # 检查文献数量是否达标，不足则继续搜索
         min_target_papers = 200  # 目标至少200篇
@@ -805,22 +827,24 @@ class ReviewTaskExecutor:
         for section_title, papers in papers_by_section.items():
             print(f"    - {section_title}: {len(papers)} 篇")
 
-        # === 验证搜索结果与题目主题一致性 ===
+        # === 验证搜索结果与题目主题一致性（简化版）===
         print(f"\n[阶段3] 验证搜索结果与题目主题一致性...")
         try:
             relevance_score = self._validate_search_relevance(topic, all_papers)
             print(f"[阶段3] 主题相关性得分: {relevance_score:.1%}")
 
+            # 注意：已移除自动过滤逻辑
+            # 相关性判断将在阶段4由LLM进行更准确的语义分析
             if relevance_score < 0.3:
-                print(f"[阶段3] ⚠️  警告: 搜索结果与题目相关性过低（{relevance_score:.1%} < 30%）")
-                print(f"[阶段3] 可能原因:")
-                print(f"[阶段3]   1. 关键词翻译不准确")
-                print(f"[阶段3]   2. 题目与搜索结果不匹配")
-                print(f"[阶段3]   3. 需要重新定义搜索策略")
-                print(f"[阶段3] 建议: 请检查题目和关键词是否一致")
-                # 不中断流程，但给出警告
+                print(f"[阶段3] ⚠️  提示: 搜索结果相关性较低（{relevance_score:.1%} < 30%）")
+                print(f"[阶段3] ℹ️  相关性判断将在阶段4由LLM进行语义分析")
+                print(f"[阶段3]   即使初始搜索结果包含不相关论文，LLM也能准确筛选")
+            else:
+                print(f"[阶段3] ✓ 搜索结果相关性良好")
         except Exception as e:
             print(f"[阶段3] 主题相关性验证失败: {e}")
+            import traceback
+            traceback.print_exc()
 
         # AMiner论文详情补充
         all_papers = await self._enrich_aminer_papers(all_papers)
@@ -1138,7 +1162,7 @@ class ReviewTaskExecutor:
                 print(f"... 共 {len(removed_details)} 篇被过滤")
 
         # 3. 主题相关性检查（按小节分别判断）
-        print(f"\n[阶段4] 开始主题相关性检查（按小节分别判断）...")
+        print(f"\n[阶段4] 开始主题相关性检查（按小节分别判断）...", flush=True)
         task_manager.update_task_status(
             task_id,
             TaskStatus.PROCESSING,
@@ -1148,6 +1172,14 @@ class ReviewTaskExecutor:
         # 获取按小节分组的论文
         papers_by_section = search_result.get('sections', {})
         section_keywords = framework.get('section_keywords', {})
+
+        # DEBUG: 打印输入数据状态
+        print(f"[阶段4] DEBUG: 检查输入数据状态...", flush=True)
+        print(f"[阶段4] DEBUG:   - papers_by_section类型: {type(papers_by_section)}", flush=True)
+        print(f"[阶段4] DEBUG:   - papers_by_section keys: {list(papers_by_section.keys())}", flush=True)
+        print(f"[阶段4] DEBUG:   - section_keywords keys: {list(section_keywords.keys())}", flush=True)
+        print(f"[阶段4] DEBUG:   - filtered_papers数量: {len(filtered_papers)}", flush=True)
+        print(f"[阶段4] DEBUG:   - search_result keys: {list(search_result.keys())}", flush=True)
 
         # 为每个小节创建论文到小节的映射（一篇论文可能属于多个小节）
         paper_to_sections = {}
@@ -1171,179 +1203,111 @@ class ReviewTaskExecutor:
         seen_paper_ids = set()  # 用于去重（一篇论文可能在多个小节中被判断）
 
         try:
-            import httpx
-            api_key = os.getenv("DEEPSEEK_API_KEY")
-            client = httpx.AsyncClient(timeout=120.0)
+            # 检查是否有小节划分
+            has_sections = bool(papers_by_section)
 
-            # 对每个小节分别处理
-            for section_title, section_papers in papers_by_section.items():
-                if section_title in ['引言', '结论']:
-                    continue
+            if not has_sections:
+                print(f"[阶段4] ⚠️  没有小节划分", flush=True)
+                print(f"[阶段4]    - papers_by_section为空: {not papers_by_section}", flush=True)
+                print(f"[阶段4]    - section_keys: {list(section_keywords.keys())}", flush=True)
+                print(f"[阶段4]    - filtered_papers数量: {len(filtered_papers)}", flush=True)
+                print(f"[阶段4] 对全部{len(filtered_papers)}篇论文进行LLM判断...", flush=True)
 
-                # 获取该小节的质量过滤后的论文
-                section_filtered_papers = []
-                for paper in filtered_papers:
-                    paper_id = paper.get('id')
-                    # 检查这篇论文是否属于当前小节
-                    for sp in section_papers:
-                        if sp.get('id') == paper_id:
-                            section_filtered_papers.append(paper)
-                            break
+                # 直接对所有论文进行LLM判断
+                from services.llm_relevance_filter import get_llm_relevance_filter
 
-                if not section_filtered_papers:
-                    continue
+                print(f"[阶段4] DEBUG: 获取LLM filter实例...", flush=True)
+                llm_filter = get_llm_relevance_filter()
+                print(f"[阶段4] DEBUG: 开始LLM相关性判断...", flush=True)
 
-                print(f"\n[阶段4] 判断小节 '{section_title}' 的文献相关性...")
-
-                # 获取该小节的关键词
-                keywords_for_section = section_keywords.get(section_title, [])
-                keywords_str = ", ".join(keywords_for_section) if keywords_for_section else "无"
-
-                # === 第一步：基于标题的快速筛选 ===
-                print(f"[阶段4] 步骤1: 基于标题快速筛选...")
-                from services.title_relevance_checker import batch_check_titles
-                from services.contextual_keyword_translator import DomainKnowledge
-
-                # 识别领域
-                domain = DomainKnowledge.identify_domain(topic)
-
-                # 批量检查标题相关性
-                title_relevant, title_irrelevant, title_uncertain = batch_check_titles(
-                    section_filtered_papers,
-                    topic,
-                    domain
+                llm_relevant, llm_irrelevant, reasons = await llm_filter.batch_check_relevance(
+                    papers=filtered_papers,
+                    topic=topic,
+                    section_title="",
+                    section_keywords=[]
                 )
 
-                print(f"[阶段4] 标题检查结果:")
-                print(f"  - 明显相关: {len(title_relevant)} 篇")
-                print(f"  - 明显不相关: {len(title_irrelevant)} 篇")
-                print(f"  - 需要进一步判断: {len(title_uncertain)} 篇")
+                print(f"[阶段4] LLM判断结果:", flush=True)
+                print(f"  - 相关: {len(llm_relevant)} 篇", flush=True)
+                print(f"  - 不相关: {len(llm_irrelevant)} 篇", flush=True)
 
-                # 显示明显不相关的文献样本
-                if title_irrelevant:
-                    print(f"[阶段4] 明显不相关的文献样本（前3篇）:")
-                    for paper in title_irrelevant[:3]:
-                        reason = paper.get('_title_check', {}).get('reason', '')
-                        title = paper.get('title', '')[:60]
+                # 显示不相关文献样本
+                if llm_irrelevant:
+                    print(f"[阶段4] 不相关文献样本（前5篇）:")
+                    for paper in llm_irrelevant[:5]:
+                        title = paper.get('title', '')[:70]
                         print(f"  - {title}")
-                        print(f"    原因: {reason}")
 
-                # 第二步：只对不确定的文献使用 LLM 判断
-                llm_papers = title_uncertain.copy()
+                if reasons:
+                    print(f"[阶段4] 判断理由:")
+                    for reason in reasons[:3]:
+                        print(f"  - {reason}")
 
-                # 明确相关的文献直接保留
-                for paper in title_relevant:
+                # 收集相关论文
+                for paper in llm_relevant:
                     paper_id = paper.get('id')
                     if paper_id and paper_id not in seen_paper_ids:
                         seen_paper_ids.add(paper_id)
                         relevant_papers.append(paper)
+            else:
+                # 对每个小节分别处理
+                for section_title, section_papers in papers_by_section.items():
+                    if section_title in ['引言', '结论']:
+                        continue
 
-                if not llm_papers:
-                    print(f"[阶段4] 所有文献通过标题检查完成，跳过 LLM 判断")
-                    continue
+                    # 获取该小节的质量过滤后的论文
+                    section_filtered_papers = []
+                    for paper in filtered_papers:
+                        paper_id = paper.get('id')
+                        # 检查这篇论文是否属于当前小节
+                        for sp in section_papers:
+                            if sp.get('id') == paper_id:
+                                section_filtered_papers.append(paper)
+                                break
 
-                print(f"[阶段4] 步骤2: 对 {len(llm_papers)} 篇文献使用 LLM 判断...")
+                    if not section_filtered_papers:
+                        continue
 
-                # 构建该小节的文献列表
-                papers_text = ""
-                for i, paper in enumerate(llm_papers, 1):
-                    title = paper.get('title', '')
-                    venue = paper.get('journal', '') or paper.get('venue', '')
-                    papers_text += f"{i}. 标题: {title}\n   来源: {venue}\n\n"
+                    print(f"\n[阶段4] 判断小节 '{section_title}' 的文献相关性...")
 
-                prompt = f"""请判断以下文献是否适合用于撰写以下小节的内容。
+                    # 获取该小节的关键词
+                    keywords_for_section = section_keywords.get(section_title, [])
 
-**重要提示**: 首先检查文献标题是否与小节主题相关。标题是最重要的判断依据。
+                    # === 使用LLM进行语义相关性判断 ===
+                    print(f"[阶段4] 使用LLM进行语义相关性判断（{len(section_filtered_papers)}篇）...")
 
-研究总主题: {topic}
-当前小节: {section_title}
-小节关键词: {keywords_str}
+                    from services.llm_relevance_filter import get_llm_relevance_filter
 
-文献列表:
-{papers_text}
+                    llm_filter = get_llm_relevance_filter()
+                    llm_relevant, llm_irrelevant, reasons = await llm_filter.batch_check_relevance(
+                        papers=section_filtered_papers,
+                        topic=topic,
+                        section_title=section_title,
+                        section_keywords=keywords_for_section
+                    )
 
-请对每篇文献进行判断，返回格式如下（严格按格式，不要有多余文字）：
-相关: [序号列表，用逗号分隔]
-不相关: [序号列表，用逗号分隔]
+                    print(f"[阶段4] LLM判断结果:")
+                    print(f"  - 相关: {len(llm_relevant)} 篇")
+                    print(f"  - 不相关: {len(llm_irrelevant)} 篇")
 
-例如：
-相关: 1,2,4,7,10
-不相关: 3,5,6,8,9
+                    # 显示不相关文献样本和理由
+                    if llm_irrelevant:
+                        print(f"[阶段4] 不相关文献样本（前3篇）:")
+                        for paper in llm_irrelevant[:3]:
+                            title = paper.get('title', '')[:60]
+                            print(f"  - {title}")
 
-判断标准：
-1. **标题匹配度**：文献标题是否包含与小节主题相关的关键词
-2. **主题一致性**：文献的研究内容是否能支持本小节的论述
-3. **领域适配性**：
-   - 如果小节讨论的是通用方法，其他行业的应用文献也可以保留
-   - 如果小节讨论的是特定领域，则优先保留该领域的文献
-4. **无关性判断**：只有在文献明显**无法为本小节提供任何有价值的信息**时，才判定为不相关
-   - 例如：小节讨论"数学软件"，而文献是"烹饪食谱"或"电影评论"
-   - **重要**：不要仅仅因为文献属于某个特定领域（如物理、化学、生物）就判定为不相关
-   - **跨学科研究**：如果题目本身涉及多个领域，应该保留相关领域的文献
+                    if reasons:
+                        print(f"[阶段4] 判断理由:")
+                        for reason in reasons[:3]:
+                            print(f"  - {reason}")
 
-研究总主题: {topic}
-
-当前小节: {section_title}
-小节关键词: {keywords_str}
-
-文献列表:
-{papers_text}
-
-请对每篇文献进行判断，返回格式如下（严格按格式，不要有多余文字）：
-相关: [序号列表，用逗号分隔]
-不相关: [序号列表，用逗号分隔]
-
-例如：
-相关: 1,2,4,7,10
-不相关: 3,5,6,8,9
-
-判断标准：
-1. **标题匹配度**：文献标题是否包含与小节主题相关的关键词
-2. **主题一致性**：文献的研究内容是否能支持本小节的论述
-3. **领域适配性**：
-   - 如果小节讨论的是通用方法，其他行业的应用文献也可以保留
-   - 如果小节讨论的是特定领域，则优先保留该领域的文献
-4. **无关性判断**：只有在文献明显**无法为本小节提供任何有价值的信息**时，才判定为不相关
-   - 例如：小节讨论"数学软件"，而文献是"烹饪食谱"或"电影评论"
-   - **重要**：不要仅仅因为文献属于某个特定领域（如物理、化学、生物）就判定为不相关
-   - **跨学科研究**：如果题目本身涉及多个领域，应该保留相关领域的文献
-"""
-
-                # 调用LLM判断
-                response = await client.post(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.3,
-                        "max_tokens": 1000
-                    }
-                )
-
-                result = response.json()
-                content = result['choices'][0]['message']['content'].strip()
-
-                # 解析结果
-                relevant_indices = []
-                irrelevant_indices = []
-
-                for line in content.split('\n'):
-                    if line.startswith('相关:'):
-                        indices_str = line.replace('相关:', '').strip()
-                        relevant_indices = [int(x.strip()) for x in indices_str.split(',') if x.strip().isdigit()]
-                    elif line.startswith('不相关:'):
-                        indices_str = line.replace('不相关:', '').strip()
-                        irrelevant_indices = [int(x.strip()) for x in indices_str.split(',') if x.strip().isdigit()]
-
-                # 收集结果（注意：这里使用 llm_papers，因为只有不确定的论文被送到了 LLM）
-                for idx, paper in enumerate(llm_papers, 1):
-                    paper_id = paper.get('id')
-                    if idx in relevant_indices:
-                        if paper_id not in seen_paper_ids:
+                    # 收集相关论文
+                    for paper in llm_relevant:
+                        paper_id = paper.get('id')
+                        if paper_id and paper_id not in seen_paper_ids:
                             seen_paper_ids.add(paper_id)
                             relevant_papers.append(paper)
-                    # 不相关的论文不需要处理，因为它们已经被标记为不相关了
 
             # 现在，找出那些在所有小节中都没被选中的论文
             all_filtered_ids = set(p.get('id') for p in filtered_papers)
@@ -1362,10 +1326,10 @@ class ReviewTaskExecutor:
                         'sections': paper.get('sections', [])
                     })
 
-            await client.aclose()
-
         except Exception as e:
-            print(f"[阶段4] LLM检查出错，保留所有文献: {e}")
+            print(f"[阶段4] ❌ LLM检查出错: {e}", flush=True)
+            print(f"[阶段4] 错误类型: {type(e).__name__}", flush=True)
+            print(f"[阶段4] 保留所有{len(filtered_papers)}篇文献（可能包含不相关论文）", flush=True)
             import traceback
             traceback.print_exc()
             relevant_papers = filtered_papers[:]
@@ -1387,24 +1351,10 @@ class ReviewTaskExecutor:
             if len(topic_irrelevant_details) > 20:
                 print(f"... 共 {len(topic_irrelevant_details)} 篇被移除")
 
-        # 5. 增强相关性评分（添加到论文中）
-        section_keywords = framework.get('section_keywords', {})
-        topic_keywords = []
-        for keywords in section_keywords.values():
-            topic_keywords.extend(keywords)
-
-        for paper in filtered_papers:
-            # 使用增强筛选服务计算相关性评分
-            score = self.enhanced_filter_service._calculate_enhanced_relevance_score(
-                paper=paper,
-                topic_keywords=topic_keywords
-            )
-            paper['relevance_score'] = score
-
-        # 6. 按相关性评分排序
-        filtered_papers.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
-
-        print(f"[阶段4] 已添加相关性评分并排序")
+        # 5. 相关性评分（已移除有缺陷的评分系统）
+        # 注意：不再使用被引量和通用词匹配进行评分
+        # 相关性判断已在上面由LLM完成
+        print(f"[阶段4] 相关性判断已完成（基于LLM语义分析）")
 
         # 7. 统计信息
         try:
@@ -2088,6 +2038,63 @@ class ReviewTaskExecutor:
         words = re.findall(r'[\u4e00-\u9fff]{2,4}', text)
         return words
 
+    def _is_generic_methodology_topic(self, topic: str) -> bool:
+        """
+        判断是否为通用方法论主题
+
+        通用方法论主题的特点：
+        - 论文内容是关于某个通用方法（如 DMAIC、六西格玛、敏捷开发）的应用
+        - 而不是该方法的原创研究
+        - 例如："DMAIC在质量管理领域的应用"、"敏捷开发在金融行业中的应用"
+
+        Args:
+            topic: 论文题目
+
+        Returns:
+            是否为通用方法论应用类主题
+        """
+        topic_lower = topic.lower()
+
+        # 检查是否包含"应用"相关的关键词
+        application_keywords = [
+            '应用', '在...中的应用', '在...领域的应用', '在...行业',
+            'application', 'in ...', 'implementation of', 'adoption of'
+        ]
+
+        # 检查是否有领域限定
+        has_application = any(kw in topic_lower for kw in application_keywords)
+
+        # 检查是否有明确的方法论名称
+        methodology_keywords = [
+            'dmaic', '六西格玛', '六西格玛法',
+            '敏捷开发', 'agile', 'scrum',
+            '精益生产', 'lean manufacturing',
+            '全面质量管理', 'tqm', 'total quality management',
+            '设计思维', 'design thinking',
+            'triz', '萃智理论'
+        ]
+
+        has_methodology = any(kw in topic_lower for kw in methodology_keywords)
+
+        # 同时包含方法论和应用，且没有明确的研究对象
+        # 则认为是通用方法论应用类主题
+        if has_methodology and has_application:
+            # 进一步检查是否有明确的研究对象
+            research_object_keywords = [
+                '系统', '平台', '模型', '算法', '技术', '方法', '工具',
+                'system', 'platform', 'model', 'algorithm', 'technique', 'method', 'tool'
+            ]
+
+            # 如果有具体的研究对象（如"算法实现"、"系统设计"），则不是纯方法论应用
+            has_research_object = any(kw in topic_lower for kw in research_object_keywords)
+
+            # 检查是否是方法论文（而不是应用文）
+            is_paper = any(kw in topic_lower for kw in ['论文', '研究', 'study', 'paper'])
+
+            return not (has_research_object and is_paper)
+
+        return False
+
     def _validate_search_relevance(self, topic: str, papers: list) -> float:
         """
         验证搜索结果与题目主题的一致性
@@ -2099,63 +2106,78 @@ class ReviewTaskExecutor:
         Returns:
             相关性得分 (0-1)
         """
-        from services.contextual_keyword_translator import DomainKnowledge
+        if not papers:
+            return 0.0
 
-        # 第一步：识别题目领域
-        domain = DomainKnowledge.identify_domain(topic)
+        import re
 
-        if not domain:
-            # 无法识别领域，使用通用验证
-            return self._generic_relevance_check(topic, papers)
+        # 提取核心关键词（更智能的提取）
+        topic_lower = topic.lower()
 
-        # 第二步：获取领域约束
-        domain_info = DomainKnowledge.DOMAINS.get(domain, {})
-        related_terms = domain_info.get("related_concepts", [])
-        exclude_terms = domain_info.get("exclude_terms", [])
+        # 定义核心关键词（权重高）
+        core_keywords = {
+            # 计算机代数相关
+            'computer algebra', 'symbolic computation', 'computer algebra system', 'cas',
+            '符号计算', '计算机代数', '代数系统',
+            # 算法相关
+            'algorithm', '算法',
+            # 实现相关
+            'implementation', '实现',
+            # 应用相关
+            'application', '应用',
+        }
 
-        print(f"[相关性验证] 识别领域: {domain_info.get('name', domain)}")
-        print(f"[相关性验证] 相关术语: {related_terms[:5]}...")
-        print(f"[相关性验证] 排除术语: {exclude_terms[:5]}...")
+        # 定义通用关键词（权重低，容易误判）
+        generic_keywords = {
+            'system', 'method', 'model', 'approach', 'technique', 'tool',
+            '系统', '方法', '模型', '技术', '工具',
+        }
 
-        # 第三步：检查前20篇文献
+        # 提取题目中的所有关键词
+        all_topic_words = set()
+        english_words = re.findall(r'[a-zA-Z]{3,}', topic)
+        all_topic_words.update([w.lower() for w in english_words])
+        chinese_words = self._extract_chinese_words(topic)
+        all_topic_words.update(chinese_words)
+
+        # 检查前20篇文献
         sample_papers = papers[:20] if len(papers) >= 20 else papers
 
-        relevant_count = 0
-        exclude_count = 0
+        total_score = 0.0
         total_count = len(sample_papers)
 
         for paper in sample_papers:
             title = paper.get('title', '').lower()
+            abstract = paper.get('abstract', '').lower()
+            combined_text = title + ' ' + abstract
 
-            # 检查是否包含相关术语
-            is_relevant = False
-            for term in related_terms:
-                if term.lower() in title:
-                    is_relevant = True
-                    relevant_count += 1
-                    break
+            paper_score = 0.0
 
-            # 检查是否包含排除术语
-            for term in exclude_terms:
-                if term.lower() in title:
-                    exclude_count += 1
-                    break
+            # 检查核心关键词（权重高）
+            for keyword in core_keywords:
+                if keyword in combined_text:
+                    # 标题匹配权重更高
+                    if keyword in title:
+                        paper_score += 2.0
+                    else:
+                        paper_score += 1.0
 
-        # 计算相关性得分
+            # 检查题目中的其他非通用关键词（权重中）
+            for word in all_topic_words:
+                if word not in generic_keywords and word in combined_text:
+                    if word in title:
+                        paper_score += 1.0
+                    else:
+                        paper_score += 0.5
+
+            # 每篇论文最高得分为5分
+            total_score += min(paper_score, 5.0)
+
         if total_count > 0:
-            relevance_score = relevant_count / total_count
-        else:
-            relevance_score = 0.0
-
-        print(f"[相关性验证] 相关文献: {relevant_count}/{total_count}")
-        print(f"[相关性验证] 排除文献: {exclude_count} 篇")
-
-        # 如果排除文献太多，降低得分
-        if exclude_count > total_count * 0.5:
-            relevance_score *= 0.5
-            print(f"[相关性验证] 排除文献过多，得分减半")
-
-        return relevance_score
+            # 归一化到0-1范围
+            avg_score = total_score / (total_count * 5.0)
+            return min(avg_score, 1.0)
+        return 0.0
 
     def _generic_relevance_check(self, topic: str, papers: list) -> float:
         """
@@ -2409,6 +2431,12 @@ class ReviewTaskExecutor:
         """
         生成同义词扩展查询（当原始关键词搜索结果不足时使用）
 
+        策略：使用精确的词组而不是通用词
+        例如：
+        - "Algebra" 太宽泛 → 使用 "Computer Algebra System"
+        - "Algorithm" 太宽泛 → 使用 "Symbolic Algorithm"
+        - "CAS" 太模糊 → 使用 "Computer Algebra System"
+
         Args:
             keywords: 原始关键词列表
             current_papers: 当前已找到的文献
@@ -2419,34 +2447,108 @@ class ReviewTaskExecutor:
         """
         synonym_queries = []
 
-        # 尝试从学术用语库获取同义词
-        try:
-            from services.academic_term_service import AcademicTermService
-            term_service = AcademicTermService()
+        # 精确词组映射（将通用概念扩展为精确的领域词组）
+        PRECISE_PHRASE_EXPANSIONS = {
+            # 计算机代数系统领域的精确词组
+            'computer_algebra': [
+                # 核心系统（最精确）
+                'Computer Algebra System',
+                'Symbolic Computation System',
+                'CAS Software',
 
-            # 为每个关键词查找同义词
-            for keyword in keywords:
-                # 使用术语库搜索
-                all_terms = term_service.search_keywords_from_topic(keyword)
+                # 具体系统名称（高精度）
+                'Wolfram Mathematica',
+                'Maple Computer Algebra',
+                'Maxima CAS',
+                'SageMath System',
 
-                # 找出同义词
-                for term in all_terms:
-                    if term.lower() != keyword.lower():
-                        # 检查这个同义词是否已经搜过
-                        term_key = (term, 'synonym')
-                        if term_key not in seen_ids:
-                            synonym_queries.append({
-                                'query': term,
-                                'lang': 'zh' if self._contains_chinese(term) else 'en',
-                                'source': 'all',
-                                'is_synonym': True,
-                                'original_query': keyword
-                            })
+                # 核心算法（高精度）
+                'Symbolic Integration',
+                'Gröbner Basis',
+                'Risch Algorithm',
+                'Symbolic Equation Solving',
 
-            print(f"[同义词扩展] 为 {len(keywords)} 个关键词生成 {len(synonym_queries)} 个同义词查询")
+                # 核心功能（高精度）
+                'Symbolic Manipulation',
+                'Formula Manipulation',
+                'Algebraic Computation',
+            ],
+        }
 
-        except Exception as e:
-            print(f"[同义词扩展] 术语库查询失败: {e}")
+        # 关键词到精确词组的映射
+        KEYWORD_TO_PRECISE_PHRASES = {
+            # 中文关键词 → 英文精确词组
+            '计算机代数系统': ['Computer Algebra System', 'Symbolic Computation System'],
+            '符号计算': ['Symbolic Computation', 'Computer Algebra'],
+            '符号算法': ['Symbolic Algorithm', 'Algebraic Algorithm'],
+            '多项式': ['Symbolic Polynomial', 'Algebraic Polynomial'],
+            '方程求解': ['Symbolic Equation Solving', 'Computer Algebra Equation'],
+            '符号积分': ['Symbolic Integration', 'Risch Algorithm'],
+            '公式推导': ['Symbolic Manipulation', 'Formula Manipulation'],
+            'gröbner': ['Gröbner Basis', 'Computer Algebra Algorithm'],
+
+            # 英文关键词 → 更精确的词组
+            'cas': ['Computer Algebra System', 'Symbolic Computation System'],
+            'algebra': ['Computer Algebra', 'Symbolic Algebra'],
+            'algorithm': ['Symbolic Algorithm', 'Computer Algebra Algorithm'],
+            'symbolic': ['Symbolic Computation', 'Symbolic Manipulation'],
+            'polynomial': ['Symbolic Polynomial', 'Polynomial Algorithm'],
+            'equation': ['Symbolic Equation', 'Computer Algebra Equation'],
+            'integration': ['Symbolic Integration', 'Risch Algorithm'],
+            'mathematica': ['Wolfram Mathematica', 'Mathematica CAS'],
+            'maple': ['Maple Computer Algebra', 'Maple CAS'],
+            'maxima': ['Maxima CAS', 'Maxima Computer Algebra'],
+            'sage': ['SageMath', 'Sage Computer Algebra'],
+            'optimization': ['Symbolic Optimization', 'Computer Algebra Optimization'],
+        }
+
+        # 为每个关键词生成精确的词组扩展
+        for keyword in keywords:
+            keyword_lower = keyword.lower()
+
+            # 查找该关键词对应的精确词组
+            for kw, precise_phrases in KEYWORD_TO_PRECISE_PHRASES.items():
+                if kw in keyword_lower:
+                    for phrase in precise_phrases:
+                        phrase_lower = phrase.lower()
+                        if phrase_lower != keyword_lower:
+                            phrase_key = (phrase, 'precise_phrase')
+                            if phrase_key not in seen_ids:
+                                synonym_queries.append({
+                                    'query': phrase,
+                                    'lang': 'en',
+                                    'source': 'all',
+                                    'is_synonym': True,
+                                    'original_query': keyword,
+                                    'synonym_type': 'precise_phrase'
+                                })
+                                seen_ids.add(phrase_key)
+
+        # 如果精确词组不够，使用领域特定词组
+        if len(synonym_queries) < len(keywords) * 2:
+            for domain, phrases in PRECISE_PHRASE_EXPANSIONS.items():
+                for phrase in phrases:
+                    phrase_key = (phrase, 'domain_phrase')
+                    if phrase_key not in seen_ids:
+                        synonym_queries.append({
+                            'query': phrase,
+                            'lang': 'en',
+                            'source': 'all',
+                            'is_synonym': True,
+                            'original_query': keywords[0] if keywords else phrase,
+                            'synonym_type': 'domain_phrase'
+                        })
+                        seen_ids.add(phrase_key)
+
+        if synonym_queries:
+            print(f"[同义词扩展] 为 {len(keywords)} 个关键词生成 {len(synonym_queries)} 个精确词组查询")
+            # 显示生成的精确词组（用于调试）
+            for sq in synonym_queries[:8]:
+                print(f"  - {sq['query']}")
+            if len(synonym_queries) > 8:
+                print(f"  ... 还有 {len(synonym_queries) - 8} 个")
+        else:
+            print(f"[同义词扩展] 没有生成有效的精确词组查询")
 
         return synonym_queries
 
@@ -2958,10 +3060,17 @@ class ReviewTaskExecutor:
 
         # 获取研究方向参数
         research_direction = params.get('research_direction', '')
-        if research_direction:
-            print(f"[阶段1] 使用研究方向: {research_direction}")
+
+        # 自动检测计算机代数相关主题（确保 CAS 缩写扩展正确工作）
+        if not research_direction:
+            topic_lower = topic.lower()
+            if any(kw in topic_lower for kw in ['computer algebra', '符号计算', 'cas', 'symbolic computation']):
+                research_direction = 'computer'
+                print(f"[阶段1] 自动检测到计算机代数相关主题，设置研究方向为: computer")
+            else:
+                print(f"[阶段1] 未指定研究方向，将由LLM自动推断")
         else:
-            print(f"[阶段1] 未指定研究方向，将由LLM自动推断")
+            print(f"[阶段1] 使用研究方向: {research_direction}")
 
         outline = await self._generate_review_outline(topic, research_direction)
         framework = {'outline': outline}
@@ -3022,6 +3131,7 @@ class ReviewTaskExecutor:
 
         # 过滤掉过于通用的单个词和包含未扩展 CAS 的关键词
         generic_single_words = {'algorithm', 'method', 'system', 'approach', 'technique', 'model'}
+
         filtered_english_keywords = []
         for kw in all_english_keywords:
             # 过滤条件：
