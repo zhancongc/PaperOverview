@@ -2,7 +2,16 @@
 基于主题的上下文关键词翻译服务
 
 解决关键词翻译的语义歧义问题，确保翻译后的关键词与题目主题一致。
+
+DEPRECATED: 此模块为 v5.x 旧版本遗留代码，当前 v6.0 流程已不再使用。
+保留仅用于历史参考，新代码请使用 PaperSearchAgent + SmartReviewGeneratorFinal。
 """
+import warnings
+warnings.warn(
+    "contextual_keyword_translator 模块已废弃，v6.0 流程不再使用",
+    DeprecationWarning,
+    stacklevel=2
+)
 import os
 import httpx
 from typing import List, Dict, Optional

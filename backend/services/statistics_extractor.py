@@ -2,7 +2,16 @@
 统计数据提取服务
 从论文中提取OR值、发生率、P值、样本量等具体数据
 让综述引用更加"实"起来
+
+DEPRECATED: 此模块为 v5.x 旧版本遗留代码，当前 v6.0 流程已不再使用。
+保留仅用于历史参考，新代码请使用 PaperSearchAgent + SmartReviewGeneratorFinal。
 """
+import warnings
+warnings.warn(
+    "statistics_extractor 模块已废弃，v6.0 流程不再使用",
+    DeprecationWarning,
+    stacklevel=2
+)
 import re
 import os
 from typing import List, Dict, Optional, Any

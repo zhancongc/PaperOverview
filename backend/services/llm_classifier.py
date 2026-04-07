@@ -1,7 +1,16 @@
 """
 基于大模型的题目分类器
 使用 DeepSeek API 进行智能分类，理解语义并准确识别题目核心
+
+DEPRECATED: 此模块为 v5.x 旧版本遗留代码，当前 v6.0 流程已不再使用。
+保留仅用于历史参考，新代码请使用 PaperSearchAgent + SmartReviewGeneratorFinal。
 """
+import warnings
+warnings.warn(
+    "llm_classifier 模块已废弃，v6.0 流程不再使用",
+    DeprecationWarning,
+    stacklevel=2
+)
 import os
 import json
 from openai import AsyncOpenAI

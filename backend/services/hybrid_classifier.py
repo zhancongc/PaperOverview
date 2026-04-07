@@ -2,7 +2,16 @@
 混合分类器：模式识别 + 大模型验证
 - 先用模式识别提取关键词
 - 再用大模型判断是否合理，不合理则优化
+
+DEPRECATED: 此模块为 v5.x 旧版本遗留代码，当前 v6.0 流程已不再使用。
+保留仅用于历史参考，新代码请使用 PaperSearchAgent + SmartReviewGeneratorFinal。
 """
+import warnings
+warnings.warn(
+    "hybrid_classifier 模块已废弃，v6.0 流程不再使用",
+    DeprecationWarning,
+    stacklevel=2
+)
 import re
 import os
 from enum import Enum

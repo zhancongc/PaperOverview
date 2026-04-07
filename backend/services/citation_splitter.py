@@ -2,7 +2,16 @@
 引用拆分服务
 当同一处引用超过3篇文献时，自动拆分为结构化表述
 避免[1-5]式的笼统堆砌
+
+DEPRECATED: 此模块为 v5.x 旧版本遗留代码，当前 v6.0 流程已不再使用。
+保留仅用于历史参考，新代码请使用 PaperSearchAgent + SmartReviewGeneratorFinal。
 """
+import warnings
+warnings.warn(
+    "citation_splitter 模块已废弃，v6.0 流程不再使用",
+    DeprecationWarning,
+    stacklevel=2
+)
 import re
 import os
 from typing import List, Dict, Tuple, Optional
