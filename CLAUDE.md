@@ -10,10 +10,9 @@ AutoOverview 是一个 AI 驱动的文献综述生成平台。用户输入研究
 
 ## 核心流程
 
-1. 用户输入主题 → 智能分析（分类 + 关键词）
-2. 多源文献搜索（Semantic Scholar / Crossref / DataCite）
-3. LLM (DeepSeek) 生成综述（Function Calling 渐进式信息披露）
-4. 严格引用规范（5条规则）+ IEEE 格式参考文献
+1. **阶段1**: PaperSearchAgent - LLM + Function Calling 驱动的文献检索（Semantic Scholar）
+2. **阶段2**: SmartReviewGeneratorFinal - 生成综述（预处理 → 初始生成 → 5条引用规范应用 → IEEE 格式）
+3. **阶段3**: CitationValidatorV2 - 额外引用校验和修复
 
 ## 关键约定
 
