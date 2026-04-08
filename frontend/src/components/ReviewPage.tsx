@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { ReviewViewer } from './ReviewViewer'
 import { PaymentModal } from './PaymentModal'
+import { ConfirmModal } from './ConfirmModal'
 import { api } from '../api'
 import type { Paper } from '../types'
 import './ReviewPage.css'
@@ -39,12 +40,23 @@ export function ReviewPage() {
   const [showPayModal, setShowPayModal] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [unlockMode, setUnlockMode] = useState(false)
+  const [showCreditConfirmModal, setShowCreditConfirmModal] = useState(false)
+  const [credits, setCredits] = useState<number>(0)
+  const [freeCredits, setFreeCredits] = useState<number>(0)
 
   // 计算文档显示状态（优先使用 API 返回的 taskData，fallback 到 state）
   const isPublicDocument = taskData?.isPublic ?? false
   const isPaidDocument = taskData?.isPaid ?? state?.isPaid ?? false
   const shouldShowWatermark = !isPublicDocument && !isPaidDocument
   const canExportDirectly = isPublicDocument || isPaidDocument
+
+  // 加载用户额度
+  useEffect(() => {
+    api.getCredits().then(data => {
+      setCredits(data.credits)
+      setFreeCredits(data.free_credits)
+    }).catch(() => {})
+  }, [])
 
   // 如果 URL 中有 taskId，从后端加载完整数据（确保 isPaid/isPublic 正确）
   useEffect(() => {
@@ -128,44 +140,98 @@ export function ReviewPage() {
   }
 
 
+  const doExport = async () => {
+    if (!reviewData.recordId) {
+      alert('该综述暂不支持导出')
+      return
+    }
+    setExporting(true)
+    try {
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers.Authorization = `Bearer ${token}`
+      const response = await fetch('/api/records/export', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ record_id: reviewData.recordId })
+      })
+      if (!response.ok) throw new Error('导出失败')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const filename = reviewData.title.replace(/[\/\\:]/g, '-')
+      a.download = `${filename}.docx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('导出失败，请稍后重试')
+      console.error(err)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleConfirmUseCredit = async () => {
+    if (!reviewData.recordId) return
+
+    setShowCreditConfirmModal(false)
+    setExporting(true)
+
+    try {
+      const result = await api.unlockRecordWithCredit(reviewData.recordId)
+      if (result.success) {
+        // 刷新额度
+        const creditsData = await api.getCredits()
+        setCredits(creditsData.credits)
+        setFreeCredits(creditsData.free_credits)
+
+        // 刷新任务数据（is_paid 状态已更新）
+        if (taskId) {
+          api.getTaskReview(taskId).then(res => {
+            if (res.success && res.data) {
+              setTaskData({
+                title: res.data.topic,
+                content: res.data.review,
+                papers: res.data.papers || [],
+                recordId: res.data.record_id,
+                isPublic: res.data.is_public,
+                isPaid: res.data.is_paid,
+              })
+            }
+          }).catch(() => {})
+        }
+
+        // 直接导出
+        await doExport()
+      } else {
+        alert(result.message || '解锁失败，请稍后重试')
+      }
+    } catch (err) {
+      console.error('解锁失败:', err)
+      alert('解锁失败，请稍后重试')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const handleExportWord = async () => {
     // 公开文档或已付费文档，直接导出
     if (canExportDirectly) {
-      if (!reviewData.recordId) {
-        alert('该综述暂不支持导出')
-        return
-      }
-      setExporting(true)
-      try {
-        const token = localStorage.getItem('auth_token')
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (token) headers.Authorization = `Bearer ${token}`
-        const response = await fetch('/api/records/export', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ record_id: reviewData.recordId })
-        })
-        if (!response.ok) throw new Error('导出失败')
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        const filename = reviewData.title.replace(/[\/\\:]/g, '-')
-        a.download = `${filename}.docx`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      } catch (err) {
-        alert('导出失败，请稍后重试')
-        console.error(err)
-      } finally {
-        setExporting(false)
-      }
+      await doExport()
       return
     }
 
-    // 免费文档，弹出单次解锁支付弹窗
+    // 免费生成的综述，检查是否有付费额度
+    if (credits > 0) {
+      // 有额度，弹出确认框
+      setShowCreditConfirmModal(true)
+      return
+    }
+
+    // 没有额度，弹出单次解锁支付弹窗
     setUnlockMode(true)
     setShowPayModal(true)
   }
@@ -328,6 +394,19 @@ export function ReviewPage() {
             setShowPayModal(false)
           }}
           planType="single"
+        />
+      )}
+
+      {/* 使用额度确认弹窗 */}
+      {showCreditConfirmModal && (
+        <ConfirmModal
+          title="使用套餐额度解锁"
+          message={`您有 ${credits} 个付费额度。\n是否使用 1 个额度解锁此综述并导出 Word？`}
+          confirmText="使用额度解锁"
+          cancelText="取消"
+          onConfirm={handleConfirmUseCredit}
+          onCancel={() => setShowCreditConfirmModal(false)}
+          type="warning"
         />
       )}
     </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { getLocalUserInfo, isLoggedIn } from '../authApi'
 import { PaymentModal } from './PaymentModal'
+import { ConfirmModal } from './ConfirmModal'
 import type { ReviewRecord } from '../types'
 import './ProfilePage.css'
 
@@ -17,6 +18,8 @@ export function ProfilePage() {
   const [pendingExportRecordId, setPendingExportRecordId] = useState<number | null>(null)
   const [exportingId, setExportingId] = useState<number | null>(null)
   const [unlockMode, setUnlockMode] = useState(false)  // true=单次解锁, false=购买套餐
+  const [showCreditConfirmModal, setShowCreditConfirmModal] = useState(false)
+  const [confirmRecordId, setConfirmRecordId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -74,31 +77,73 @@ export function ProfilePage() {
 
     // 已付费生成的综述，直接导出
     if (record.is_paid) {
-      setExportingId(id)
-      try {
-        const blob = await api.exportReview(id)
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        const filename = record.topic.replace(/[\/\\:]/g, '-')
-        a.download = `${filename}.docx`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      } catch (err) {
-        console.error('导出失败:', err)
-        alert('导出失败，请稍后重试')
-      } finally {
-        setExportingId(null)
-      }
+      await doExport(id, record)
       return
     }
 
-    // 免费生成的综述，弹出单次解锁支付弹窗
+    // 免费生成的综述，检查是否有付费额度
+    if (credits > 0) {
+      // 有额度，弹出确认框
+      setConfirmRecordId(id)
+      setShowCreditConfirmModal(true)
+      return
+    }
+
+    // 没有额度，直接弹出支付弹窗
     setUnlockMode(true)
     setPendingExportRecordId(id)
     setShowPayModal(true)
+  }
+
+  const doExport = async (id: number, record: ReviewRecord) => {
+    setExportingId(id)
+    try {
+      const blob = await api.exportReview(id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const filename = record.topic.replace(/[\/\\:]/g, '-')
+      a.download = `${filename}.docx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('导出失败:', err)
+      alert('导出失败，请稍后重试')
+    } finally {
+      setExportingId(null)
+    }
+  }
+
+  const handleConfirmUseCredit = async () => {
+    if (confirmRecordId === null) return
+    const record = records.find(r => r.id === confirmRecordId)
+    if (!record) return
+
+    setShowCreditConfirmModal(false)
+    setExportingId(confirmRecordId)
+
+    try {
+      const result = await api.unlockRecordWithCredit(confirmRecordId)
+      if (result.success) {
+        // 刷新记录列表和额度
+        await loadRecords()
+        const creditsData = await api.getCredits()
+        setCredits(creditsData.credits)
+
+        // 直接导出
+        await doExport(confirmRecordId, record)
+      } else {
+        alert(result.message || '解锁失败，请稍后重试')
+      }
+    } catch (err) {
+      console.error('解锁失败:', err)
+      alert('解锁失败，请稍后重试')
+    } finally {
+      setExportingId(null)
+      setConfirmRecordId(null)
+    }
   }
 
   const handleLogout = () => {
@@ -281,6 +326,22 @@ export function ProfilePage() {
             }
           }}
           planType="single"
+        />
+      )}
+
+      {/* 使用额度确认弹窗 */}
+      {showCreditConfirmModal && confirmRecordId !== null && (
+        <ConfirmModal
+          title="使用套餐额度解锁"
+          message={`您有 ${credits} 个付费额度。\n是否使用 1 个额度解锁此综述并导出 Word？`}
+          confirmText="使用额度解锁"
+          cancelText="取消"
+          onConfirm={handleConfirmUseCredit}
+          onCancel={() => {
+            setShowCreditConfirmModal(false)
+            setConfirmRecordId(null)
+          }}
+          type="warning"
         />
       )}
     </div>

@@ -1,0 +1,210 @@
+/* ==================== 确认弹窗 ==================== */
+:root {
+  --academic-red: #D63031;
+  --academic-red-dark: #B71C1C;
+  --academic-red-light: #FF5252;
+  --cream-white: #FFFBF5;
+  --pure-white: #FFFFFF;
+  --ink-black: #1A1A1A;
+  --charcoal: #2D3436;
+  --text-gray: #636E72;
+  --light-gray: #DFE6E9;
+  --border-gray: #E8ECEF;
+  --warning-orange: #f39c12;
+  --warning-orange-dark: #e67e22;
+  --success-green: #27ae60;
+  --success-green-dark: #219a52;
+}
+
+.confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.confirm-modal {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+  width: 420px;
+  max-width: 90vw;
+  position: relative;
+  padding: 32px;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.confirm-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 24px;
+  color: var(--text-gray);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: none;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.confirm-modal-close:hover {
+  color: var(--charcoal);
+  background: var(--cream-white);
+}
+
+/* 头部 */
+.confirm-modal-header {
+  text-align: center;
+  padding-bottom: 20px;
+}
+
+.confirm-modal-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.confirm-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink-black);
+  margin: 0;
+  font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* 内容 */
+.confirm-modal-body {
+  padding: 0 0 24px 0;
+}
+
+.confirm-modal-message {
+  font-size: 15px;
+  color: var(--text-gray);
+  text-align: center;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* 底部按钮 */
+.confirm-modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirm-modal-btn {
+  flex: 1;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.confirm-modal-btn-cancel {
+  background: var(--cream-white);
+  color: var(--text-gray);
+  border: 1.5px solid var(--border-gray);
+}
+
+.confirm-modal-btn-cancel:hover {
+  background: white;
+  border-color: var(--text-gray);
+  color: var(--charcoal);
+  transform: translateY(-1px);
+}
+
+.confirm-modal-btn-primary {
+  background: linear-gradient(135deg, var(--academic-red) 0%, var(--academic-red-dark) 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(214, 48, 49, 0.25);
+}
+
+.confirm-modal-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(214, 48, 49, 0.35);
+}
+
+.confirm-modal-btn-danger {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.25);
+}
+
+.confirm-modal-btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(243, 156, 18, 0.35);
+}
+
+.confirm-modal-btn-warning {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.25);
+}
+
+.confirm-modal-btn-warning:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(243, 156, 18, 0.35);
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+  .confirm-modal {
+    padding: 24px 20px;
+  }
+
+  .confirm-modal-title {
+    font-size: 18px;
+  }
+
+  .confirm-modal-message {
+    font-size: 14px;
+  }
+
+  .confirm-modal-footer {
+    flex-direction: column;
+  }
+
+  .confirm-modal-btn {
+    width: 100%;
+  }
+}
