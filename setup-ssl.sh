@@ -9,7 +9,7 @@ set -e
 
 DOMAIN="autooverview.snappicker.com"
 NGINX_CONF="/etc/nginx/sites-available/autooverview"
-CERTBOT_EMAIL=""  # 留空则 certbot 会交互式询问
+CERTBOT_EMAIL="service@snappicker.com"
 
 # 颜色
 RED='\033[0;31m'
