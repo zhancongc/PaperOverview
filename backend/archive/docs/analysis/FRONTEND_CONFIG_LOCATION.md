@@ -78,4 +78,4 @@
 ## 修改建议
 
 如果需要修改默认值，可以编辑：
-- `/Users/zhancc/Github/PaperOverview/frontend/src/App.tsx` 第 31-35 行
+- `/Users/zhancc/Github/AutoOverview/frontend/src/App.tsx` 第 31-35 行

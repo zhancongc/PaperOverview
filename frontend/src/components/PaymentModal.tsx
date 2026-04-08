@@ -99,6 +99,23 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
     }
   }, [orderNo, paymentStatus, onPaymentSuccess])
 
+  // 开发环境：5秒后自动触发模拟支付
+  useEffect(() => {
+    if (!IS_DEV || !payUrl || paymentStatus !== 'waiting' || planType !== 'unlock') return
+
+    const timer = setTimeout(async () => {
+      try {
+        // 调用模拟支付URL（DevAlipayService返回的回调URL）
+        await fetch(payUrl)
+        // 轮询会检测到支付成功
+      } catch (err) {
+        console.error('模拟支付失败:', err)
+      }
+    }, 5000)
+
+    return () => clearTimeout(timer)
+  }, [IS_DEV, payUrl, paymentStatus, planType])
+
   // 创建订单
   const createPayment = useCallback(async () => {
     setLoading(true)
@@ -116,14 +133,10 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
           return
         }
         setOrderNo(result.order_no || '')
+        setPayUrl(result.pay_url || '')
         setAmount(29.8)
-        // 开发环境直接支付成功
-        if (IS_DEV) {
-          setPaymentStatus('paid')
-          onPaymentSuccess()
-        } else {
-          setPaymentStatus('waiting')
-        }
+        // 统一进入等待状态，开发环境5秒后自动触发支付
+        setPaymentStatus('waiting')
       } else {
         // 套餐购买模式
         const result = await api.createSubscription(planType)
@@ -199,14 +212,18 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
             <div className="payment-modal-payment">
               {IS_DEV ? (
                 <div className="payment-modal-devpay">
-                  <p className="payment-dev-hint">🔧 开发环境 · 模拟支付</p>
+                  <p className="payment-dev-hint">
+                    🔧 开发环境 · {planType === 'unlock' ? '5秒后自动完成支付' : '模拟支付'}
+                  </p>
                   <p className="payment-dev-order">订单号：{orderNo}</p>
-                  <button className="payment-modal-btn" onClick={handleDevPay}>
-                    模拟支付（¥{amount}）
-                  </button>
+                  {planType !== 'unlock' && (
+                    <button className="payment-modal-btn" onClick={handleDevPay}>
+                      模拟支付（¥{amount}）
+                    </button>
+                  )}
                   <div className="payment-modal-polling">
                     <div className="payment-spinner small"></div>
-                    <p>等待支付结果...</p>
+                    <p>{planType === 'unlock' ? '正在自动支付...' : '等待支付结果...'}</p>
                   </div>
                 </div>
               ) : (

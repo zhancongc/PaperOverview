@@ -469,23 +469,39 @@ async def unlock_record_for_export(
         auth_db.add(log)
         auth_db.commit()
 
-        # 开发环境直接支付成功
-        if os.getenv("PAYMENT_ENV", "dev") == "dev":
-            from authkit.services.alipay import AlipayService
-            alipay_service = AlipayService()
-            await alipay_service.handle_payment_success(
-                order_no=order_no,
-                trade_no=f"dev_trade_{uuid.uuid4().hex[:16]}",
-                # 传递额外的元数据用于解锁记录
-                extra_data={"record_id": request.record_id}
-            )
+        # 统一调用支付服务（开发环境使用 DevAlipayService，生产环境使用真实支付宝）
+        from authkit.services.payment_config import get_payment_config, get_payment_service
 
-        return {
-            "success": True,
-            "order_no": order_no,
-            "amount": 29.8,
-            "message": "解锁订单已创建"
-        }
+        payment_config = get_payment_config()
+        alipay_service = get_payment_service()
+
+        # 构建回调 URL
+        return_url = f"{payment_config['frontend_url']}/profile"
+        notify_url = f"{payment_config['backend_url']}/api/payment/notify"
+
+        # 创建支付订单
+        pay_url = alipay_service.create_order(
+            out_trade_no=order_no,
+            total_amount=29.8,
+            subject="单次解锁综述导出",
+            timeout_express="15m",
+            return_url=return_url,
+            notify_url=notify_url
+        )
+
+        if pay_url:
+            return {
+                "success": True,
+                "order_no": order_no,
+                "amount": 29.8,
+                "pay_url": pay_url,
+                "message": "解锁订单已创建，请完成支付"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "创建支付订单失败，请稍后重试"
+            }
     finally:
         auth_db.close()
 

@@ -1,0 +1,2791 @@
+{
+  "topic": "computer algebra system的算法实现及应用",
+  "review": "# 计算机代数系统的算法实现及应用：文献综述\n\n## 引言\n\n计算机代数系统（Computer Algebra System， CAS）是一类能够进行符号数学运算的软件系统，其核心在于对数学表达式进行解析、化简、变换和求解，而不仅仅是数值计算。自20世纪60年代以来，随着计算理论和硬件的发展，CAS已从学术研究工具演变为广泛应用于科学研究、工程计算和教育领域的强大平台[1, 2]。其发展历程见证了从专用系统（如REDUCE、Macsyma）到通用商业系统（如Maple、Mathematica）和开源系统（如Maxima、SymPy）的转变，深刻地影响了数学、物理、工程和计算机科学的研究范式[3, 4]。\n\n计算机代数系统的核心价值在于其算法实现。这些算法涵盖了多项式代数、微积分、微分方程、线性代数、数论和代数几何等众多数学分支。高效的算法是实现CAS功能性和实用性的基础，例如Gröbner基计算、符号积分、微分方程求解和矩阵运算等[5, 6]。近年来，随着计算需求的日益复杂和跨学科融合的加深，CAS的算法不断优化，其应用范围也从传统的数学物理领域扩展至人工智能、量子计算、形式验证和工程优化等新兴前沿[7, 8, 9]。\n\n本综述旨在系统梳理计算机代数系统的核心算法实现及其在多学科领域的应用进展。首先，本文将概述CAS的核心算法与实现技术；其次，重点评述其在数学物理、工程科学、人工智能与机器学习等领域的应用成果；接着，探讨其在教育领域的作用；最后，总结当前面临的挑战并展望未来发展方向。本文引用的文献涵盖了2016年至2025年间的研究成果，力图反映该领域的最新动态。\n\n## 1. 计算机代数系统的核心算法与实现\n\n计算机代数系统的强大功能植根于一系列高效、精确的符号计算算法。这些算法构成了CAS的“引擎”，其设计与优化直接决定了系统的性能和应用范围。\n\n### 1.1 符号计算基础算法\n\n多项式代数是符号计算的基础，其中Gröbner基计算是核心算法之一，广泛应用于方程求解、几何定理证明和密码学。传统的Buchberger算法及其优化变体是计算Gröbner基的标准方法。近年来，机器学习技术被引入以优化算法中的关键步骤，例如S-对选择。Peifer等人[5]利用强化学习训练策略模型，在特定类型的二项式方程系统上，其学习到的选择策略在多项式加法总数上超越了传统启发式方法，为算法优化提供了新的思路。除了Gröbner基，线性递推关系计算也是符号求和与插值的基础。Berthomieu和Faugère[10]提出了一种基于多项式除法的算法，用于计算序列的线性递推关系理想，该算法完全基于多元多项式算术，避免了传统方法中的线性代数操作，为稀疏多项式插值等问题提供了新途径。\n\n在矩阵计算方面，广义逆（如Drazin逆）的符号计算是线性代数中的重要问题。Sendra[11]以及Stanimirović等人[12]研究了在一般域上通过特殊化等方法符号计算广义逆的表示与算法，这些工作为处理奇异矩阵和病态系统提供了理论工具。\n\n### 1.2 微分方程与积分计算\n\n符号微分方程求解是CAS的标志性功能之一。针对大型常微分方程系统，紧凑且高效的雅可比矩阵符号计算是关键。Kofman等人[13]提出了在大规模ODE系统中计算紧凑稀疏符号雅可比矩阵的方法，这对基于雅可比矩阵的数值求解器（如刚性方程求解器）的效率至关重要。在积分计算领域，Raab[14]研究了参数积分的符号计算，这类积分常见于物理和工程中的特殊函数。在理论物理中，Feynman积分的计算是高能物理精确计算的核心挑战。Wu等人[15]开发的NeatIBP软件包，利用零化和模交技术生成小规模的积分-by-parts（IBP）关系，相比标准的Laporta算法能产生更紧凑的方程组，显著提升了多圈Feynman积分的约化效率。\n\n对于特殊类型的序列和函数，算法也在不断进步。Ablinger[16]通过结合Kovacic算法求解线性微分方程，改进了计算全纯序列的逆Mellin变换的方法。Fox[17]则利用符号计算，开发了搜索Hofstadter类递归方程的线性递归解算法，发现了此类序列的无限族。\n\n### 1.3 程序变换与自动化\n\n除了具体的数学算法，如何将符号计算能力集成到更广泛的程序分析与验证流程中，也是一个重要方向。Lauko等人[6]提出了一种基于程序变换的符号计算方法。该方法通过编译器工具将标准程序转换为能在内部维护和操作符号值的语义等价程序，从而使得不支持符号操作的验证工具也能间接处理符号计算，简化了工具链的构造。\n\n### 1.4 几何代数与张量计算\n\n几何代数（Geometric Algebra, GA）提供了一种统一的数学语言来描述几何对象和变换，在计算机图形学、机器人和物理中有广泛应用。Hildenbrand[18]对几何代数计算进行了系统介绍。在实现层面，Peeters[19]开发的Cadabra2系统专门针对场论中的张量计算问题，提供了直观的输入格式和交互式笔记本界面，极大地简化了拉格朗日量处理、运动方程计算和对称性分析等任务，弥补了主流CAS在张量符号计算方面的不足。\n\n## 2. 计算机代数系统在数学物理中的应用\n\n数学物理是计算机代数系统最早且最深入的应用领域之一。CAS为求解复杂的非线性偏微分方程（PDE）、分析可积系统以及研究引力与场论提供了不可或缺的工具。\n\n### 2.1 非线性偏微分方程解析解\n\n寻找非线性PDE的精确解（如孤子、怪波和块状解）是数学物理中的核心课题。符号计算通过自动化李对称分析、双线性方法、试探函数法等，极大地推动了这个领域的发展。大量研究集中在各类可积系统上，例如：\n- **Kadomtsev-Petviashvili (KP) 类方程**：Yang和Ma[20]利用符号计算求解了BKP方程的块状解。Lü等人[21]研究了扩展的KP类方程的有理解。Adem[22]结合李对称分析和扩展tanh方法，求解了耦合KP方程的精确解。\n- **Boussinesq-Burgers系统**：Gao等人[23]针对高阶Boussinesq-Burgers系统，从二维Bell多项式出发构造了非自Bäcklund变换，并从Painlevé-Bäcklund格式得到了自Bäcklund变换和孤子解，并将其应用于地球、土卫二和土卫六的水波研究。\n- **(2+1)维和(3+1)维系统**：Gao在一系列工作中系统地运用符号计算方法研究了多个(2+1)维变系数系统，如Sawada-Kotera系统[24]、广义非线性演化系统[25]、广义变系数Boiti–Leon–Pempinelli系统[26]以及广义色散长波系统[27]，揭示了它们在流体力学、等离子体物理和非线性光学中的应用。Kumar等人[28, 29]则求解了新的(3+1)维Painlevé可积广义非线性演化方程和KdV-BBM方程的怪波与块状解。\n- **怪波与可控中心**：Zhaqilao[30]和Liu等人[31]分别提出了构造具有可控中心的怪波和寻找变系数非线性系统多怪波解的符号计算途径。\n\n### 2.2 可积系统与对称性分析\n\n除了求解，CAS还用于研究方程本身的可积结构和对称性。Krasil'shchik等人[32]的专著系统阐述了PDE可积结构的符号计算。Cheviakov和Cheviakov[33]开发了用于非线性物理模型等价变换和参数约简的符号计算工具。Adem等人[34]对一个广义色散水波系统进行了守恒律计算、对称约化和行波解研究，展示了符号计算在系统分析中的综合应用。\n\n### 2.3 引力理论与场论\n\n在广义相对论和量子场论中，涉及繁重的张量计算。MacCallum[35]综述了计算机代数在引力研究中的应用，包括精确解、摄动计算和数值相对论的准备工作。Cadabra2[19]即是专门为此领域设计的CAS。在量子电动力学等领域，Shirokov[36]展示了计算机代数在超对称电动力学计算中的应用。Korolkova等人[37]则利用空间-时间代数形式对麦克斯韦方程进行了符号研究。\n\n### 2.4 天体力学与动力系统\n\nCAS也被用于探索基础物理问题。Mogavero等人[38]通过计算机代数揭示了太阳系混沌的起源。在动力系统方面，Huang等人[39, 40]利用符号计算方法分析快返排斥子和微分方程定性理论，Song[41]则对Lorenz-84系统进行了定性研究。\n\n## 3. 计算机代数系统在工程与科学计算中的应用\n\n计算机代数系统在工程领域的应用主要体现在建模、分析、优化和验证等方面，其符号推导能力能够帮助工程师获得更深刻的理解和更可靠的设计。\n\n### 3.1 控制系统与机器人学\n\n在控制领域，符号计算可用于推导系统模型和设计控制器。Jiang[42]将符号计算用于自主海洋水面船的非线性模型预测控制。Do[43]提出了用于串行柔性关节机器人逆动力学的符号微分算法，提高了计算效率。在机器人运动学中，Chablat等人[44]通过计算机代数和实代数几何算法，判定机械臂的尖点性。结构分析方面，Hang[45]利用共形几何代数对并联机构进行了结构分析。\n\n### 3.2 电路设计与形式验证\n\n集成电路（IC）设计，特别是模拟IC设计，严重依赖于专家经验。Shi等人[46]调查了利用符号计算实现模拟IC设计自动推理的进展。在数字电路，尤其是算术电路的验证方面，符号计算与SAT求解器结合成为了强大工具。Mahzoon等人[47]使用符号计算机代数和布尔可满足性形式验证了模乘器。Kaufmann等人[48]通过结合SAT求解和计算机代数改进了AMulet2乘法器验证工具。Rao等人[49]则利用计算机代数技术对整数运算电路进行校正。Li等人[50, 51]甚至利用SAT求解器和计算机代数攻击了最小的Kochen-Specker问题。\n\n### 3.3 科学计算与多物理场建模\n\n在计算流体动力学（CFD）中，Cordesse[52]应用计算机代数推导了带非保守项非线性PDE系统的熵补充守恒律，用于复杂流体流动的建模与分析。Vorozhtsov等人[53]利用计算机代数手段比较了分子动力学问题中高阶差分格式的精度。\n在航空航天领域，Gutnik等人[54, 55, 56, 57]系列工作应用计算机代数方法研究连接体系统在轨道或引力场中的平稳运动。Prokopenya[58, 59]则用CAS研究变质量多体问题中的演化方程。\n\n### 3.4 优化与设计空间探索\n\n符号计算有助于理解和优化复杂系统。Kim[60]通过集成接口利用符号计算进行复杂系统的高效设计优化。Zhao[61]提出通过自适应采样和符号计算来描述设计空间。\n\n## 4. 计算机代数系统在人工智能与机器学习中的新兴应用\n\n人工智能，特别是机器学习，与符号计算正经历着深刻的交叉融合，催生了神经符号计算等新范式，同时也利用CAS来增强机器学习模型的能力和可解释性。\n\n### 4.1 从符号AI到神经符号AI\n\n传统的符号AI基于逻辑和规则，而深度学习则在感知任务上表现出色。将两者结合的神经符号AI旨在获得兼具学习能力和推理能力的系统。Liang[62]回顾了从符号AI到神经符号AI的演进。Pisano[63]提出了一个用于可解释AI（XAI）的统一神经符号计算模型。在认知科学层面，Cho等人[64]将梯度符号计算用于句子处理的增量解析，建立了连续动力系统与离散符号结构之间的桥梁。\n\n### 4.2 符号回归与机器学习辅助计算\n\n符号回归旨在从数据中发现简洁的数学表达式，是机器学习与符号计算结合的典型例子。Fox[65]探讨了如何利用计算机代数系统将背景知识融入符号回归过程。Sun[66]提出了符号回归辅助的离线数据驱动进化计算。在材料科学中，Wang[67]通过维度同步计算进行符号回归，以发现材料性质的本构关系。在算法层面，Barket[68]利用长短期记忆网络（LSTM）和树LSTM来选择符号积分算法，展示了机器学习优化符号计算流程的潜力。\n\n### 4.3 自动定理证明与形式验证\n\nSAT（可满足性）求解器与计算机代数的结合是形式验证领域的强大组合。Ábrahám等人[69, 70]和Davenport等人[71]系统探讨了可满足性检查与符号计算的结合。Bright等人[72]也综述了这一交叉领域。Zulkoski等人[73, 74]开发了MathCheck，一个结合CAS和SAT求解器的数学助手，用于验证组合猜想和充当数学助手。在信息论中，Guo[75]利用符号计算证明信息不等式和恒等式。\n\n### 4.4 量子计算算法实现\n\n量子计算作为一种新的计算范式，其算法设计和模拟也受益于CAS。Kerenedis等人[8]提出了用于无监督机器学习的量子q-means算法。Coles等人[76]为初学者提供了量子算法实现的教程。Camps等人[77]给出了特定稀疏矩阵块编码的显式量子电路。Shao[78]提出了在量子计算机上计算可对角化矩阵特征值的算法。Combarro等人[79]提出了判断有限维代数交换性的量子算法。Nguyen[80]则通过MAGMA计算代数系统模拟量子计算。\n\n## 5. 计算机代数系统在教育与可视化中的角色\n\n计算机代数系统不仅是研究工具，也是强大的教育辅助手段，能够改变数学和工程学科的教学与学习方式，并促进教育的可及性。\n\n### 5.1 数学教育辅助工具\n\n大量研究探讨了CAS在数学教学中的效果和应用模式。Tamur等人[81]对过去十年基于CAS的数学学习进行了元分析，总体肯定了其积极影响。具体应用包括：\n- **微积分与线性代数**：Kamalov等人[82]通过案例研究展示了在微积分课程中利用SymPy带来的成绩显著提升。Karjanto[83]通过结合SageMath和免费电子书，在翻转课堂中教授线性代数。\n- **微分方程**：Zeynivandnezhad[84]探讨了在微分方程中运用CAS来阐释数学思维。Lohgheswary[85]讨论了将CAS纳入微分方程教学大纲。\n- **特定数学分支**：Olenev[86, 87]展示了使用Maple CAS教授数学归纳法、集合论和组合学基础。Velychko[88]探讨了在未来数学教师培训过程中使用Maxima。\n- **动态几何与证明**：Hasek[89]将动态几何软件辅以CAS作为证明工具。Brown[90]则探讨了CAS是否准备好用于课堂中几何不等式的猜想与证明。\n\n### 5.2 可视化、可访问性与系统开发\n\n对于视觉障碍学习者，CAS的可访问性至关重要。Mejía等人[91, 92]和Zambrano[93]分别开发了面向视障人士的CAS系统CASVI和IrisMath，并进行了实验评估。在可视化方面，Petković等人[94, 95]将符号计算和计算机图形学作为工具，用于开发和研宄新的求根方法。在系统开发上，Karjanto[96, 97]积极推广开源CAS Maxima在教学中的应用。\n\n### 5.3 评估与互动学习\n\nCAS也被用于创建形成性评估。Herbert[98]利用LaTeX、PDF表单和计算机代数创建数学形成性评估。Pardos和Bhandari[99]则评估了ChatGPT与人类导师生成的代数提示在学习增益上的差异，发现人类提示仍具显著优势，这为AI教育工具的研发提供了重要参考。\n\n## 结论与展望\n\n本文系统综述了计算机代数系统的算法实现及其在数学物理、工程科学、人工智能和教育等领域的广泛应用。文献表明，经过数十年的发展，CAS已经从强大的符号计算引擎演变为支撑多学科研究和创新的基础性工具。\n\n**主要进展总结如下**：\n1.  **算法核心不断强化**：经典算法（如Gröbner基计算）通过机器学习等方法得到优化；新算法（如基于多项式除法的递推关系计算[10]）不断涌现；专门领域系统（如Cadabra2）针对张量场论等需求提供了高效解决方案。\n2.  **应用边界持续拓展**：在数学物理中，CAS已成为求解非线性PDE、分析可积系统和研究引力理论的标准工具[4-7, 15, 48]。在工程中，它深入到控制、机器人、电路验证等核心环节[42, 44, 49]。与AI的融合催生了神经符号计算[62, 63]、符号回归[67, 65]和机器学习辅助的算法选择[68]等新方向。\n3.  **教育角色日益凸显**：CAS作为教学辅助、探究工具和可访问性解决方案，正在重塑数学教育[81, 82]，并为特殊需求学生提供支持[91, 93]。\n\n**当前挑战与未来方向**：\n尽管成果丰硕，该领域仍面临诸多挑战，未来研究可能在以下方向取得突破：\n1.  **可扩展性与性能**：处理大规模、高复杂度问题（如极高阶PDE系统、超大矩阵）时，符号计算仍面临组合爆炸和内存限制。未来需要结合高性能计算、并行算法和混合符号-数值方法[100, 101]。\n2.  **算法的智能化与自动化**：如何让CAS更智能地选择算法、猜测表达式形式、甚至自动发现新的数学关系，是一个长期目标。深度学习和符号计算的深度融合将是一个关键路径[102, 103, 104]。\n3.  **跨范式集成的鲁棒性**：神经符号系统、SAT与代数混合求解器等集成系统的理论完备性和实际鲁棒性仍需加强[72, 71, 105]。需要发展更坚实的数学基础来保证这些复杂系统的可靠性。\n4.  **量子计算时代的适配**：随着量子计算硬件的发展，需要开发适用于量子算法设计、分析和验证的新型符号计算工具[76, 106]，并探索量子计算机代数系统的新形态。\n5.  **用户体验与普及**：降低专业CAS的使用门槛，开发更直观的交互界面（如自然语言输入），并将其更无缝地嵌入到科研工作流和教育环境中，对于扩大其影响力至关重要[9]。\n\n计算机代数系统正处于一个充满活力的交叉点。它不仅是执行复杂数学计算的工具，更已成为连接纯数学、应用科学和计算智能的桥梁。面对日益复杂的科学问题和工程挑战，持续推动计算机代数算法的创新与应用边界的拓展，对于加速科学发现和技术进步具有不可替代的意义。未来的CAS将更加智能、强大和普及，继续在人类探索未知世界的征程中扮演关键角色。\n\n## References\n\n[1] Bruno Salvy, \"SYMBOLIC COMPUTATION,\" Applied Numerical Methods Using Matlab®, 2020. DOI: 10.1002/9781119626879.app7\n\n[2] W. Koepf, \"Introduction to Computer Algebra,\" Springer Undergraduate Texts in Mathematics and Technology, 2021. DOI: 10.1007/978-3-030-78017-3_1\n\n[3] E. Roanes-Lozano, José Luis Galán García, and Carmen Solano-Macías, \"Some Reflections About the Success and Impact of the Computer Algebra System DERIVE with a 10-Year Time Perspective,\" Mathematics in Computer Science, 2019. DOI: 10.1007/s11786-019-00404-9\n\n[4] V. Gerdt, Wolfram Koepf, Werner M. Seiler, et al., \"Computer Algebra in Scientific Computing,\" Lecture Notes in Computer Science, 2018. DOI: 10.1007/978-3-319-99639-4\n\n[5] Dylan Peifer, M. Stillman, and Daniel Halpern-Leistner, \"Learning selection strategies in Buchberger's algorithm,\" in International Conference on Machine Learning, 2020\n\n[6] Henrich Lauko, P. Ročkai, and J. Barnat, \"Symbolic Computation via Program Transformation,\" arXiv preprint, 10.1007/978-3-030-02508-3_17, 2018\n\n[7] Gaurav Kumar, R. Banerjee, Deepak Kr Singh, et al., \"Mathematics for Machine Learning,\" Journal of Mathematical Sciences & Computational Mathematics, 2020. DOI: 10.1017/9781108679930\n\n[8] Iordanis Kerenidis, Jonas Landman, Alessandro Luongo, et al., \"q-means: A quantum algorithm for unsupervised machine learning,\" Neural Information Processing Systems, 2018\n\n[9] Hayk Martiros, Aaron Miller, Nathan Bucki, et al., \"SymForce: Symbolic Computation and Code Generation for Robotics,\" arXiv preprint, 10.15607/RSS.2022.XVIII.041, 2022\n\n[10] Jérémy Berthomieu and J. Faugère, \"A Polynomial-Division-Based Algorithm for Computing Linear Recurrence Relations,\" in Proceedings of the 2018 ACM International Symposium on Symbolic and Algebraic Computation, 2018. DOI: 10.1145/3208976.3209017\n\n[11] J. Sendra and J. Sendra, \"Symbolic computation of Drazin inverses by specializations,\" J. Comput. Appl. Math., 2016. DOI: 10.1016/j.cam.2016.01.059\n\n[12] P. Stanimirović, M. Ciric, A. Lastra, et al., \"Representations and symbolic computation of generalized inverses over fields,\" Appl. Math. Comput., 2021. DOI: 10.1016/j.amc.2021.126287\n\n[13] E. Kofman, Joaquín Fernández, and Denise Marzorati, \"Compact sparse symbolic Jacobian computation in large systems of ODEs,\" Appl. Math. Comput., 2021. DOI: 10.1016/j.amc.2021.126181\n\n[14] C. Raab, \"Symbolic Computation of Parameter Integrals,\" in Proceedings of the 2016 ACM International Symposium on Symbolic and Algebraic Computation, 2016. DOI: 10.1145/2930889.2930940\n\n[15] Zihao Wu, J. Boehm, Rourou Ma, et al., \"NeatIBP 1.0, a package generating small-size integration-by-parts relations for Feynman integrals,\" Comput. Phys. Commun., 2023. DOI: 10.1016/j.cpc.2023.108999\n\n[16] J. Ablinger, \"Computing the Inverse Mellin Transform of Holonomic Sequences using Kovacic's Algorithm,\" arXiv preprint, 10.22323/1.290.0001, 2018\n\n[17] Nathan Fox, \"Discovering linear-recurrent solutions to Hofstadter-like recurrences using symbolic computation,\" J. Symb. Comput., 2018. DOI: 10.1016/j.jsc.2017.06.002\n\n[18] D. Hildenbrand, \"Introduction to Geometric Algebra Computing\", 2018. DOI: 10.1201/9781315152172\n\n[19] K. Peeters, \"Cadabra2: computer algebra for field theory revisited,\" J. Open Source Softw., 2018. DOI: 10.21105/JOSS.01118\n\n[20] Jingyuan Yang and W. Ma, \"Lump solutions to the BKP equation by symbolic computation,\" International Journal of Modern Physics B, 2016. DOI: 10.1142/S0217979216400282\n\n[21] Xing Lü, W. Ma, Yuan Zhou, et al., \"Rational solutions to an extended Kadomtsev-Petviashvili-like equation with symbolic computation,\" Comput. Math. Appl., 2016. DOI: 10.1016/j.camwa.2016.02.017\n\n[22] A. Adem, \"Symbolic computation on exact solutions of a coupled Kadomtsev-Petviashvili equation: Lie symmetry analysis and extended tanh method,\" Comput. Math. Appl., 2017. DOI: 10.1016/j.camwa.2017.06.049\n\n[23] Xin-Yi Gao, Yongjiang Guo, and Wen-Rui Shan, \"Water-wave symbolic computation for the Earth, Enceladus and Titan: The higher-order Boussinesq-Burgers system, auto- and non-auto-Bäcklund transformations,\" Appl. Math. Lett., 2020. DOI: 10.1016/j.aml.2019.106170\n\n[24] Xin-Yi Gao, \"In plasma physics and fluid dynamics: Symbolic computation on a (2+1)-dimensional variable-coefficient Sawada-Kotera system,\" Appl. Math. Lett., 2024. DOI: 10.1016/j.aml.2024.109262\n\n[25] Xin-Yi Gao, \"Symbolic Computation on a (2+1)-Dimensional Generalized Nonlinear Evolution System in Fluid Dynamics, Plasma Physics, Nonlinear Optics and Quantum Mechanics,\" Qualitative Theory of Dynamical Systems, 2024. DOI: 10.1007/s12346-024-01045-5\n\n[26] Xin-Yi Gao, Yongjiang Guo, and Wen-Rui Shan, \"Symbolic computation on a (2+1)-dimensional generalized variable-coefficient Boiti–Leon–Pempinelli system for the water waves,\" Chaos Solitons & Fractals, 2021. DOI: 10.1016/J.CHAOS.2021.111066\n\n[27] Xin-Yi Gao, Y. Guo, and Wen-Rui Shan, \"Oceanic shallow-water symbolic computation on a (2+1)-dimensional generalized dispersive long-wave system,\" Physics Letters A, 2022. DOI: 10.1016/j.physleta.2022.128552\n\n[28] S Kumar and B. Mohan, \"A direct symbolic computation of center-controlled rogue waves to a new Painlevé-integrable (3+1)-D generalized nonlinear evolution equation in plasmas,\" Nonlinear Dynamics, 2023. DOI: 10.1007/s11071-023-08683-5\n\n[29] S Kumar, B. Mohan, and Raj Kumar, \"Newly formed center-controlled rouge wave and lump solutions of a generalized (3+1)-dimensional KdV-BBM equation via symbolic computation approach,\" Physica Scripta, 2023. DOI: 10.1088/1402-4896/ace862\n\n[30] Zhaqilao, \"A symbolic computation approach to constructing rogue waves with a controllable center in the nonlinear systems,\" Comput. Math. Appl., 2018. DOI: 10.1016/j.camwa.2018.02.001\n\n[31] Jian‐Guo Liu, Wen-Hui Zhu, and Yan He, \"Variable-coefficient symbolic computation approach for finding multiple rogue wave solutions of nonlinear system with variable coefficients,\" Zeitschrift für angewandte Mathematik und Physik, 2019. DOI: 10.1007/s00033-021-01584-w\n\n[32] Joseph Krasil'shchik, A. Verbovetsky, and R. Vitolo, \"The Symbolic Computation of Integrability Structures for Partial Differential Equations,\" Texts & Monographs in Symbolic Computation, 2018. DOI: 10.1007/978-3-319-71655-8\n\n[33] A. Cheviakov, \"Symbolic computation of equivalence transformations and parameter reduction for nonlinear physical models,\" Comput. Phys. Commun., 2017. DOI: 10.1016/j.cpc.2017.06.013\n\n[34] A. Adem, T. S. Moretlo, and B. Muatjetjeja, \"A generalized dispersive water waves system: Conservation laws; symmetry reduction; travelling wave solutions; symbolic computation,\" Partial Differential Equations in Applied Mathematics, 2022. DOI: 10.1016/j.padiff.2022.100465\n\n[35] M. MacCallum, \"Computer algebra in gravity research,\" Living Reviews in Relativity, 2018. DOI: 10.1007/s41114-018-0015-6\n\n[36] I. Shirokov, \"Computer Algebra Calculations in Supersymmetric Electrodynamics,\" Programming and Computer Software, 2022. DOI: 10.1134/S0361768823020147\n\n[37] A. V. Korolkova, M. Gevorkyan, Arseny V. Fedorov, et al., \"Symbolic Studies of Maxwell’s Equations in Space-Time Algebra Formalism,\" Programming and Computer Software, 2024. DOI: 10.1134/S0361768824020087\n\n[38] F. Mogavero and J. Laskar, \"The origin of chaos in the Solar System through computer algebra,\" Astronomy &amp; Astrophysics, 2022. DOI: 10.1051/0004-6361/202243327\n\n[39] Bo Huang and W. Niu, \"Analysis of Snapback Repellers Using Methods of Symbolic Computation,\" Int. J. Bifurc. Chaos, 2019. DOI: 10.1142/S0218127419500548\n\n[40] Bo Huang, W. Niu, and Dongming Wang, \"Symbolic computation for the qualitative theory of differential equations,\" Acta Mathematica Scientia, 2022. DOI: 10.1007/s10473-022-0617-7\n\n[41] Jichao Song, Wei Niu, Bo Huang, et al., \"Qualitative Investigation of the Lorenz-84 System Using Computer Algebra Methods,\" Mathematics in Computer Science, 2025. DOI: 10.1007/s11786-025-00605-5\n\n[42] Xiaoyong Jiang, Langyue Huang, Mengle Peng, et al., \"Nonlinear model predictive control using symbolic computation on autonomous marine surface vehicle,\" Journal of Marine Science and Technology, 2021. DOI: 10.1007/s00773-021-00847-5\n\n[43] T. Do, V. Vu, and Zhaoheng Liu, \"Symbolic differentiation algorithm for inverse dynamics of serial robots with flexible joints,\" Journal of Mechanisms and Robotics, 2021. DOI: 10.1115/1.4051355\n\n[44] D. Chablat, Rémi Prébet, M. S. E. Din, et al., \"Deciding Cuspidality of Manipulators through Computer Algebra and Algorithms in Real Algebraic Geometry,\" in Proceedings of the 2022 International Symposium on Symbolic and Algebraic Computation, 2022. DOI: 10.1145/3476446.3535477\n\n[45] Lubin Hang, Chengwei Shen, and Tingli Yang, \"Structural Analysis of Parallel Mechanisms Using Conformal Geometric Algebra,\" in International Conference on Intelligent Robotics and Applications, 2016. DOI: 10.1007/978-3-319-43506-0_14\n\n[46] G. Shi, \"Toward automated reasoning for analog IC design by symbolic computation - A survey,\" Integr., 2018. DOI: 10.1016/j.vlsi.2017.08.005\n\n[47] Alireza Mahzoon, Daniel Große, Christoph Scholl, et al., \"Formal Verification of Modular Multipliers using Symbolic Computer Algebra and Boolean Satisfiability,\" in 2022 59th ACM/IEEE Design Automation Conference (DAC), 2022. DOI: 10.1145/3489517.3530605\n\n[48] Daniela Kaufmann and Armin Biere, \"Improving AMulet2 for verifying multiplier circuits using SAT solving and computer algebra,\" International Journal on Software Tools for Technology Transfer, 2023. DOI: 10.1007/s10009-022-00688-6\n\n[49] V. Rao, Haden Ondricek, P. Kalla, et al., \"Rectification of Integer Arithmetic Circuits using Computer Algebra Techniques,\" in 2021 IEEE 39th International Conference on Computer Design (ICCD), 2021. DOI: 10.1109/ICCD53106.2021.00039\n\n[50] Zhengyu Li, Curtis Bright, and Vijay Ganesh, \"A SAT Solver and Computer Algebra Attack on the Minimum Kochen-Specker Problem,\" in International Joint Conference on Artificial Intelligence, 2023. DOI: 10.24963/ijcai.2024/210\n\n[51] Zhengyu Li, Curtis Bright, and Vijay Ganesh, \"A SAT Solver and Computer Algebra Attack on the Minimum Kochen-Specker Problem (Student Abstract),\" in AAAI Conference on Artificial Intelligence, 2024. DOI: 10.1609/aaai.v38i21.30472\n\n[52] Pierre Cordesse and M. Massot, \"Entropy supplementary conservation law for non-linear systems of PDEs with non-conservative terms: application to the modelling and analysis of complex fluid flows using computer algebra,\" arXiv preprint, 10.4310/CMS.2020.V18.N2.A10, 2019\n\n[53] E. V. Vorozhtsov and S. Kiselev, \"Comparative Study of the Accuracy of Higher-Order Difference Schemes for Molecular Dynamics Problems Using the Computer Algebra Means,\" Computer Algebra in Scientific Computing, 2020. DOI: 10.1007/978-3-030-60026-6_35\n\n[54] S. Gutnik and V. Sarychev, \"Application of Computer Algebra Methods to Investigate the Dynamics of the System of Two Connected Bodies Moving along a Circular Orbit,\" Programming and Computer Software, 2019. DOI: 10.1134/S0361768819020051\n\n[55] S. Gutnik and V. Sarychev, \"Application of computer algebra methods for investigation of stationary motions of a gyrostat satellite,\" Programming and Computer Software, 2017. DOI: 10.1134/S0361768817020050\n\n[56] S. Gutnik and V. Sarychev, \"Application of Computer Algebra Methods to Investigation of Stationary Motions of a System of Two Connected Bodies Moving in a Circular Orbit,\" Computational Mathematics and Mathematical Physics, 2020. DOI: 10.1134/S0965542520010091\n\n[57] S. Gutnik and V. Sarychev, \"Computer Algebra Methods for Searching the Stationary Motions of the Connected Bodies System Moving in Gravitational Field,\" Mathematics in Computer Science, 2022. DOI: 10.1007/s11786-022-00535-6\n\n[58] A. Prokopenya, M. Minglibayev, and S. Shomshekova, \"Applications of Computer Algebra in the Study of the Two-Planet Problem of Three Bodies with Variable Masses,\" Programming and Computer Software, 2019. DOI: 10.1134/S0361768819020087\n\n[59] A. Prokopenya, M. Minglibayev, and Aiken Kosherbayeva, \"Derivation of Evolutionary Equations in the Many-Body Problem with Isotropically Varying Masses Using Computer Algebra,\" Programming and Computer Software, 2022. DOI: 10.1134/S0361768822020098\n\n[60] Hansu Kim, Shinyu Kim, Taekyun Kim, et al., \"Efficient design optimization of complex system through an integrated interface using symbolic computation,\" Adv. Eng. Softw., 2018. DOI: 10.1016/J.ADVENGSOFT.2018.09.006\n\n[61] Fei Zhao, I. Grossmann, Salvador García Muñoz, et al., \"Design Space Description through Adaptive Sampling and Symbolic Computation,\" AIChE Journal, 2022. DOI: 10.1002/aic.17604\n\n[62] Baoyu Liang, Yucheng Wang, and Chao Tong, \"AI Reasoning in Deep Learning Era: From Symbolic AI to Neural–Symbolic AI,\" Mathematics, 2025. DOI: 10.3390/math13111707\n\n[63] Giuseppe Pisano, Giovanni Ciatto, Roberta Calegari, et al., \"Neuro-symbolic Computation for XAI: Towards a Unified Model,\" in Workshop From Objects to Agents, 2020\n\n[64] Pyeong Whan Cho, M. Goldrick, and P. Smolensky, \"Incremental parsing in a continuous dynamical system: sentence processing in Gradient Symbolic Computation,\" Linguistics Vanguard, 2017. DOI: 10.1515/lingvan-2016-0105\n\n[65] Charles Fox, N. Tran, Nikki Nacion, et al., \"Incorporating background knowledge in symbolic regression using a computer algebra system,\" Machine Learning: Science and Technology, 2023. DOI: 10.1088/2632-2153/ad4a1e\n\n[66] Yuhong Sun, Ting Huang, Jinghui Zhong, et al., \"Symbolic Regression-Assisted Offline Data-Driven Evolutionary Computation,\" in IEEE Transactions on Evolutionary Computation, 2025. DOI: 10.1109/TEVC.2024.3482326\n\n[67] Changxin Wang, Y. Zhang, Cheng Wen, et al., \"Symbolic regression in materials science via dimension-synchronous-computation,\" Journal of Materials Science &amp; Technology, 2022. DOI: 10.1016/j.jmst.2021.12.052\n\n[68] Rashid Barket, Matthew England, and Jurgen Gerhard, \"Symbolic Integration Algorithm Selection with Machine Learning: LSTMs vs Tree LSTMs,\" arXiv preprint, 10.48550/arXiv.2404.14973, 2024\n\n[69] E. Ábrahám, J. Abbott, B. Becker, et al., \"Satisfiability Checking meets Symbolic Computation (Project Paper),\" in International Conference on Intelligent Computer Mathematics, 2016. DOI: 10.1007/978-3-319-42547-4_3\n\n[70] E. Ábrahám, J. Abbott, B. Becker, et al., \"Satisfiability checking and symbolic computation,\" in ACM Commun. Comput. Algebra, 2016. DOI: 10.1145/3055282.3055285\n\n[71] J. Davenport, M. England, A. Griggio, et al., \"Symbolic computation and satisfiability checking,\" J. Symb. Comput., 2020. DOI: 10.1016/J.JSC.2019.07.017\n\n[72] Curtis Bright, I. Kotsireas, and Vijay Ganesh, \"When satisfiability solving meets symbolic computation,\" in Communications of the ACM, 2022. DOI: 10.1145/3500921\n\n[73] Edward Zulkoski, Curtis Bright, A. Heinle, et al., \"Combining SAT Solvers with Computer Algebra Systems to Verify Combinatorial Conjectures,\" Journal of Automated Reasoning, 2016. DOI: 10.1007/s10817-016-9396-y\n\n[74] Edward Zulkoski, Vijay Ganesh, and K. Czarnecki, \"MathCheck: A Math Assistant via a Combination of Computer Algebra Systems and SAT Solvers,\" CADE, 2016. DOI: 10.1007/978-3-319-21401-6_41\n\n[75] Laigang Guo, R. Yeung, and Xiao-Shan Gao, \"Proving Information Inequalities and Identities with Symbolic Computation,\" in 2022 IEEE International Symposium on Information Theory (ISIT), 2022. DOI: 10.1109/ISIT50566.2022.9834774\n\n[76] Patrick J. Coles, S. Eidenbenz, S. Pakin, et al., \"Quantum Algorithm Implementations for Beginners,\" in ACM Transactions on Quantum Computing, 2018. DOI: 10.1145/3517340\n\n[77] Daan Camps, Lin Lin, R. Beeumen, et al., \"Explicit Quantum Circuits for Block Encodings of Certain Sparse Matrice,\" arXiv preprint, 10.48550/arXiv.2203.10236, 2022\n\n[78] Changpeng Shao, \"Computing Eigenvalues of Diagonalizable Matrices on a Quantum Computer,\" in ACM Transactions on Quantum Computing, 2022. DOI: 10.1145/3527845\n\n[79] E. Combarro, J. Ranilla, and I. F. Rúa, \"A Quantum Algorithm for the Commutativity of Finite Dimensional Algebras,\" in IEEE Access, 2019. DOI: 10.1109/ACCESS.2019.2908785\n\n[80] Binh Duc Nguyen, \"Simulation of Quantum Computation via MAGMA Computational Algebra System,\" International Journal of Advanced Trends in Computer Science and Engineering, 2020. DOI: 10.30534/ijatcse/2020/130922020\n\n[81] M. Tamur, Y. S. Ksumah, D. Juandi, et al., \"A Meta-Analysis of the Past Decade of Mathematics Learning Based on the Computer Algebra System (CAS),\" in Journal of Physics: Conference Series, 2021. DOI: 10.1088/1742-6596/1882/1/012060\n\n[82] F. Kamalov, David Santandreu, Ho-Hon Leung, et al., \"Leveraging computer algebra systems in calculus: a case study with SymPy,\" in 2023 IEEE Global Engineering Education Conference (EDUCON), 2023. DOI: 10.1109/EDUCON54358.2023.10125196\n\n[83] N. Karjanto and S. Lee, \"Flipped classroom in Introductory Linear Algebra by utilizing Computer Algebra System {\\sl SageMath} and a free electronic book,\" arXiv preprint, 2017\n\n[84] Fereshteh Zeynivandnezhad and Rachel Bates, \"Explicating mathematical thinking in differential equations using a computer algebra system,\" International Journal of Mathematical Education in Science and Technology, 2017. DOI: 10.1080/0020739X.2017.1409368\n\n[85] N. Lohgheswary, Z. Nopiah, Effandi Zakaria, et al., \"Incorporating Computer Algebra System in Differential Equations Syllabus,\" Journal of Engineering and Applied Sciences, 2019. DOI: 10.36478/jeasci.2019.7475.7480\n\n[86] A. Olenev, A. Shuvaev, M V Migacheva, et al., \"Using the Maple computer algebra system to study mathematical induction,\" in Journal of Physics: Conference Series, 2020. DOI: 10.1088/1742-6596/1691/1/012102\n\n[87] A. Olenev, K. A. Kirichek, E. V. Potekhina, et al., \"Capabilities of the Maple computer algebra system in the study of set theory and combinatorics,\" in Journal of Physics: Conference Series, 2020. DOI: 10.1088/1742-6596/1691/1/012097\n\n[88] V. Velychko, A. V. Stopkin, and Olena H. Fedorenko, \"USE OF COMPUTER ALGEBRA SYSTEM MAXIMA IN THE PROCESS OF TEACHING FUTURE MATHEMATICS TEACHERS,\" Information Technologies and Learning Tools, 2019. DOI: 10.33407/ITLT.V69I1.2284\n\n[89] R. Hasek, \"Dynamic Geometry Software Supplemented with a Computer Algebra System as a Proving Tool,\" Mathematics in Computer Science, 2018. DOI: 10.1007/s11786-018-0369-x\n\n[90] Christopher W. Brown, Z. Kovács, T. Recio, et al., \"Is Computer Algebra Ready for Conjecturing and Proving Geometric Inequalities in the Classroom?,\" Mathematics in Computer Science, 2022. DOI: 10.1007/s11786-022-00532-9\n\n[91] Paúl Mejía, L. Martini, Felipe Grijalva, et al., \"CASVI: Computer Algebra System Aimed at Visually Impaired People. Experiments,\" in IEEE Access, 2021. DOI: 10.1109/ACCESS.2021.3129106\n\n[92] Paúl Mejía, L. Martini, J. Larco, et al., \"CASVI: A Computer Algebra System Aimed at Visually Impaired People,\" in International Conference on Computers for Handicapped Persons, 2018. DOI: 10.1007/978-3-319-94277-3_89\n\n[93] A. Zambrano, Danilo Pilacuan, Mateo N. Salvador, et al., \"IrisMath: A Blind-Friendly Web-Based Computer Algebra System,\" in IEEE Access, 2023. DOI: 10.1109/ACCESS.2023.3281761\n\n[94] I. Petkovic and D. Herceg, \"Symbolic computation and computer graphics as tools for developing and studying new root-finding methods,\" Appl. Math. Comput., 2017. DOI: 10.1016/j.amc.2016.09.025\n\n[95] I. Petkovic and B. Neta, \"On an application of symbolic computation and computer graphics to root-finders: The case of multiple roots of unknown multiplicity,\" J. Comput. Appl. Math., 2016. DOI: 10.1016/j.cam.2016.06.008\n\n[96] N. Karjanto and H. S. Husain, \"Not another computer algebra system: Highlighting wxMaxima in calculus,\" arXiv preprint, 10.3390/math9011317, 2021\n\n[97] N. Karjanto and H. S. Husain, \"Adopting Maxima as an Open-Source Computer Algebra System into Mathematics Teaching and Learning\", 2017. DOI: 10.1007/978-3-319-62597-3_128\n\n[98] Katherine Herbert, D. Demskoi, and Kerrie Cullis, \"Creating mathematics formative assessments using LaTeX, PDF forms and computer algebra,\" Australasian Journal of Educational Technology, 2018. DOI: 10.14742/AJET.4539\n\n[99] Z. Pardos and Shreya Bhandari, \"Learning gain differences between ChatGPT and human tutor generated algebra hints,\" arXiv preprint, 10.48550/arXiv.2302.06871, 2023\n\n[100] P. Zhang, Yueming Liu, and Meikang Qiu, \"SNC: A Cloud Service Platform for Symbolic-Numeric Computation Using Just-In-Time Compilation,\" in IEEE Transactions on Cloud Computing, 2018. DOI: 10.1109/TCC.2017.2656088\n\n[101] 佚名, \"Numerical and Symbolic Computation\", 2020. DOI: 10.3390/books978-3-03936-303-2\n\n[102] Lynn Pickering, Tereso Del Rio Almajano, M. England, et al., \"Explainable AI Insights for Symbolic Computation: A case study on selecting the variable ordering for cylindrical algebraic decomposition,\" arXiv preprint, 10.1016/j.jsc.2023.102276, 2023\n\n[103] B. Buchberger, \"Automated programming, symbolic computation, machine learning: my personal view,\" Annals of Mathematics and Artificial Intelligence, 2023. DOI: 10.1007/s10472-023-09894-7\n\n[104] Tereso del R'io and Matthew England, \"Lessons on Datasets and Paradigms in Machine Learning for Symbolic Computation: A Case Study on CAD,\" Mathematics in Computer Science, 2024. DOI: 10.1007/s11786-024-00591-0\n\n[105] G. Sarma and Nick J. Hay, \"Robust Computer Algebra, Theorem Proving, and Oracle AI,\" Informatica (Slovenia), 2017. DOI: 10.2139/SSRN.3038545\n\n[106] O. Alsheikh, Efekan K¨okc¨u, B. Bakalov, et al., \"RedCarD: A Quantum Assisted Algorithm for Fixed-Depth Unitary Synthesis via Cartan Decomposition\", 2025",
+  "cited_papers": [
+    {
+      "id": "16828eda0a48634c275f2c6bd21a74a2b1c10817",
+      "title": "SYMBOLIC COMPUTATION",
+      "authors": [
+        "Bruno Salvy"
+      ],
+      "year": 2020,
+      "cited_by_count": 12,
+      "is_english": true,
+      "abstract": "While Philippe Flajolet did not publish many articles in journals or conferences devoted specifically to symbolic computation, symbolic computation played an important rôle in the way he dealt with mathematics. This is obvious in the “Symbolic Method” that is the first stage of Analytic Combinatorics and is briefly summarized in §1 below. It is also very important in his approach to complex analysis as we develop in §2. Finally, his taste for computation also expressed itself in the development of a few new and useful algorithms in computer algebra per se, presented in §3. This introduction aims at presenting the basic ideas in the articles of this chapter, with a few comments on the historical context and the evolutions of these ideas. The articles discussed here are: – Computer algebra libraries for combinatorial structures [46]; – A finite sum of products of binomial coefficients [81]; – The SIGSAM challenges: symbolic asymptotics in practice [49]; – On the non-holonomic character of logarithms, powers, and the nth prime function [28]; – Lindelöf representations and (non-)holonomic sequences [29]; – Holonomic symmetric functions [79]; – Fast computation of special resultants [5]. The first one contains a longer summary of the computational aspects of the work led in the Algorithms project till 1995.",
+      "type": "article",
+      "doi": "10.1002/9781119626879.app7",
+      "venue": "Applied Numerical Methods Using Matlab®",
+      "journal": "Applied Numerical Methods Using Matlab®",
+      "venue_name": "Applied Numerical Methods Using Matlab®",
+      "primary_location": {
+        "source": {
+          "display_name": "Applied Numerical Methods Using Matlab®"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "5eb95fedb0e17ab9b820600b46d01c343ff3d800",
+      "title": "Introduction to Computer Algebra",
+      "authors": [
+        "W. Koepf"
+      ],
+      "year": 2021,
+      "cited_by_count": 2,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/978-3-030-78017-3_1",
+      "venue": "Springer Undergraduate Texts in Mathematics and Technology",
+      "journal": "Springer Undergraduate Texts in Mathematics and Technology",
+      "venue_name": "Springer Undergraduate Texts in Mathematics and Technology",
+      "primary_location": {
+        "source": {
+          "display_name": "Springer Undergraduate Texts in Mathematics and Technology"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "f7e7e684fbb1d4595be82b08e0076ae525113b5c",
+      "title": "Some Reflections About the Success and Impact of the Computer Algebra System DERIVE with a 10-Year Time Perspective",
+      "authors": [
+        "E. Roanes-Lozano",
+        "José Luis Galán García",
+        "Carmen Solano-Macías"
+      ],
+      "year": 2019,
+      "cited_by_count": 6,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s11786-019-00404-9",
+      "venue": "Mathematics in Computer Science",
+      "journal": "Mathematics in Computer Science",
+      "venue_name": "Mathematics in Computer Science",
+      "primary_location": {
+        "source": {
+          "display_name": "Mathematics in Computer Science"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "e2278a01c237bad18332815e471f61cf7bf25833",
+      "title": "Computer Algebra in Scientific Computing",
+      "authors": [
+        "V. Gerdt",
+        "Wolfram Koepf",
+        "Werner M. Seiler",
+        "E. V. Vorozhtsov"
+      ],
+      "year": 2018,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "In an emerging computing paradigm, computational capabilities, from processing power to storage capacities, are offered to users over communication networks as a cloud-based service. There, demanding computations are outsourced in order to limit infrastructure costs. The idea of verifiable computing is to associate a data structure, a proof-of-work certificate, to the result of the outsourced computation. This allows a verification algorithm to prove the validity of the result, faster than by recomputing it. We talk about a Prover (the server performing the computations) and a Verifier. Goldwasser, Kalai and Rothblum gave in 2008 a generic method to verify any parallelizable computation, in almost linear time in the size of the, potentially structured, inputs and the result. However, the extra cost of the computations for the Prover (and therefore the extra cost to the customer), although only almost a constant factor of the overall work, is nonetheless prohibitive in practice. Differently, we will here present problem-specific procedures in computer algebra, e.g. for exact linear algebra computations, that are Proveroptimal, that is that have much less financial overhead.",
+      "type": "article",
+      "doi": "10.1007/978-3-319-99639-4",
+      "venue": "Lecture Notes in Computer Science",
+      "journal": "Lecture Notes in Computer Science",
+      "venue_name": "Lecture Notes in Computer Science",
+      "primary_location": {
+        "source": {
+          "display_name": "Lecture Notes in Computer Science"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "7a6db835f3b3557cf976924aee9b99f21205a990",
+      "title": "Learning selection strategies in Buchberger's algorithm",
+      "authors": [
+        "Dylan Peifer",
+        "M. Stillman",
+        "Daniel Halpern-Leistner"
+      ],
+      "year": 2020,
+      "cited_by_count": 34,
+      "is_english": true,
+      "abstract": "Studying the set of exact solutions of a system of polynomial equations largely depends on a single iterative algorithm, known as Buchberger's algorithm. Optimized versions of this algorithm are crucial for many computer algebra systems (e.g., Mathematica, Maple, Sage). We introduce a new approach to Buchberger's algorithm that uses reinforcement learning agents to perform S-pair selection, a key step in the algorithm. We then study how the difficulty of the problem depends on the choices of domain and distribution of polynomials, about which little is known. Finally, we train a policy model using proximal policy optimization (PPO) to learn S-pair selection strategies for random systems of binomial equations. In certain domains, the trained model outperforms state-of-the-art selection heuristics in total number of polynomial additions performed, which provides a proof-of-concept that recent developments in machine learning have the potential to improve performance of algorithms in symbolic computation.",
+      "type": "article",
+      "doi": null,
+      "venue": "International Conference on Machine Learning",
+      "journal": "International Conference on Machine Learning",
+      "venue_name": "International Conference on Machine Learning",
+      "primary_location": {
+        "source": {
+          "display_name": "International Conference on Machine Learning"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "47b227b081d56dbb1b5c23839d051f94c899ca50",
+      "title": "Symbolic Computation via Program Transformation",
+      "authors": [
+        "Henrich Lauko",
+        "P. Ročkai",
+        "J. Barnat"
+      ],
+      "year": 2018,
+      "cited_by_count": 23,
+      "is_english": true,
+      "abstract": "Symbolic computation is an important approach in automated program analysis. Most state-of-the-art tools perform symbolic computation as interpreters and directly maintain symbolic data. In this paper, we show that it is feasible, and in fact practical, to use a compiler-based strategy instead. Using compiler tooling, we propose and implement a transformation which takes a standard program and outputs a program that performs semantically equivalent, but partially symbolic, computation. The transformed program maintains symbolic values internally and operates directly on them hence the program can be processed by a tool without support for symbolic manipulation. \nThe main motivation for the transformation is in symbolic verification, but there are many other possible use-cases, including test generation and concolic testing. Moreover using the transformation simplifies tools, since the symbolic computation is handled by the program directly. We have implemented the transformation at the level of LLVM bitcode. The paper includes an experimental evaluation, based on an explicit-state software model checker as a verification backend.",
+      "type": "article",
+      "doi": "10.1007/978-3-030-02508-3_17",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "4f97e87512eb8bf48ce695443e958725c54908b6",
+      "title": "Mathematics for Machine Learning",
+      "authors": [
+        "Gaurav Kumar",
+        "R. Banerjee",
+        "Deepak Kr Singh",
+        "Nitesh Choubey",
+        "Arnaw"
+      ],
+      "year": 2020,
+      "cited_by_count": 510,
+      "is_english": true,
+      "abstract": "Machine learning is a way to study the algorithm and statistical model that is used by computer to perform a specific task through pattern and deduction [1]. It builds a mathematical model from a sample data which may come under either supervised or unsupervised learning. It is closely\n related to computational statistics which is an interface between statistics and computer science. Also, linear algebra and probability theory are two tools of mathematics which form the basis of machine learning. In general, statistics is a science concerned with collecting, analysing, interpreting\n the data. Data are the facts and figure that can be classified as either quantitative or qualitative. From the given set of data, we can predict the expected observation, difference between the outcome of two observations and how data look like which can help in better decision making process\n [2]. Descriptive and inferential statistics are the two methods of data analysis. Descriptive statistics summarize the raw data into information through which common expectation and variation of data can be taken. It also provides graphical methods that can be used to visualize the sample\n of data and qualitative understanding of observation whereas inferential statistics refers to drawing conclusions from data. Inferences are made under the framework of probability theory. So, understanding of data and interpretation of result are two important aspects of machine learning.\n In this paper, we have reviewed the different methods of ML, mathematics behind ML, its application in day to day life and future aspects.",
+      "type": "article",
+      "doi": "10.1017/9781108679930",
+      "venue": "Journal of Mathematical Sciences & Computational Mathematics",
+      "journal": "Journal of Mathematical Sciences & Computational Mathematics",
+      "venue_name": "Journal of Mathematical Sciences & Computational Mathematics",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Mathematical Sciences & Computational Mathematics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "c2b278761f88326ac13148e4764bd406d42ad3ba",
+      "title": "q-means: A quantum algorithm for unsupervised machine learning",
+      "authors": [
+        "Iordanis Kerenidis",
+        "Jonas Landman",
+        "Alessandro Luongo",
+        "A. Prakash"
+      ],
+      "year": 2018,
+      "cited_by_count": 267,
+      "is_english": true,
+      "abstract": "Quantum machine learning is one of the most promising applications of a full-scale quantum computer. Over the past few years, many quantum machine learning algorithms have been proposed that can potentially offer considerable speedups over the corresponding classical algorithms. In this paper, we introduce q-means, a new quantum algorithm for clustering which is a canonical problem in unsupervised machine learning. The $q$-means algorithm has convergence and precision guarantees similar to $k$-means, and it outputs with high probability a good approximation of the $k$ cluster centroids like the classical algorithm. Given a dataset of $N$ $d$-dimensional vectors $v_i$ (seen as a matrix $V \\in \\mathbb{R}^{N \\times d})$ stored in QRAM, the running time of q-means is $\\widetilde{O}\\left( k d \\frac{\\eta}{\\delta^2}\\kappa(V)(\\mu(V) + k \\frac{\\eta}{\\delta}) + k^2 \\frac{\\eta^{1.5}}{\\delta^2} \\kappa(V)\\mu(V) \\right)$ per iteration, where $\\kappa(V)$ is the condition number, $\\mu(V)$ is a parameter that appears in quantum linear algebra procedures and $\\eta = \\max_{i} ||v_{i}||^{2}$. For a natural notion of well-clusterable datasets, the running time becomes $\\widetilde{O}\\left( k^2 d \\frac{\\eta^{2.5}}{\\delta^3} + k^{2.5} \\frac{\\eta^2}{\\delta^3} \\right)$ per iteration, which is linear in the number of features $d$, and polynomial in the rank $k$, the maximum square norm $\\eta$ and the error parameter $\\delta$. Both running times are only polylogarithmic in the number of datapoints $N$. Our algorithm provides substantial savings compared to the classical $k$-means algorithm that runs in time $O(kdN)$ per iteration, particularly for the case of large datasets.",
+      "type": "article",
+      "doi": null,
+      "venue": "Neural Information Processing Systems",
+      "journal": "Neural Information Processing Systems",
+      "venue_name": "Neural Information Processing Systems",
+      "primary_location": {
+        "source": {
+          "display_name": "Neural Information Processing Systems"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "84e4db8adf0f040708e1dbe5338869bbc6d49976",
+      "title": "SymForce: Symbolic Computation and Code Generation for Robotics",
+      "authors": [
+        "Hayk Martiros",
+        "Aaron Miller",
+        "Nathan Bucki",
+        "Bradley Solliday",
+        "Ryan D. Kennedy",
+        "Jack Zhu",
+        "Tung Dang",
+        "Dominic Pattison",
+        "Harrison Zheng",
+        "Teo Tomic"
+      ],
+      "year": 2022,
+      "cited_by_count": 20,
+      "is_english": true,
+      "abstract": "We present SymForce, a library for fast symbolic computation, code generation, and nonlinear optimization for robotics applications like computer vision, motion planning, and controls. SymForce combines the development speed and flexibility of symbolic math with the performance of autogenerated, highly optimized code in C++ or any target runtime language. SymForce provides geometry and camera types, Lie group operations, and branchless singularity handling for creating and analyzing complex symbolic expressions in Python, built on top of SymPy. Generated functions can be integrated as factors into our tangent-space nonlinear optimizer, which is highly optimized for real-time production use. We introduce novel methods to automatically compute tangent-space Jacobians, eliminating the need for bug-prone handwritten derivatives. This workflow enables faster runtime code, faster development time, and fewer lines of handwritten code versus the state-of-the-art. Our experiments demonstrate that our approach can yield order of magnitude speedups on computational tasks core to robotics. Code is available at https://github.com/symforce-org/symforce.",
+      "type": "article",
+      "doi": "10.15607/RSS.2022.XVIII.041",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "275828b6301e89cab37dab5648d45728868d8249",
+      "title": "A Polynomial-Division-Based Algorithm for Computing Linear Recurrence Relations",
+      "authors": [
+        "Jérémy Berthomieu",
+        "J. Faugère"
+      ],
+      "year": 2018,
+      "cited_by_count": 6,
+      "is_english": true,
+      "abstract": "Sparse polynomial interpolation, sparse linear system solving or modular rational reconstruction are fundamental problems in Computer Algebra. They come down to computing linear recurrence relations of a sequence with the Berlekamp--Massey algorithm. Likewise, sparse multivariate polynomial interpolation and multidimensional cyclic code decoding require guessing linear recurrence relations of a multivariate sequence. Several algorithms solve this problem. The so-called Berlekamp--Massey--Sakata algorithm (1988) uses polynomial additions and shifts by a monomial. The Scalar-FGLM algorithm (2015) relies on linear algebra operations on a multi-Hankel matrix, a multivariate generalization of a Hankel matrix. The Artinian Gorenstein border basis algorithm (2017) uses a Gram-Schmidt process. We propose a new algorithm for computing the Gröbner basis of the ideal of relations of a sequence based solely on multivariate polynomial arithmetic. This algorithm allows us to both revisit the Berlekamp--Massey--Sakata algorithm through the use of polynomial divisions and to completely revise the Scalar-FGLM algorithm without linear algebra operations. A key observation in the design of this algorithm is to work on the mirror of the truncated generating series allowing us to use polynomial arithmetic modulo a monomial ideal. It appears to have some similarities with Padé approximants of this mirror polynomial. Finally, we give a partial solution to the transformation of this algorithm into an adaptive one.",
+      "type": "article",
+      "doi": "10.1145/3208976.3209017",
+      "venue": "Proceedings of the 2018 ACM International Symposium on Symbolic and Algebraic Computation",
+      "journal": "Proceedings of the 2018 ACM International Symposium on Symbolic and Algebraic Computation",
+      "venue_name": "Proceedings of the 2018 ACM International Symposium on Symbolic and Algebraic Computation",
+      "primary_location": {
+        "source": {
+          "display_name": "Proceedings of the 2018 ACM International Symposium on Symbolic and Algebraic Computation"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "9d225b154b6cb9d9b6e6a4fbeaa639c4e297bcd7",
+      "title": "Symbolic computation of Drazin inverses by specializations",
+      "authors": [
+        "J. Sendra",
+        "J. Sendra"
+      ],
+      "year": 2016,
+      "cited_by_count": 14,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.cam.2016.01.059",
+      "venue": "J. Comput. Appl. Math.",
+      "journal": "J. Comput. Appl. Math.",
+      "venue_name": "J. Comput. Appl. Math.",
+      "primary_location": {
+        "source": {
+          "display_name": "J. Comput. Appl. Math."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "62eb610c2eaf67165214a53403c2e9412fa5d990",
+      "title": "Representations and symbolic computation of generalized inverses over fields",
+      "authors": [
+        "P. Stanimirović",
+        "M. Ciric",
+        "A. Lastra",
+        "J. Sendra",
+        "J. Sendra"
+      ],
+      "year": 2021,
+      "cited_by_count": 13,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.amc.2021.126287",
+      "venue": "Appl. Math. Comput.",
+      "journal": "Appl. Math. Comput.",
+      "venue_name": "Appl. Math. Comput.",
+      "primary_location": {
+        "source": {
+          "display_name": "Appl. Math. Comput."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "665049ab1bf1a447d43752a59f37faad2ba90f1c",
+      "title": "Compact sparse symbolic Jacobian computation in large systems of ODEs",
+      "authors": [
+        "E. Kofman",
+        "Joaquín Fernández",
+        "Denise Marzorati"
+      ],
+      "year": 2021,
+      "cited_by_count": 7,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.amc.2021.126181",
+      "venue": "Appl. Math. Comput.",
+      "journal": "Appl. Math. Comput.",
+      "venue_name": "Appl. Math. Comput.",
+      "primary_location": {
+        "source": {
+          "display_name": "Appl. Math. Comput."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "6b2837ff6b4dc6ed6f8028ed2bf29f0f96dca56b",
+      "title": "Symbolic Computation of Parameter Integrals",
+      "authors": [
+        "C. Raab"
+      ],
+      "year": 2016,
+      "cited_by_count": 4,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1145/2930889.2930940",
+      "venue": "Proceedings of the 2016 ACM International Symposium on Symbolic and Algebraic Computation",
+      "journal": "Proceedings of the 2016 ACM International Symposium on Symbolic and Algebraic Computation",
+      "venue_name": "Proceedings of the 2016 ACM International Symposium on Symbolic and Algebraic Computation",
+      "primary_location": {
+        "source": {
+          "display_name": "Proceedings of the 2016 ACM International Symposium on Symbolic and Algebraic Computation"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "4cd5d883f4ef12e7e567d500eea64fcd26d8ab0f",
+      "title": "NeatIBP 1.0, a package generating small-size integration-by-parts relations for Feynman integrals",
+      "authors": [
+        "Zihao Wu",
+        "J. Boehm",
+        "Rourou Ma",
+        "Hefeng Xu",
+        "Yang Zhang"
+      ],
+      "year": 2023,
+      "cited_by_count": 76,
+      "is_english": true,
+      "abstract": "In this work, we present the package {\\sc NeatIBP}, which automatically generates small-size integration-by-parts (IBP) identities for Feynman integrals. Based on the syzygy and module intersection techniques, the generated IBP identities' propagator degree is controlled and thus the size of the system of IBP identities is shorter than that generated by the standard Laporta algorithm. This package is powered by the computer algebra systems {\\sc Mathematica} and {\\sc Singular}, and the library {\\sc SpaSM}. It is parallelized on the level of Feynman integral sectors. The generated small-size IBP identities can subsequently be used for either finite field reduction or analytic reduction. We demonstrate the capabilities of this package on several multi-loop IBP examples.",
+      "type": "article",
+      "doi": "10.1016/j.cpc.2023.108999",
+      "venue": "Comput. Phys. Commun.",
+      "journal": "Comput. Phys. Commun.",
+      "venue_name": "Comput. Phys. Commun.",
+      "primary_location": {
+        "source": {
+          "display_name": "Comput. Phys. Commun."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "59fe8e0a31a591362c177c930c116de464e5ee09",
+      "title": "Computing the Inverse Mellin Transform of Holonomic Sequences using Kovacic's Algorithm",
+      "authors": [
+        "J. Ablinger"
+      ],
+      "year": 2018,
+      "cited_by_count": 45,
+      "is_english": true,
+      "abstract": "We describe how the extension of a solver for linear differential equations by Kovacic's algorithm helps to improve a method to compute the inverse Mellin transform of holonomic sequences. The method is implemented in the computer algebra package HarmonicSums.",
+      "type": "article",
+      "doi": "10.22323/1.290.0001",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "09d1ebf30f18d2c1e5e2c8ff84896507ccec1799",
+      "title": "Discovering linear-recurrent solutions to Hofstadter-like recurrences using symbolic computation",
+      "authors": [
+        "Nathan Fox"
+      ],
+      "year": 2018,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "Abstract The Hofstadter Q -sequence, with its simple definition, has defied all attempts at analyzing its behavior. Defined by a simple nested recurrence and an initial condition, the sequence looks approximately linear, though with a lot of noise. But, it is unknown whether the sequence is even infinite. In the years since Hofstadter published his sequence, various people have found variants with predictable behavior. Commonly, the variant sequences eventually satisfy linear recurrences. Proofs of such behaviors are inductive and highly automatable. This suggests that a search for more sequences like these may be fruitful. In this paper, we develop an algorithm to search for these sequences. Using this algorithm, we determine that such sequences come in infinite families that are themselves plentiful. In fact, there are hundreds of easy to describe families based on the Hofstadter Q -recurrence alone.",
+      "type": "article",
+      "doi": "10.1016/j.jsc.2017.06.002",
+      "venue": "J. Symb. Comput.",
+      "journal": "J. Symb. Comput.",
+      "venue_name": "J. Symb. Comput.",
+      "primary_location": {
+        "source": {
+          "display_name": "J. Symb. Comput."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "eafde1cff09cad8a457b42bc49f52cbd9302b65d",
+      "title": "Introduction to Geometric Algebra Computing",
+      "authors": [
+        "D. Hildenbrand"
+      ],
+      "year": 2018,
+      "cited_by_count": 23,
+      "is_english": true,
+      "abstract": "From the Foreword: \"Dietmar Hildenbrand's new book, Introduction to Geometric Algebra Computing, in my view, fills an important gap in Clifford's geometric algebra literature I can only congratulate the author for the daring simplicity of his novel educational approach taken in this book, consequently combined with hands on computer based exploration. Without noticing, the active reader will thus educate himself in elementary geometric algebra algorithm development, geometrically intuitive, highly comprehensible, and fully optimized.\" --Eckhard Hitzer, International Christian University, Tokyo, Japan Geometric Algebra is a very powerful mathematical system for an easy and intuitive treatment of geometry, but the community working with it is still very small. The main goal of this book is to close this gap with an introduction to Geometric Algebra from an engineering/computing perspective. This book is intended to give a rapid introduction to computing with Geometric Algebra and its power for geometric modeling. From the geometric objects point of view, it focuses on the most basic ones, namely points, lines and circles. This algebra is called Compass Ruler Algebra, since it is comparable to working with a compass and ruler. The book explores how to compute with these geometric objects, and their geometric operations and transformations, in a very intuitive way. The book follows a top-down approach, and while it focuses on 2D, it is also easily expandable to 3D computations. Algebra in engineering applications such as computer graphics, computer vision and robotics are also covered.",
+      "type": "article",
+      "doi": "10.1201/9781315152172",
+      "venue": "",
+      "journal": "",
+      "venue_name": "",
+      "primary_location": {
+        "source": {}
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "0099b56b2d58e651f15883cff4602c772f166d4d",
+      "title": "Cadabra2: computer algebra for field theory revisited",
+      "authors": [
+        "K. Peeters"
+      ],
+      "year": 2018,
+      "cited_by_count": 67,
+      "is_english": true,
+      "abstract": "Field theory is an area of mathematics required in a wide range of theoretical physics problems, from general relativity to high-energy particle physics and condensed matter theory. Symbolic computations in this field tend to be difficult to do with mainstream computer algebra systems, because the required algorithmic functionality is often simply not available, but also because the standard notation tends to hide a lot of implicit mathematical structure which cannot easily be represented. Cadabra2 is an open source computer algebra system specifically written for the solution of tensor field theory problems. It enables manipulation of Lagrangians, computation of equations of motion, analysis of symmetries and so on in an interactive notebook interface, using an input format which closely resembles standard mathematical notation, combined with a familiar Python environment to manipulate expressions.",
+      "type": "article",
+      "doi": "10.21105/JOSS.01118",
+      "venue": "J. Open Source Softw.",
+      "journal": "J. Open Source Softw.",
+      "venue_name": "J. Open Source Softw.",
+      "primary_location": {
+        "source": {
+          "display_name": "J. Open Source Softw."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "64f1e5809eaccfe30dbfaf6d56b073f1330857f0",
+      "title": "Lump solutions to the BKP equation by symbolic computation",
+      "authors": [
+        "Jingyuan Yang",
+        "W. Ma"
+      ],
+      "year": 2016,
+      "cited_by_count": 195,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1142/S0217979216400282",
+      "venue": "International Journal of Modern Physics B",
+      "journal": "International Journal of Modern Physics B",
+      "venue_name": "International Journal of Modern Physics B",
+      "primary_location": {
+        "source": {
+          "display_name": "International Journal of Modern Physics B"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "9bd5b97033d221fe5679a03af2a3d3c7036dd196",
+      "title": "Rational solutions to an extended Kadomtsev-Petviashvili-like equation with symbolic computation",
+      "authors": [
+        "Xing Lü",
+        "W. Ma",
+        "Yuan Zhou",
+        "C. M. Khalique"
+      ],
+      "year": 2016,
+      "cited_by_count": 151,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.camwa.2016.02.017",
+      "venue": "Comput. Math. Appl.",
+      "journal": "Comput. Math. Appl.",
+      "venue_name": "Comput. Math. Appl.",
+      "primary_location": {
+        "source": {
+          "display_name": "Comput. Math. Appl."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "02f6badf1ceaf7dad652fac3d9071c3f5da01188",
+      "title": "Symbolic computation on exact solutions of a coupled Kadomtsev-Petviashvili equation: Lie symmetry analysis and extended tanh method",
+      "authors": [
+        "A. Adem"
+      ],
+      "year": 2017,
+      "cited_by_count": 43,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.camwa.2017.06.049",
+      "venue": "Comput. Math. Appl.",
+      "journal": "Comput. Math. Appl.",
+      "venue_name": "Comput. Math. Appl.",
+      "primary_location": {
+        "source": {
+          "display_name": "Comput. Math. Appl."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "53956c23b2f7b3e7ecdebc026a99d06faeae3504",
+      "title": "Water-wave symbolic computation for the Earth, Enceladus and Titan: The higher-order Boussinesq-Burgers system, auto- and non-auto-Bäcklund transformations",
+      "authors": [
+        "Xin-Yi Gao",
+        "Yongjiang Guo",
+        "Wen-Rui Shan"
+      ],
+      "year": 2020,
+      "cited_by_count": 190,
+      "is_english": true,
+      "abstract": "Abstract In the Solar System, water and water waves are commonly seen: For the Earth, water is “at the core of sustainable development” and “at the heart of adaptation to climate change”; For the Enceladus, Cassini spacecraft discovers a possible global ocean of liquid water beneath an icy crust; For the Titan, Cassini spacecraft suggests an icy shell floating atop a global ocean. Shallow water waves near the ocean beaches or in the lakes can be described by the Boussinesq-Burgers-type equations. In this Letter, on the higher-order Boussinesq-Burgers system, symbolic computation helps us to go from the two-dimensional Bell polynomials to construct two non-auto-Backlund transformations and to proceed from the Painleve-Backlund format to obtain four auto-Backlund transformations with some soliton solutions. All of our results are shown to be dependent on the constant coefficient in the system.",
+      "type": "article",
+      "doi": "10.1016/j.aml.2019.106170",
+      "venue": "Appl. Math. Lett.",
+      "journal": "Appl. Math. Lett.",
+      "venue_name": "Appl. Math. Lett.",
+      "primary_location": {
+        "source": {
+          "display_name": "Appl. Math. Lett."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "7912f9e314a1215f854a490903f5d2a7ca709c17",
+      "title": "In plasma physics and fluid dynamics: Symbolic computation on a (2+1)-dimensional variable-coefficient Sawada-Kotera system",
+      "authors": [
+        "Xin-Yi Gao"
+      ],
+      "year": 2024,
+      "cited_by_count": 161,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.aml.2024.109262",
+      "venue": "Appl. Math. Lett.",
+      "journal": "Appl. Math. Lett.",
+      "venue_name": "Appl. Math. Lett.",
+      "primary_location": {
+        "source": {
+          "display_name": "Appl. Math. Lett."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "14bbea0fdaa371bdd2d48a2566500015c0e367e9",
+      "title": "Symbolic Computation on a (2+1)-Dimensional Generalized Nonlinear Evolution System in Fluid Dynamics, Plasma Physics, Nonlinear Optics and Quantum Mechanics",
+      "authors": [
+        "Xin-Yi Gao"
+      ],
+      "year": 2024,
+      "cited_by_count": 157,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s12346-024-01045-5",
+      "venue": "Qualitative Theory of Dynamical Systems",
+      "journal": "Qualitative Theory of Dynamical Systems",
+      "venue_name": "Qualitative Theory of Dynamical Systems",
+      "primary_location": {
+        "source": {
+          "display_name": "Qualitative Theory of Dynamical Systems"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "185c3f6d10674b4cf58b9e4b3e6e0c9782d4d8fb",
+      "title": "Symbolic computation on a (2+1)-dimensional generalized variable-coefficient Boiti–Leon–Pempinelli system for the water waves",
+      "authors": [
+        "Xin-Yi Gao",
+        "Yongjiang Guo",
+        "Wen-Rui Shan"
+      ],
+      "year": 2021,
+      "cited_by_count": 42,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/J.CHAOS.2021.111066",
+      "venue": "Chaos Solitons & Fractals",
+      "journal": "Chaos Solitons & Fractals",
+      "venue_name": "Chaos Solitons & Fractals",
+      "primary_location": {
+        "source": {
+          "display_name": "Chaos Solitons & Fractals"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "aeba975b0e17e8e725b0b3ba68cf4c3c7a1e2e54",
+      "title": "Oceanic shallow-water symbolic computation on a (2+1)-dimensional generalized dispersive long-wave system",
+      "authors": [
+        "Xin-Yi Gao",
+        "Y. Guo",
+        "Wen-Rui Shan"
+      ],
+      "year": 2022,
+      "cited_by_count": 24,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.physleta.2022.128552",
+      "venue": "Physics Letters A",
+      "journal": "Physics Letters A",
+      "venue_name": "Physics Letters A",
+      "primary_location": {
+        "source": {
+          "display_name": "Physics Letters A"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "7d7727b5eeebf1740011eb5929e77373b5f70e08",
+      "title": "A direct symbolic computation of center-controlled rogue waves to a new Painlevé-integrable (3+1)-D generalized nonlinear evolution equation in plasmas",
+      "authors": [
+        "S Kumar",
+        "B. Mohan"
+      ],
+      "year": 2023,
+      "cited_by_count": 59,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s11071-023-08683-5",
+      "venue": "Nonlinear Dynamics",
+      "journal": "Nonlinear Dynamics",
+      "venue_name": "Nonlinear Dynamics",
+      "primary_location": {
+        "source": {
+          "display_name": "Nonlinear Dynamics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "48e569fed56e1c49bbe9b2aab0e7cb1d6ddf37f9",
+      "title": "Newly formed center-controlled rouge wave and lump solutions of a generalized (3+1)-dimensional KdV-BBM equation via symbolic computation approach",
+      "authors": [
+        "S Kumar",
+        "B. Mohan",
+        "Raj Kumar"
+      ],
+      "year": 2023,
+      "cited_by_count": 30,
+      "is_english": true,
+      "abstract": "In this article, we investigate the generalized (3+1)-dimensional KdV-Benjamin-Bona-Mahony equation governed with constant coefficients. It applies the Painlevé analysis to test the complete integrability of the concerned KdV-BBM equation. The symbolic computational approach provides first-order, second-order rogue wave and lump solutions with center-controlled parameters. The rogue waves localized in space and time have a significant amplitude, and lumps are of rational form solution, localized decaying solutions in all space directions rationally. Utilizing a symbolic computation approach, we get the bilinear equation of the KdV-Benjamin-Bona-Mahony equation and show the center-controlled rogue waves and lumps. We employ the symbolic system software Mathematica to do the symbolic computations, form the first and second-order rogue waves, and lump solutions with appropriate values of constant coefficients. The KdV-Benjamin-Bona-Mahony equation analyses the evolution of long waves with modest amplitudes propagating in plasma physics and the motion of waves in fluids and other weakly dispersive mediums. Moreover, rogue waves and lumps occur in several scientific areas, such as fluid dynamics, optical fibers, dusty plasma, oceanography, water engineering, and other nonlinear sciences.",
+      "type": "article",
+      "doi": "10.1088/1402-4896/ace862",
+      "venue": "Physica Scripta",
+      "journal": "Physica Scripta",
+      "venue_name": "Physica Scripta",
+      "primary_location": {
+        "source": {
+          "display_name": "Physica Scripta"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "e196bfbd0a4bc36f7d0bb402153f4fdb1aa33ed9",
+      "title": "A symbolic computation approach to constructing rogue waves with a controllable center in the nonlinear systems",
+      "authors": [
+        "Zhaqilao"
+      ],
+      "year": 2018,
+      "cited_by_count": 75,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.camwa.2018.02.001",
+      "venue": "Comput. Math. Appl.",
+      "journal": "Comput. Math. Appl.",
+      "venue_name": "Comput. Math. Appl.",
+      "primary_location": {
+        "source": {
+          "display_name": "Comput. Math. Appl."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "d57423faf638e049873b76c35e49629682c1bcbf",
+      "title": "Variable-coefficient symbolic computation approach for finding multiple rogue wave solutions of nonlinear system with variable coefficients",
+      "authors": [
+        "Jian‐Guo Liu",
+        "Wen-Hui Zhu",
+        "Yan He"
+      ],
+      "year": 2019,
+      "cited_by_count": 53,
+      "is_english": true,
+      "abstract": "In this paper, a variable-coefficient symbolic computation approach is proposed to solve the multiple rogue wave solutions of nonlinear equation with variable coefficients. As an application, a (2+1\\documentclass[12pt]{minimal} \\usepackage{amsmath} \\usepackage{wasysym} \\usepackage{amsfonts} \\usepackage{amssymb} \\usepackage{amsbsy} \\usepackage{mathrsfs} \\usepackage{upgreek} \\setlength{\\oddsidemargin}{-69pt} \\begin{document}$$2+1$$\\end{document})-dimensional variable-coefficient Kadomtsev–Petviashvili equation is investigated. The multiple rogue wave solutions are obtained and their dynamic features are shown in some 3D and contour plots.",
+      "type": "article",
+      "doi": "10.1007/s00033-021-01584-w",
+      "venue": "Zeitschrift für angewandte Mathematik und Physik",
+      "journal": "Zeitschrift für angewandte Mathematik und Physik",
+      "venue_name": "Zeitschrift für angewandte Mathematik und Physik",
+      "primary_location": {
+        "source": {
+          "display_name": "Zeitschrift für angewandte Mathematik und Physik"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "98527aec6a9b36047559905a33e3c1a7a4227db6",
+      "title": "The Symbolic Computation of Integrability Structures for Partial Differential Equations",
+      "authors": [
+        "Joseph Krasil'shchik",
+        "A. Verbovetsky",
+        "R. Vitolo"
+      ],
+      "year": 2018,
+      "cited_by_count": 70,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/978-3-319-71655-8",
+      "venue": "Texts & Monographs in Symbolic Computation",
+      "journal": "Texts & Monographs in Symbolic Computation",
+      "venue_name": "Texts & Monographs in Symbolic Computation",
+      "primary_location": {
+        "source": {
+          "display_name": "Texts & Monographs in Symbolic Computation"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "4ee36d80a22a99926cdddb7c58422d4c6b5c129f",
+      "title": "Symbolic computation of equivalence transformations and parameter reduction for nonlinear physical models",
+      "authors": [
+        "A. Cheviakov"
+      ],
+      "year": 2017,
+      "cited_by_count": 30,
+      "is_english": true,
+      "abstract": "Abstract An efficient systematic procedure is provided for symbolic computation of Lie groups of equivalence transformations and generalized equivalence transformations of systems of differential equations that contain arbitrary elements (arbitrary functions and/or arbitrary constant parameters), using the software package GeM for Maple . Application of equivalence transformations to the reduction of the number of arbitrary elements in a given system of equations is discussed, and several examples are considered. The first computational example of generalized equivalence transformations where the transformation of the dependent variable involves an arbitrary constitutive function is presented. As a detailed physical example, a three-parameter family of nonlinear wave equations describing finite anti-plane shear displacements of an incompressible hyperelastic fiber-reinforced medium is considered. Equivalence transformations are computed and employed to radically simplify the model for an arbitrary fiber direction, invertibly reducing the model to a simple form that corresponds to a special fiber direction, and involves no arbitrary elements. The presented computation algorithm is applicable to wide classes of systems of differential equations containing arbitrary elements.",
+      "type": "article",
+      "doi": "10.1016/j.cpc.2017.06.013",
+      "venue": "Comput. Phys. Commun.",
+      "journal": "Comput. Phys. Commun.",
+      "venue_name": "Comput. Phys. Commun.",
+      "primary_location": {
+        "source": {
+          "display_name": "Comput. Phys. Commun."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "43a49f13d9d0ee763135a8f412fce4e02f4a8fee",
+      "title": "A generalized dispersive water waves system: Conservation laws; symmetry reduction; travelling wave solutions; symbolic computation",
+      "authors": [
+        "A. Adem",
+        "T. S. Moretlo",
+        "B. Muatjetjeja"
+      ],
+      "year": 2022,
+      "cited_by_count": 18,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.padiff.2022.100465",
+      "venue": "Partial Differential Equations in Applied Mathematics",
+      "journal": "Partial Differential Equations in Applied Mathematics",
+      "venue_name": "Partial Differential Equations in Applied Mathematics",
+      "primary_location": {
+        "source": {
+          "display_name": "Partial Differential Equations in Applied Mathematics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "adabb277ebfe899313fdee94550460c61d26ba00",
+      "title": "Computer algebra in gravity research",
+      "authors": [
+        "M. MacCallum"
+      ],
+      "year": 2018,
+      "cited_by_count": 27,
+      "is_english": true,
+      "abstract": "The complicated nature of calculations in general relativity was one of the driving forces in the early development of computer algebra (CA). CA has become widely used in gravity research (GR) and its use can be expected to grow further. Here the general nature of computer algebra is discussed, along with some aspects of CA system design; features particular to GR’s requirements are considered; information on packages for CA in GR is provided, both for those packages currently available and for their predecessors; and applications of CA in GR are outlined.",
+      "type": "article",
+      "doi": "10.1007/s41114-018-0015-6",
+      "venue": "Living Reviews in Relativity",
+      "journal": "Living Reviews in Relativity",
+      "venue_name": "Living Reviews in Relativity",
+      "primary_location": {
+        "source": {
+          "display_name": "Living Reviews in Relativity"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "3fc2c62e59b2b71435c2a08a2dedc8009152b1d5",
+      "title": "Computer Algebra Calculations in Supersymmetric Electrodynamics",
+      "authors": [
+        "I. Shirokov"
+      ],
+      "year": 2022,
+      "cited_by_count": 2,
+      "is_english": true,
+      "abstract": "Abstract We propose a new symbolic algorithm and a C++ program for generating and calculating supersymmetric Feynman diagrams for $$\\mathcal{N} = 1$$ supersymmetric electrodynamics regularized by higher derivatives in four dimensions. According to standard rules, the program generates all diagrams that are necessary to calculate a specific contribution to the two-point Green function of matter superfields in the needed order, and then reduces the answer to the sum of Euclidean momentum integrals. At the moment, the program was used to calculate the anomalous dimension in $$\\mathcal{N} = 1$$ supersymmetric quantum electrodynamics, regularized by higher derivatives, in the three-loop approximation.",
+      "type": "article",
+      "doi": "10.1134/S0361768823020147",
+      "venue": "Programming and Computer Software",
+      "journal": "Programming and Computer Software",
+      "venue_name": "Programming and Computer Software",
+      "primary_location": {
+        "source": {
+          "display_name": "Programming and Computer Software"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "1cb59d5c43e66233249d6b0eeb29e211a619735c",
+      "title": "Symbolic Studies of Maxwell’s Equations in Space-Time Algebra Formalism",
+      "authors": [
+        "A. V. Korolkova",
+        "M. Gevorkyan",
+        "Arseny V. Fedorov",
+        "K. A. Shtepa",
+        "Dmitry S. Kulyabov"
+      ],
+      "year": 2024,
+      "cited_by_count": 2,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1134/S0361768824020087",
+      "venue": "Programming and Computer Software",
+      "journal": "Programming and Computer Software",
+      "venue_name": "Programming and Computer Software",
+      "primary_location": {
+        "source": {
+          "display_name": "Programming and Computer Software"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "4f114d48c59208136f707291c8f90f3d25c85ca8",
+      "title": "The origin of chaos in the Solar System through computer algebra",
+      "authors": [
+        "F. Mogavero",
+        "J. Laskar"
+      ],
+      "year": 2022,
+      "cited_by_count": 21,
+      "is_english": true,
+      "abstract": "The discovery of the chaotic motion of the planets in the Solar System dates back more than 30 years. Still, no analytical theory has satisfactorily addressed the origin of chaos so far. Implementing canonical perturbation theory in the computer algebra system TRIP, we systematically retrieve the secular resonances at work along the orbital solution of a forced long-term dynamics of the inner planets. We compare the time statistic of their half-widths to the ensemble distribution of the maximum Lyapunov exponent and establish dynamical sources of chaos in an unbiased way. New resonances are predicted by the theory and checked against direct integrations of the Solar System. The image of an entangled dynamics of the inner planets emerges.",
+      "type": "article",
+      "doi": "10.1051/0004-6361/202243327",
+      "venue": "Astronomy &amp; Astrophysics",
+      "journal": "Astronomy &amp; Astrophysics",
+      "venue_name": "Astronomy &amp; Astrophysics",
+      "primary_location": {
+        "source": {
+          "display_name": "Astronomy &amp; Astrophysics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "e76f145054ba36f88093ca396e42882be735dee5",
+      "title": "Analysis of Snapback Repellers Using Methods of Symbolic Computation",
+      "authors": [
+        "Bo Huang",
+        "W. Niu"
+      ],
+      "year": 2019,
+      "cited_by_count": 11,
+      "is_english": true,
+      "abstract": "This paper presents an algebraic criterion for determining whether all the zeros of a given polynomial are outside the unit circle in the complex plane. This criterion is used to deduce critical algebraic conditions for the occurrence of chaos in multidimensional discrete dynamical systems based on a modified Marotto’s theorem developed by Li and Chen (called “Marotto–Li–Chen theorem”). Using these algebraic conditions we reduce the problem of analyzing chaos induced by snapback repeller to an algebraic problem, and propose an algorithmic approach to solve this algebraic problem by means of symbolic computation. The proposed approach is effective as shown by several examples and can be used to determine the possibility that all the fixed points are snapback repellers.",
+      "type": "article",
+      "doi": "10.1142/S0218127419500548",
+      "venue": "Int. J. Bifurc. Chaos",
+      "journal": "Int. J. Bifurc. Chaos",
+      "venue_name": "Int. J. Bifurc. Chaos",
+      "primary_location": {
+        "source": {
+          "display_name": "Int. J. Bifurc. Chaos"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "b9db3c842bea8bf037314b4145da7c0f83f90eba",
+      "title": "Symbolic computation for the qualitative theory of differential equations",
+      "authors": [
+        "Bo Huang",
+        "W. Niu",
+        "Dongming Wang"
+      ],
+      "year": 2022,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s10473-022-0617-7",
+      "venue": "Acta Mathematica Scientia",
+      "journal": "Acta Mathematica Scientia",
+      "venue_name": "Acta Mathematica Scientia",
+      "primary_location": {
+        "source": {
+          "display_name": "Acta Mathematica Scientia"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "5e2d3483a581464e7a3b89228e613a19368c2838",
+      "title": "Qualitative Investigation of the Lorenz-84 System Using Computer Algebra Methods",
+      "authors": [
+        "Jichao Song",
+        "Wei Niu",
+        "Bo Huang",
+        "Le Deng"
+      ],
+      "year": 2025,
+      "cited_by_count": 1,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s11786-025-00605-5",
+      "venue": "Mathematics in Computer Science",
+      "journal": "Mathematics in Computer Science",
+      "venue_name": "Mathematics in Computer Science",
+      "primary_location": {
+        "source": {
+          "display_name": "Mathematics in Computer Science"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "1f02b4c5b87c299a62d04c4595ada1dc6672f7da",
+      "title": "Nonlinear model predictive control using symbolic computation on autonomous marine surface vehicle",
+      "authors": [
+        "Xiaoyong Jiang",
+        "Langyue Huang",
+        "Mengle Peng",
+        "Zhongyi Li",
+        "Ke-ji Yang"
+      ],
+      "year": 2021,
+      "cited_by_count": 10,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s00773-021-00847-5",
+      "venue": "Journal of Marine Science and Technology",
+      "journal": "Journal of Marine Science and Technology",
+      "venue_name": "Journal of Marine Science and Technology",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Marine Science and Technology"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "a3e626b3d0028da385299730653f7fbbaa7726a8",
+      "title": "Symbolic differentiation algorithm for inverse dynamics of serial robots with flexible joints",
+      "authors": [
+        "T. Do",
+        "V. Vu",
+        "Zhaoheng Liu"
+      ],
+      "year": 2021,
+      "cited_by_count": 4,
+      "is_english": true,
+      "abstract": "\n A new symbolic differentiation algorithm is proposed in this paper to automatically generate the inverse dynamics of flexible joint robots in symbolic form, and results obtained can be used in real-time applications. The proposed method with 𝒪(n) computational complexity is developed based on the recursive Newton-Euler algorithm, the chain rule of differentiation, and the computer algebra system. The input of the proposed algorithm consists of symbolic matrices describing the kinematic and dynamic parameters of the robot. The output is the inverse dynamics solution written in portable and optimized code (C-code/Matlab-code). An exemplary, numerical simulation for inverse dynamics of the Kuka LWR4 robot with seven flexible joints is conducted using Matlab, in which the computational time per cycle of inverse dynamics is about 0.02 millisecond. The numerical example provides very good matching results versus existing methods, while requiring much less computation time and complexity.",
+      "type": "article",
+      "doi": "10.1115/1.4051355",
+      "venue": "Journal of Mechanisms and Robotics",
+      "journal": "Journal of Mechanisms and Robotics",
+      "venue_name": "Journal of Mechanisms and Robotics",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Mechanisms and Robotics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "3753d30c5f61a27081caf56d35e9b44c967022cd",
+      "title": "Deciding Cuspidality of Manipulators through Computer Algebra and Algorithms in Real Algebraic Geometry",
+      "authors": [
+        "D. Chablat",
+        "Rémi Prébet",
+        "M. S. E. Din",
+        "Durgesh Haribhau Salunkhe",
+        "P. Wenger"
+      ],
+      "year": 2022,
+      "cited_by_count": 7,
+      "is_english": true,
+      "abstract": "Cuspidal robots are robots with at least two inverse kinematic solutions that can be connected by a singularity-free path. Deciding the cuspidality of generic 3R robots has been studied in the past, but extending the study to six-degree-of-freedom robots can be a challenging problem. Many robots can be modeled as a polynomial map together with a real algebraic set so that the notion of cuspidality can be extended to these data. In this paper we design an algorithm that, on input a polynomial map in n indeterminates, and s polynomials in the same indeterminates describing a real algebraic set of dimension d, decides the cuspidality of the restriction of the map to the real algebraic set under consideration. Moreover, if D and τ are, respectively the maximum degree and the bound on the bit size of the coefficients of the input polynomials, this algorithm runs in time log-linear in τ and polynomial in ((s+d)D)O(n2). It relies on many high-level algorithms in computer algebra which use advanced methods on real algebraic sets and critical loci of polynomial maps. As far as we know, this is the first algorithm that tackles the cuspidality problem from a general point of view.",
+      "type": "article",
+      "doi": "10.1145/3476446.3535477",
+      "venue": "Proceedings of the 2022 International Symposium on Symbolic and Algebraic Computation",
+      "journal": "Proceedings of the 2022 International Symposium on Symbolic and Algebraic Computation",
+      "venue_name": "Proceedings of the 2022 International Symposium on Symbolic and Algebraic Computation",
+      "primary_location": {
+        "source": {
+          "display_name": "Proceedings of the 2022 International Symposium on Symbolic and Algebraic Computation"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "34f881735cfd4df36001cb50ea940ced1ce011e9",
+      "title": "Structural Analysis of Parallel Mechanisms Using Conformal Geometric Algebra",
+      "authors": [
+        "Lubin Hang",
+        "Chengwei Shen",
+        "Tingli Yang"
+      ],
+      "year": 2016,
+      "cited_by_count": 1,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/978-3-319-43506-0_14",
+      "venue": "International Conference on Intelligent Robotics and Applications",
+      "journal": "International Conference on Intelligent Robotics and Applications",
+      "venue_name": "International Conference on Intelligent Robotics and Applications",
+      "primary_location": {
+        "source": {
+          "display_name": "International Conference on Intelligent Robotics and Applications"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "d38ab0045bb255759cc2f8b4edadbfc4f68e4672",
+      "title": "Toward automated reasoning for analog IC design by symbolic computation - A survey",
+      "authors": [
+        "G. Shi"
+      ],
+      "year": 2018,
+      "cited_by_count": 21,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.vlsi.2017.08.005",
+      "venue": "Integr.",
+      "journal": "Integr.",
+      "venue_name": "Integr.",
+      "primary_location": {
+        "source": {
+          "display_name": "Integr."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "c3e900efec1b7814a5d9b9b48a90c79fe1362a3c",
+      "title": "Formal Verification of Modular Multipliers using Symbolic Computer Algebra and Boolean Satisfiability",
+      "authors": [
+        "Alireza Mahzoon",
+        "Daniel Große",
+        "Christoph Scholl",
+        "Alexander Konrad",
+        "R. Drechsler"
+      ],
+      "year": 2022,
+      "cited_by_count": 15,
+      "is_english": true,
+      "abstract": "Modular multipliers are the essential components in cryptography and Residue Number System (RNS) designs. Especially, $2^{n}-1$ and $2^{n}+1$ modular multipliers have gained more attention due to their regular structures and a wide variety of applications. However, there is no automated formal verification method to prove the correctness of these multipliers. As a result, bugs might remain undetected after the design phase. In this paper, we present our modular verifier that combines Symbolic Computer Algebra (SCA) and Boolean Satisfiability (SAT) to prove the correctness of $2^{n}-1$ and $2^{n}+1$ modular multipliers. Our verifier takes advantage of three techniques, i.e. coefficient correction, SAT-based local vanishing removal, and SAT-based output condition check to overcome the challenges of SCA-based verification. The efficiency of our verifier is demonstrated using an extensive set of modular multipliers with up to several million gates.",
+      "type": "article",
+      "doi": "10.1145/3489517.3530605",
+      "venue": "2022 59th ACM/IEEE Design Automation Conference (DAC)",
+      "journal": "2022 59th ACM/IEEE Design Automation Conference (DAC)",
+      "venue_name": "2022 59th ACM/IEEE Design Automation Conference (DAC)",
+      "primary_location": {
+        "source": {
+          "display_name": "2022 59th ACM/IEEE Design Automation Conference (DAC)"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "3fa5becc52481c5fa2153137fba78fd56c4accb3",
+      "title": "Improving AMulet2 for verifying multiplier circuits using SAT solving and computer algebra",
+      "authors": [
+        "Daniela Kaufmann",
+        "Armin Biere"
+      ],
+      "year": 2023,
+      "cited_by_count": 16,
+      "is_english": true,
+      "abstract": "Verifying arithmetic circuits and most prominently multiplier circuits is an important problem which in practice is still considered to be challenging. One of the currently most successful verification techniques relies on algebraic reasoning. In this article, we present AMulet2 , a fully automatic tool for verification of integer multipliers combining SAT solving and computer algebra. Our tool models multipliers given as and-inverter graphs as a set of polynomials and applies preprocessing techniques based on elimination theory of Gröbner bases. Finally, it uses a polynomial reduction algorithm to verify the correctness of the given circuit. AMulet2 is a re-factorization and improved re-implementation of our previous verification tool AMulet1 and cannot only be used as a stand-alone tool but also serves as a polynomial reasoning framework. We present a novel XOR-based slicing approach and discuss improvements on the data structures including monomial sharing.",
+      "type": "article",
+      "doi": "10.1007/s10009-022-00688-6",
+      "venue": "International Journal on Software Tools for Technology Transfer",
+      "journal": "International Journal on Software Tools for Technology Transfer",
+      "venue_name": "International Journal on Software Tools for Technology Transfer",
+      "primary_location": {
+        "source": {
+          "display_name": "International Journal on Software Tools for Technology Transfer"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "0210c0abf093174288b1cff94f8ce1946df6a595",
+      "title": "Rectification of Integer Arithmetic Circuits using Computer Algebra Techniques",
+      "authors": [
+        "V. Rao",
+        "Haden Ondricek",
+        "P. Kalla",
+        "Florian Enescu"
+      ],
+      "year": 2021,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "This paper proposes a symbolic algebra approach for multi-target rectification of integer arithmetic circuits. The circuit is represented as a system of polynomials and rectified against a polynomial specification with computations modeled over the field of rationals. Given a set of nets as potential rectification targets, we formulate a check to ascertain the existence of rectification functions at these targets. Upon confirmation, we compute the patch functions collectively for the targets. In this regard, we show how to synthesize a logic sub-circuit from polynomial artifacts generated over the field of rationals. We present new mathematical contributions and results to substantiate this synthesis process. We present two approaches for patch function computation: a greedy approach that resolves the rectification functions for the targets and an approach that explores a subset of don’t care conditions for the targets. Our approach is implemented as custom software and utilizes the existing open-source symbolic algebra libraries for computations. We present experimental results of our approach on several integer multipliers benchmark and discuss the quality of the patch sub-circuits generated.",
+      "type": "article",
+      "doi": "10.1109/ICCD53106.2021.00039",
+      "venue": "2021 IEEE 39th International Conference on Computer Design (ICCD)",
+      "journal": "2021 IEEE 39th International Conference on Computer Design (ICCD)",
+      "venue_name": "2021 IEEE 39th International Conference on Computer Design (ICCD)",
+      "primary_location": {
+        "source": {
+          "display_name": "2021 IEEE 39th International Conference on Computer Design (ICCD)"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "9ed0ec8c4af07ad4a328bdefb84019c3063f4c9c",
+      "title": "A SAT Solver and Computer Algebra Attack on the Minimum Kochen-Specker Problem",
+      "authors": [
+        "Zhengyu Li",
+        "Curtis Bright",
+        "Vijay Ganesh"
+      ],
+      "year": 2023,
+      "cited_by_count": 15,
+      "is_english": true,
+      "abstract": "One of the fundamental results in quantum foundations is the Kochen–Specker (KS) theorem, which states that any theory whose predictions agree with quantum mechanics must be contextual, i.e., a quantum observation cannot be understood as revealing a pre-existing value. The theorem hinges on the existence of a mathematical object called a KS vector system. While many KS vector systems are known, the problem of finding the minimum KS vector system in three dimensions (3D) has remained stubbornly open for over 55 years. To address the minimum KS problem, we present a new verifiable proof-producing method based on a combination of a Boolean satisfiability (SAT) solver and a computer algebra system (CAS) that uses an isomorph-free orderly generation technique that is very effective in pruning away large parts of the search space. Our method shows that a KS system in 3D must contain at least 24 vectors. We show that our sequential and parallel Cube-and-Conquer (CnC) SAT+CAS methods are significantly faster than SAT-only, CAS-only, and a prior CAS-based method of Uijlen and Westerbaan. Further, while our parallel pipeline is somewhat slower than the parallel CnC version of the recently introduced Satisfiability Modulo Theories (SMS) method, this is in part due to the overhead of proof generation. Finally, we provide the first computer-verifiable proof certificate of a lower bound to the KS problem with a size of 40.3 TiB in order 23.",
+      "type": "article",
+      "doi": "10.24963/ijcai.2024/210",
+      "venue": "International Joint Conference on Artificial Intelligence",
+      "journal": "International Joint Conference on Artificial Intelligence",
+      "venue_name": "International Joint Conference on Artificial Intelligence",
+      "primary_location": {
+        "source": {
+          "display_name": "International Joint Conference on Artificial Intelligence"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "2bfa20069212d04c1662b960f52d8a404678b461",
+      "title": "A SAT Solver and Computer Algebra Attack on the Minimum Kochen-Specker Problem (Student Abstract)",
+      "authors": [
+        "Zhengyu Li",
+        "Curtis Bright",
+        "Vijay Ganesh"
+      ],
+      "year": 2024,
+      "cited_by_count": 4,
+      "is_english": true,
+      "abstract": "The problem of finding the minimum three-dimensional Kochen–Specker (KS) vector system, an important problem in quantum foundations, has remained open for over 55 years. We present a new method to address this problem based on a combination of a Boolean satisfiability (SAT) solver and a computer algebra system (CAS). Our approach improved the lower bound on the size of a KS system from 22 to 24. More importantly, we provide the first computer-verifiable proof certificate of a lower bound to the KS problem with a proof size of 41.6 TiB for order 23. The efficiency is due to the powerful combination of SAT solvers and CAS-based orderly generation.",
+      "type": "article",
+      "doi": "10.1609/aaai.v38i21.30472",
+      "venue": "AAAI Conference on Artificial Intelligence",
+      "journal": "AAAI Conference on Artificial Intelligence",
+      "venue_name": "AAAI Conference on Artificial Intelligence",
+      "primary_location": {
+        "source": {
+          "display_name": "AAAI Conference on Artificial Intelligence"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "40557825c0d2e3435edf9bd0c2905784d0cc9051",
+      "title": "Entropy supplementary conservation law for non-linear systems of PDEs with non-conservative terms: application to the modelling and analysis of complex fluid flows using computer algebra",
+      "authors": [
+        "Pierre Cordesse",
+        "M. Massot"
+      ],
+      "year": 2019,
+      "cited_by_count": 9,
+      "is_english": true,
+      "abstract": "In the present contribution, we investigate first-order nonlinear systems of partial differential equations which are constituted of two parts: a system of conservation laws and non-conservative first order terms. Whereas the theory of first-order systems of conservation laws is well established and the conditions for the existence of supplementary conservation laws, and more specifically of an entropy supplementary conservation law for smooth solutions, well known, there exists so far no general extension to obtain such supplementary conservation laws when non-conservative terms are present. We propose a framework in order to extend the existing theory and show that the presence of non-conservative terms somewhat complexifies the problem since numerous combinations of the conservative and non-conservative terms can lead to a supplementary conservation law. We then identify a restricted framework in order to design and analyze physical models of complex fluid flows by means of computer algebra and thus obtain the entire ensemble of possible combination of conservative and non-conservative terms with the objective of obtaining specifically an entropy supplementary conservation law. The theory as well as developed computer algebra tool are then applied to a Baer-Nunziato two-phase flow model and to a multicomponent plasma fluid model. The first one is a first-order fluid model, with non-conservative terms impacting on the linearly degenerate field and requires a closure since there is no way to derive interfacial quantities from averaging principles and we need guidance in order to close the pressure and velocity of the interface and the thermodynamics of the mixture. The second one involves first order terms for the heavy species coupled to second order terms for the electrons, the non-conservative terms impact the genuinely nonlinear fields and the model can be rigorously derived from kinetic theory. We show how the theory allows to recover the whole spectrum of closures obtained so far in the literature for the two-phase flow system as well as conditions when one aims at extending the thermodynamics and also applies to the plasma case, where we recover the usual entropy supplementary equation, thus assessing the effectiveness and scope of the proposed theory.",
+      "type": "article",
+      "doi": "10.4310/CMS.2020.V18.N2.A10",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "8c4fcd9625aef3a3eb836771303bba96650a58af",
+      "title": "Comparative Study of the Accuracy of Higher-Order Difference Schemes for Molecular Dynamics Problems Using the Computer Algebra Means",
+      "authors": [
+        "E. V. Vorozhtsov",
+        "S. Kiselev"
+      ],
+      "year": 2020,
+      "cited_by_count": 2,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/978-3-030-60026-6_35",
+      "venue": "Computer Algebra in Scientific Computing",
+      "journal": "Computer Algebra in Scientific Computing",
+      "venue_name": "Computer Algebra in Scientific Computing",
+      "primary_location": {
+        "source": {
+          "display_name": "Computer Algebra in Scientific Computing"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "8b8e5d6dc81f7795a7e4929686cf3bb4d4f295bb",
+      "title": "Application of Computer Algebra Methods to Investigate the Dynamics of the System of Two Connected Bodies Moving along a Circular Orbit",
+      "authors": [
+        "S. Gutnik",
+        "V. Sarychev"
+      ],
+      "year": 2019,
+      "cited_by_count": 13,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1134/S0361768819020051",
+      "venue": "Programming and Computer Software",
+      "journal": "Programming and Computer Software",
+      "venue_name": "Programming and Computer Software",
+      "primary_location": {
+        "source": {
+          "display_name": "Programming and Computer Software"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "e4128da0d60cf5fb580bd1ceadd98ff2cbe2f607",
+      "title": "Application of computer algebra methods for investigation of stationary motions of a gyrostat satellite",
+      "authors": [
+        "S. Gutnik",
+        "V. Sarychev"
+      ],
+      "year": 2017,
+      "cited_by_count": 13,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1134/S0361768817020050",
+      "venue": "Programming and Computer Software",
+      "journal": "Programming and Computer Software",
+      "venue_name": "Programming and Computer Software",
+      "primary_location": {
+        "source": {
+          "display_name": "Programming and Computer Software"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "392bb81d91aa4966b6434e7634a5079bd20aa1be",
+      "title": "Application of Computer Algebra Methods to Investigation of Stationary Motions of a System of Two Connected Bodies Moving in a Circular Orbit",
+      "authors": [
+        "S. Gutnik",
+        "V. Sarychev"
+      ],
+      "year": 2020,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1134/S0965542520010091",
+      "venue": "Computational Mathematics and Mathematical Physics",
+      "journal": "Computational Mathematics and Mathematical Physics",
+      "venue_name": "Computational Mathematics and Mathematical Physics",
+      "primary_location": {
+        "source": {
+          "display_name": "Computational Mathematics and Mathematical Physics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "8322e30c74ed8b6816942633eb28eca9bc6ae358",
+      "title": "Computer Algebra Methods for Searching the Stationary Motions of the Connected Bodies System Moving in Gravitational Field",
+      "authors": [
+        "S. Gutnik",
+        "V. Sarychev"
+      ],
+      "year": 2022,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s11786-022-00535-6",
+      "venue": "Mathematics in Computer Science",
+      "journal": "Mathematics in Computer Science",
+      "venue_name": "Mathematics in Computer Science",
+      "primary_location": {
+        "source": {
+          "display_name": "Mathematics in Computer Science"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "02f1dc93eaf30b959b50bf7fe2da68090fece904",
+      "title": "Applications of Computer Algebra in the Study of the Two-Planet Problem of Three Bodies with Variable Masses",
+      "authors": [
+        "A. Prokopenya",
+        "M. Minglibayev",
+        "S. Shomshekova"
+      ],
+      "year": 2019,
+      "cited_by_count": 11,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1134/S0361768819020087",
+      "venue": "Programming and Computer Software",
+      "journal": "Programming and Computer Software",
+      "venue_name": "Programming and Computer Software",
+      "primary_location": {
+        "source": {
+          "display_name": "Programming and Computer Software"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "8222430150b76188ab09cb3fa6cc13fc7b7b6303",
+      "title": "Derivation of Evolutionary Equations in the Many-Body Problem with Isotropically Varying Masses Using Computer Algebra",
+      "authors": [
+        "A. Prokopenya",
+        "M. Minglibayev",
+        "Aiken Kosherbayeva"
+      ],
+      "year": 2022,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1134/S0361768822020098",
+      "venue": "Programming and Computer Software",
+      "journal": "Programming and Computer Software",
+      "venue_name": "Programming and Computer Software",
+      "primary_location": {
+        "source": {
+          "display_name": "Programming and Computer Software"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "5065602173b8c2e6634aac932b209d9641215f84",
+      "title": "Efficient design optimization of complex system through an integrated interface using symbolic computation",
+      "authors": [
+        "Hansu Kim",
+        "Shinyu Kim",
+        "Taekyun Kim",
+        "T. Lee",
+        "N. Ryu",
+        "Kihan Kwon",
+        "S. Min"
+      ],
+      "year": 2018,
+      "cited_by_count": 21,
+      "is_english": true,
+      "abstract": "Abstract A complex system is composed of several subsystems and numerous lower level components. It is inefficient to design the complex system at the system level by using high-fidelity models. A system level approach using a language-based model is required to design such a highly complex system before implementing a detailed design. However, as commercial process integration and design optimization software packages focus on detailed design, which uses the high-fidelity models, it is difficult to perform the design optimization of a highly complex system, such as a combat vehicle. Moreover, as commercial optimization software packages use numerical computation, the gradient calculation cost can increase, and the matrix computation process can be inefficient in terms of optimization time. Therefore, in this study, an integrated interface for efficient design optimization was developed to focus on concept design using a MODELICA language-based model. Additionally, the design variable screening by using analysis of variance, surrogate modeling through sequential design of experiments, and symbolic computation were used to solve the aforementioned problems. These were applied to the design optimization of the combat vehicle system to demonstrate the effectiveness of the integrated interface and symbolic computation. In conclusion, a concept design utilizing a MODELICA language-based model was achieved, and the optimization time achieved by symbolic computation was largely reduced in comparison to the optimization time achieved by numerical computation.",
+      "type": "article",
+      "doi": "10.1016/J.ADVENGSOFT.2018.09.006",
+      "venue": "Adv. Eng. Softw.",
+      "journal": "Adv. Eng. Softw.",
+      "venue_name": "Adv. Eng. Softw.",
+      "primary_location": {
+        "source": {
+          "display_name": "Adv. Eng. Softw."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "e9a5a3e8e750b3716046f24ef7bebbccad784721",
+      "title": "Design Space Description through Adaptive Sampling and Symbolic Computation",
+      "authors": [
+        "Fei Zhao",
+        "I. Grossmann",
+        "Salvador García Muñoz",
+        "S. Stamatis"
+      ],
+      "year": 2022,
+      "cited_by_count": 10,
+      "is_english": true,
+      "abstract": "Design space definition is one of the key parts in pharmaceutical research and development. In this article, we propose a novel solution strategy to explicitly describe the design space without recourse decisions. First, to smooth the boundary, the Kreisselmeier-Steinhauser (KS) function is applied to aggregate all inequality constraints. Next, for creating a surrogate polynomial model of the KS function, we focus on finding sampling points on the boundary of KS space. After performing Latin hypercube sampling (LHS), two methods are presented to efficiently expand the boundary points, i.e., line projection to the boundary through any two feasible LHS points and perturbation around the adaptive sampling points. Finally, a symbolic computation method, cylindrical algebraic decomposition, is applied to transform the surrogate model into a series of explicit and triangular subsystems, which can be converted to describe the KS space. Two case studies show the efficiency of the proposed algorithm.",
+      "type": "article",
+      "doi": "10.1002/aic.17604",
+      "venue": "AIChE Journal",
+      "journal": "AIChE Journal",
+      "venue_name": "AIChE Journal",
+      "primary_location": {
+        "source": {
+          "display_name": "AIChE Journal"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "c95954d4add8a8b22d5720a1286ed6a4782117bb",
+      "title": "AI Reasoning in Deep Learning Era: From Symbolic AI to Neural–Symbolic AI",
+      "authors": [
+        "Baoyu Liang",
+        "Yucheng Wang",
+        "Chao Tong"
+      ],
+      "year": 2025,
+      "cited_by_count": 34,
+      "is_english": true,
+      "abstract": "The pursuit of Artificial General Intelligence (AGI) demands AI systems that not only perceive but also reason in a human-like manner. While symbolic systems pioneered early breakthroughs in logic-based reasoning, such as MYCIN and DENDRAL, they suffered from brittleness and poor scalability. Conversely, modern deep learning architectures have achieved remarkable success in perception tasks, yet continue to fall short in interpretable and structured reasoning. This dichotomy has motivated growing interest in Neural–Symbolic AI, a paradigm that integrates symbolic logic with neural computation to unify reasoning and learning. This survey provides a comprehensive and technically grounded overview of AI reasoning in the deep learning era, with a particular focus on Neural–Symbolic AI. Beyond a historical narrative, we introduce a formal definition of AI reasoning and propose a novel three-dimensional taxonomy that organizes reasoning paradigms by representation form, task structure, and application context. We then systematically review recent advances—including Differentiable Logic Programming, abductive learning, program induction, logic-aware Transformers, and LLM-based symbolic planning—highlighting their technical mechanisms, capabilities, and limitations. In contrast to prior surveys, this work bridges symbolic logic, neural computation, and emergent generative reasoning, offering a unified framework to understand and compare diverse approaches. We conclude by identifying key open challenges such as symbolic–continuous alignment, dynamic rule learning, and unified architectures, and we aim to provide a conceptual foundation for future developments in general-purpose reasoning systems.",
+      "type": "article",
+      "doi": "10.3390/math13111707",
+      "venue": "Mathematics",
+      "journal": "Mathematics",
+      "venue_name": "Mathematics",
+      "primary_location": {
+        "source": {
+          "display_name": "Mathematics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "1356f6e3ca4d8ab066314068c9d5aaf014db6dbb",
+      "title": "Neuro-symbolic Computation for XAI: Towards a Unified Model",
+      "authors": [
+        "Giuseppe Pisano",
+        "Giovanni Ciatto",
+        "Roberta Calegari",
+        "Andrea Omicini"
+      ],
+      "year": 2020,
+      "cited_by_count": 7,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": null,
+      "venue": "Workshop From Objects to Agents",
+      "journal": "Workshop From Objects to Agents",
+      "venue_name": "Workshop From Objects to Agents",
+      "primary_location": {
+        "source": {
+          "display_name": "Workshop From Objects to Agents"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "dd6d28f8d50b1e4ddc57bed47b525f932eefd441",
+      "title": "Incremental parsing in a continuous dynamical system: sentence processing in Gradient Symbolic Computation",
+      "authors": [
+        "Pyeong Whan Cho",
+        "M. Goldrick",
+        "P. Smolensky"
+      ],
+      "year": 2017,
+      "cited_by_count": 48,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1515/lingvan-2016-0105",
+      "venue": "Linguistics Vanguard",
+      "journal": "Linguistics Vanguard",
+      "venue_name": "Linguistics Vanguard",
+      "primary_location": {
+        "source": {
+          "display_name": "Linguistics Vanguard"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "50ba506a389b072273d1b62c8e85ce43e01dd2f0",
+      "title": "Incorporating background knowledge in symbolic regression using a computer algebra system",
+      "authors": [
+        "Charles Fox",
+        "N. Tran",
+        "Nikki Nacion",
+        "Samiha Sharlin",
+        "Tyler R. Josephson"
+      ],
+      "year": 2023,
+      "cited_by_count": 4,
+      "is_english": true,
+      "abstract": "Symbolic regression (SR) can generate interpretable, concise expressions that fit a given dataset, allowing for more human understanding of the structure than black-box approaches. The addition of background knowledge (in the form of symbolic mathematical constraints) allows for the generation of expressions that are meaningful with respect to theory while also being consistent with data. We specifically examine the addition of constraints to traditional genetic algorithm (GA) based SR (PySR) as well as a Markov-chain Monte Carlo (MCMC) based Bayesian SR architecture (Bayesian Machine Scientist), and apply these to rediscovering adsorption equations from experimental, historical datasets. We find that, while hard constraints prevent GA and MCMC SR from searching, soft constraints can lead to improved performance both in terms of search effectiveness and model meaningfulness, with computational costs increasing by about an order of magnitude. If the constraints do not correlate well with the dataset or expected models, they can hinder the search of expressions. We find incorporating these constraints in Bayesian SR (as the Bayesian prior) is better than by modifying the fitness function in the GA.",
+      "type": "article",
+      "doi": "10.1088/2632-2153/ad4a1e",
+      "venue": "Machine Learning: Science and Technology",
+      "journal": "Machine Learning: Science and Technology",
+      "venue_name": "Machine Learning: Science and Technology",
+      "primary_location": {
+        "source": {
+          "display_name": "Machine Learning: Science and Technology"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "20fc3f906bedc570bff6b7074c1717b93b08eec4",
+      "title": "Symbolic Regression-Assisted Offline Data-Driven Evolutionary Computation",
+      "authors": [
+        "Yuhong Sun",
+        "Ting Huang",
+        "Jinghui Zhong",
+        "Jun Zhang",
+        "Yue-jiao Gong"
+      ],
+      "year": 2025,
+      "cited_by_count": 8,
+      "is_english": true,
+      "abstract": "When solving optimization problems with expensive or implicit objective functions, evolutionary algorithms (EAs) commonly utilize surrogate models as cost-effective substitutes for evaluation. This category of algorithms is referred to as data-driven EAs (DDEAs). However, when constructing surrogate models, existing studies rely on the hand-crafted model structure, requiring prior knowledge while leading to the suboptimal fitting ability of the model. To address the issue, this article proposes a novel symbolic regression (SR)-assisted EA, namely SR-DDEA. SR-DDEA employs SR to automatically construct the model structure without prior knowledge and obtain accurate surrogates. Specifically, we develop an efficient gene expression programming algorithm to enhance the expressive ability of surrogates, assisted by a queue-based decoding strategy to improve the efficiency of the model calculations. We also employ a clustering-based selective ensemble method to maximize data utilization and obtain diverse models. Experimental findings on commonly employed benchmarks demonstrate that our algorithm surpasses other cutting-edge offline DDEAs on test problems of different scales and a practical aerodynamic airfoil design challenge.",
+      "type": "article",
+      "doi": "10.1109/TEVC.2024.3482326",
+      "venue": "IEEE Transactions on Evolutionary Computation",
+      "journal": "IEEE Transactions on Evolutionary Computation",
+      "venue_name": "IEEE Transactions on Evolutionary Computation",
+      "primary_location": {
+        "source": {
+          "display_name": "IEEE Transactions on Evolutionary Computation"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "f4c0e9e96f444d8270f03f5e421de5fb440b9d67",
+      "title": "Symbolic regression in materials science via dimension-synchronous-computation",
+      "authors": [
+        "Changxin Wang",
+        "Y. Zhang",
+        "Cheng Wen",
+        "Mingliang Yang",
+        "T. Lookman",
+        "Yanjing Su",
+        "Tong-Yi Zhang"
+      ],
+      "year": 2022,
+      "cited_by_count": 33,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.jmst.2021.12.052",
+      "venue": "Journal of Materials Science &amp; Technology",
+      "journal": "Journal of Materials Science &amp; Technology",
+      "venue_name": "Journal of Materials Science &amp; Technology",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Materials Science &amp; Technology"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "64024c576d9efd8247c1f845276d8bce2ea10789",
+      "title": "Symbolic Integration Algorithm Selection with Machine Learning: LSTMs vs Tree LSTMs",
+      "authors": [
+        "Rashid Barket",
+        "Matthew England",
+        "Jurgen Gerhard"
+      ],
+      "year": 2024,
+      "cited_by_count": 4,
+      "is_english": true,
+      "abstract": "Computer Algebra Systems (e.g. Maple) are used in research, education, and industrial settings. One of their key functionalities is symbolic integration, where there are many sub-algorithms to choose from that can affect the form of the output integral, and the runtime. Choosing the right sub-algorithm for a given problem is challenging: we hypothesise that Machine Learning can guide this sub-algorithm choice. A key consideration of our methodology is how to represent the mathematics to the ML model: we hypothesise that a representation which encodes the tree structure of mathematical expressions would be well suited. We trained both an LSTM and a TreeLSTM model for sub-algorithm prediction and compared them to Maple's existing approach. Our TreeLSTM performs much better than the LSTM, highlighting the benefit of using an informed representation of mathematical expressions. It is able to produce better outputs than Maple's current state-of-the-art meta-algorithm, giving a strong basis for further research.",
+      "type": "article",
+      "doi": "10.48550/arXiv.2404.14973",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "16f64eff2c5f0a87b5f4265b1454ccf592e5aba7",
+      "title": "Satisfiability Checking meets Symbolic Computation (Project Paper)",
+      "authors": [
+        "E. Ábrahám",
+        "J. Abbott",
+        "B. Becker",
+        "Anna Maria Bigatti",
+        "M. Brain",
+        "B. Buchberger",
+        "A. Cimatti",
+        "J. Davenport",
+        "M. England",
+        "P. Fontaine"
+      ],
+      "year": 2016,
+      "cited_by_count": 38,
+      "is_english": true,
+      "abstract": "Symbolic Computation and Satisfiability Checking are two research areas, both having their individual scientific focus but sharing also common interests in the development, implementation and application of decision procedures for arithmetic theories. Despite their commonalities, the two communities are rather weakly connected. The aim of our newly accepted SC 2 project (H2020-FETOPEN-CSA) is to strengthen the connection between these communities by creating common platforms, initiating interaction and exchange, identifying common challenges, and developing a common roadmap from theory along the way to tools and (industrial) applications. In this paper we report on the aims and on the first activities of this project, and formalise some relevant challenges for the unified SC 2 community.",
+      "type": "article",
+      "doi": "10.1007/978-3-319-42547-4_3",
+      "venue": "International Conference on Intelligent Computer Mathematics",
+      "journal": "International Conference on Intelligent Computer Mathematics",
+      "venue_name": "International Conference on Intelligent Computer Mathematics",
+      "primary_location": {
+        "source": {
+          "display_name": "International Conference on Intelligent Computer Mathematics"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "5cbca4b3658c66969819eaf228a9d6edf87f8fc4",
+      "title": "Satisfiability checking and symbolic computation",
+      "authors": [
+        "E. Ábrahám",
+        "J. Abbott",
+        "B. Becker",
+        "Anna Maria Bigatti",
+        "M. Brain",
+        "B. Buchberger",
+        "A. Cimatti",
+        "J. Davenport",
+        "M. England",
+        "P. Fontaine"
+      ],
+      "year": 2016,
+      "cited_by_count": 7,
+      "is_english": true,
+      "abstract": "Symbolic Computation and Satisfiability Checking are viewed as individual research areas, but they share common interests in the development, implementation and application of decision procedures for arithmetic theories. Despite these commonalities, the two communities are currently only weakly connected. We introduce a new project SC2 to build a joint community in this area, supported by a newly accepted EU (H2020-FETOPEN-CSA) project of the same name. We aim to strengthen the connection between these communities by creating common platforms, initiating interaction and exchange, identifying common challenges, and developing a common roadmap. This abstract and accompanying poster describes the motivation and aims for the project, and reports on the first activities.",
+      "type": "article",
+      "doi": "10.1145/3055282.3055285",
+      "venue": "ACM Commun. Comput. Algebra",
+      "journal": "ACM Commun. Comput. Algebra",
+      "venue_name": "ACM Commun. Comput. Algebra",
+      "primary_location": {
+        "source": {
+          "display_name": "ACM Commun. Comput. Algebra"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "af11d49d41f521e08f617cdc7ece53e8fe07a9a7",
+      "title": "Symbolic computation and satisfiability checking",
+      "authors": [
+        "J. Davenport",
+        "M. England",
+        "A. Griggio",
+        "T. Sturm",
+        "C. Tinelli"
+      ],
+      "year": 2020,
+      "cited_by_count": 11,
+      "is_english": true,
+      "abstract": "Abstract The two communities of Symbolic Computation and Satisfiability Checking have recently found themselves tackling similar problems and having a growing interest in each other's technology. This special issue presents articles whose contribution is of interest to, and is influenced by, both communities. Given the context of this journal we start this editorial with a more thorough overview of Satisfiability Checking, and then turn to Symbolic Computation and the potentials and challenges for collaboration. The collection of articles in this issue is evidence of the already existing fruitful work at the intersection of these communities.",
+      "type": "article",
+      "doi": "10.1016/J.JSC.2019.07.017",
+      "venue": "J. Symb. Comput.",
+      "journal": "J. Symb. Comput.",
+      "venue_name": "J. Symb. Comput.",
+      "primary_location": {
+        "source": {
+          "display_name": "J. Symb. Comput."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "a5b70b6bd512b817f90b692bb0779c92d18d8fd7",
+      "title": "When satisfiability solving meets symbolic computation",
+      "authors": [
+        "Curtis Bright",
+        "I. Kotsireas",
+        "Vijay Ganesh"
+      ],
+      "year": 2022,
+      "cited_by_count": 15,
+      "is_english": true,
+      "abstract": "The science of less-than-brute force.",
+      "type": "article",
+      "doi": "10.1145/3500921",
+      "venue": "Communications of the ACM",
+      "journal": "Communications of the ACM",
+      "venue_name": "Communications of the ACM",
+      "primary_location": {
+        "source": {
+          "display_name": "Communications of the ACM"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "2e20520c18438f015d0da609d02878c53c632908",
+      "title": "Combining SAT Solvers with Computer Algebra Systems to Verify Combinatorial Conjectures",
+      "authors": [
+        "Edward Zulkoski",
+        "Curtis Bright",
+        "A. Heinle",
+        "I. Kotsireas",
+        "K. Czarnecki",
+        "Vijay Ganesh"
+      ],
+      "year": 2016,
+      "cited_by_count": 37,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s10817-016-9396-y",
+      "venue": "Journal of Automated Reasoning",
+      "journal": "Journal of Automated Reasoning",
+      "venue_name": "Journal of Automated Reasoning",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Automated Reasoning"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "dedbb1f4c56808cfe19e6566a7e623fa710e4159",
+      "title": "MathCheck: A Math Assistant via a Combination of Computer Algebra Systems and SAT Solvers",
+      "authors": [
+        "Edward Zulkoski",
+        "Vijay Ganesh",
+        "K. Czarnecki"
+      ],
+      "year": 2016,
+      "cited_by_count": 23,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/978-3-319-21401-6_41",
+      "venue": "CADE",
+      "journal": "CADE",
+      "venue_name": "CADE",
+      "primary_location": {
+        "source": {
+          "display_name": "CADE"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "319f5fbccd7a8d0576921935adcdf4ee5f90f463",
+      "title": "Proving Information Inequalities and Identities with Symbolic Computation",
+      "authors": [
+        "Laigang Guo",
+        "R. Yeung",
+        "Xiao-Shan Gao"
+      ],
+      "year": 2022,
+      "cited_by_count": 9,
+      "is_english": true,
+      "abstract": "Proving linear inequalities and identities of Shannon’s information measures, possibly with linear constraints on the information measures, is an important problem in information theory. For this purpose, ITIP and other variant algorithms have been developed and implemented, which are all based on solving a linear program (LP). In particular, an identity f = 0 is verified by solving two LPs, one for f ≥ 0 and one for f ≤ 0. In this paper, we develop a set of algorithms that can be implemented by symbolic computation. Based on these algorithms, procedures for verifying linear information inequalities and identities are devised. Compared with LP-based algorithms, our procedures can produce analytical proofs that are both human-verifiable and free of numerical errors. Our procedures are also more efficient computationally. For constrained inequalities, by taking advantage of the algebraic structure of the problem, the size of the LP that needs to be solved can be significantly reduced. For identities, instead of solving two LPs, the identity can be verified directly with very little computation.",
+      "type": "article",
+      "doi": "10.1109/ISIT50566.2022.9834774",
+      "venue": "2022 IEEE International Symposium on Information Theory (ISIT)",
+      "journal": "2022 IEEE International Symposium on Information Theory (ISIT)",
+      "venue_name": "2022 IEEE International Symposium on Information Theory (ISIT)",
+      "primary_location": {
+        "source": {
+          "display_name": "2022 IEEE International Symposium on Information Theory (ISIT)"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "d47b792804f86676579f5021d5cf1a234b5b1edf",
+      "title": "Quantum Algorithm Implementations for Beginners",
+      "authors": [
+        "Patrick J. Coles",
+        "S. Eidenbenz",
+        "S. Pakin",
+        "A. Adedoyin",
+        "J. Ambrosiano",
+        "P. Anisimov",
+        "W. Casper",
+        "Gopinath Chennupati",
+        "Carleton Coffrin",
+        "H. Djidjev"
+      ],
+      "year": 2018,
+      "cited_by_count": 252,
+      "is_english": true,
+      "abstract": "As quantum computers become available to the general public, the need has arisen to train a cohort of quantum programmers, many of whom have been developing classical computer programs for most of their careers. While currently available quantum computers have less than 100 qubits, quantum computing hardware is widely expected to grow in terms of qubit count, quality, and connectivity. This review aims at explaining the principles of quantum programming, which are quite different from classical programming, with straightforward algebra that makes understanding of the underlying fascinating quantum mechanical principles optional. We give an introduction to quantum computing algorithms and their implementation on real quantum hardware. We survey 20 different quantum algorithms, attempting to describe each in a succinct and self-contained fashion. We show how these algorithms can be implemented on IBM’s quantum computer, and in each case, we discuss the results of the implementation with respect to differences between the simulator and the actual hardware runs. This article introduces computer scientists, physicists, and engineers to quantum algorithms and provides a blueprint for their implementations.",
+      "type": "article",
+      "doi": "10.1145/3517340",
+      "venue": "ACM Transactions on Quantum Computing",
+      "journal": "ACM Transactions on Quantum Computing",
+      "venue_name": "ACM Transactions on Quantum Computing",
+      "primary_location": {
+        "source": {
+          "display_name": "ACM Transactions on Quantum Computing"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "2b9e4bc81fdc24dcf20b4c0fdb91ec370b32ce45",
+      "title": "Explicit Quantum Circuits for Block Encodings of Certain Sparse Matrice",
+      "authors": [
+        "Daan Camps",
+        "Lin Lin",
+        "R. Beeumen",
+        "Chao Yang"
+      ],
+      "year": 2022,
+      "cited_by_count": 132,
+      "is_english": true,
+      "abstract": "Many standard linear algebra problems can be solved on a quantum computer by using recently developed quantum linear algebra algorithms that make use of block encodings and quantum eigenvalue/singular value transformations. A block encoding embeds a properly scaled matrix of interest A in a larger unitary transformation U that can be decomposed into a product of simpler unitaries and implemented efficiently on a quantum computer. Although quantum algorithms can potentially achieve exponential speedup in solving linear algebra problems compared to the best classical algorithm, such gain in efficiency ultimately hinges on our ability to construct an efficient quantum circuit for the block encoding of A, which is difficult in general, and not trivial even for well-structured sparse matrices. In this paper, we give a few examples on how efficient quantum circuits can be explicitly constructed for some well-structured sparse matrices, and discuss a few strategies used in these constructions. We also provide implementations of these quantum circuits in MATLAB.",
+      "type": "article",
+      "doi": "10.48550/arXiv.2203.10236",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "94035570c0e501363f98e65f86e7f0f463e37ca2",
+      "title": "Computing Eigenvalues of Diagonalizable Matrices on a Quantum Computer",
+      "authors": [
+        "Changpeng Shao"
+      ],
+      "year": 2022,
+      "cited_by_count": 22,
+      "is_english": true,
+      "abstract": "Computing eigenvalues of matrices is ubiquitous in numerical linear algebra problems. Currently, fast quantum algorithms for estimating eigenvalues of Hermitian and unitary matrices are known. However, the general case is far from fully understood in the quantum case. Based on a quantum algorithm for solving linear ordinary differential equations, we show how to estimate the eigenvalues of diagonalizable matrices that only have real eigenvalues. The output is a superposition of the eigenpairs, and the overall complexity is polylog in the dimension for sparse matrices. Under an assumption, we extend the algorithm to diagonalizable matrices with complex eigenvalues.",
+      "type": "article",
+      "doi": "10.1145/3527845",
+      "venue": "ACM Transactions on Quantum Computing",
+      "journal": "ACM Transactions on Quantum Computing",
+      "venue_name": "ACM Transactions on Quantum Computing",
+      "primary_location": {
+        "source": {
+          "display_name": "ACM Transactions on Quantum Computing"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "eb81176ff625eb3497b71f6955601d645c0c4f5b",
+      "title": "A Quantum Algorithm for the Commutativity of Finite Dimensional Algebras",
+      "authors": [
+        "E. Combarro",
+        "J. Ranilla",
+        "I. F. Rúa"
+      ],
+      "year": 2019,
+      "cited_by_count": 8,
+      "is_english": true,
+      "abstract": "A quantum procedure for testing the commutativity of a finite dimensional algebra is introduced. This algorithm, based on Grover’s quantum search, is shown to provide a quadratic speed-up (when the number of queries to the algebra multiplication constants is considered) over any classical algorithm (both deterministic and randomized) with equal success rate and shown to be optimal among the class of probabilistic quantum query algorithms. This algorithm can also be readily adapted to test commutativity and hermiticity of square matrices, again with quadratic speed-up. The results of the experiments carried out on a quantum computer simulator and on one of IBM’s 5-qubit quantum computers are presented.",
+      "type": "article",
+      "doi": "10.1109/ACCESS.2019.2908785",
+      "venue": "IEEE Access",
+      "journal": "IEEE Access",
+      "venue_name": "IEEE Access",
+      "primary_location": {
+        "source": {
+          "display_name": "IEEE Access"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "68e48f2f28b83488c2bdef573be8a707473a166e",
+      "title": "Simulation of Quantum Computation via MAGMA Computational Algebra System",
+      "authors": [
+        "Binh Duc Nguyen"
+      ],
+      "year": 2020,
+      "cited_by_count": 1,
+      "is_english": true,
+      "abstract": "Quantum computation is the usage of quantum mechanics to process information. It has been proven that quantum computation has the capacity to transfer data securely based on its fundamental and it solves the complex issues better than classical computation. However, before the quantum computers are available for people living, we need to verify and build up some frameworks for verification of quantum information system. In this research, we consider the MAGMA system which can be useful for quantum computation and calculation parameters of quantum stabilizer codes. Therein, we consider the problem of the first quantum error correction codes and we verify that basic algorithm on MAGMA system. The proposed system prove that MAGMA can be used for many tasks of quantum algorithms, quantum communication, and quantum computation problems.",
+      "type": "article",
+      "doi": "10.30534/ijatcse/2020/130922020",
+      "venue": "International Journal of Advanced Trends in Computer Science and Engineering",
+      "journal": "International Journal of Advanced Trends in Computer Science and Engineering",
+      "venue_name": "International Journal of Advanced Trends in Computer Science and Engineering",
+      "primary_location": {
+        "source": {
+          "display_name": "International Journal of Advanced Trends in Computer Science and Engineering"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    },
+    {
+      "id": "2c06f2af4aa2c10ef8a9be674415196a0b870019",
+      "title": "A Meta-Analysis of the Past Decade of Mathematics Learning Based on the Computer Algebra System (CAS)",
+      "authors": [
+        "M. Tamur",
+        "Y. S. Ksumah",
+        "D. Juandi",
+        "V. Kurnila",
+        "E. Jehadus",
+        "A. O. Samura"
+      ],
+      "year": 2021,
+      "cited_by_count": 23,
+      "is_english": true,
+      "abstract": "Hundreds of studies have been found in the literature on mathematics learning supported by the use of the computer algebra system (CAS). However, there are numerous reports with mixed and even contradictory findings. This has the potential to lead to errors in concluding. This meta-analysis study was conducted to test the overall effect size (ES) of CAS-based mathematics learning. This study also aims to analyze the level of variation in individual studies and consider its implications. The ERIC, SAGE, SpringerLink, and Google Scholar databases were examined to achieve relevant research. The search results found 136 related journal articles published between 2010 and 2020. As per the study protocol, 31 articles were eligible, and 36 ES were analyzed. The calculation tool is Comprehensive Meta-Analysis (CMA) software, and the Hedges-g equation is used based on the random-effect model. The analysis results revealed that overall the use of CAS ES had a large positive impact on students’ mathematical abilities (ES = 0.89; standard error 0.08). Moderator analysis shows that CAS’s use is more effective, considering the difference in education level and CAS type. The research implications are discussed and provide important information as a fundamental idea for further meta-analysis studies on CAS’s effects.",
+      "type": "article",
+      "doi": "10.1088/1742-6596/1882/1/012060",
+      "venue": "Journal of Physics: Conference Series",
+      "journal": "Journal of Physics: Conference Series",
+      "venue_name": "Journal of Physics: Conference Series",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Physics: Conference Series"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "62189e97a09f26dd24b7b4393777e88759659cf1",
+      "title": "Leveraging computer algebra systems in calculus: a case study with SymPy",
+      "authors": [
+        "F. Kamalov",
+        "David Santandreu",
+        "Ho-Hon Leung",
+        "Jason Johnson",
+        "Ziad El-Khatib"
+      ],
+      "year": 2023,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "Technology plays a pivotal role in modern university curriculum. Given the recent advances in machine learning, it is particularly important to leverage the tools provided by the latest advances in computing. In this paper, we investigate the effects of including Python-based computer algebra system SymPy in university calculus courses. The advantages of SymPy include open-source, introduction to programming, and simplicity. Critically, comparison of the grades pre and post adoption of SymPy in calculus courses indicates a statistically significant improvement. Although further studies - based on a larger cohort - about the effectiveness of open-access computer algebra system are desirable, the initial findings suggest that SymPy provides a viable alternative to commercially available computer algebra system.",
+      "type": "article",
+      "doi": "10.1109/EDUCON54358.2023.10125196",
+      "venue": "2023 IEEE Global Engineering Education Conference (EDUCON)",
+      "journal": "2023 IEEE Global Engineering Education Conference (EDUCON)",
+      "venue_name": "2023 IEEE Global Engineering Education Conference (EDUCON)",
+      "primary_location": {
+        "source": {
+          "display_name": "2023 IEEE Global Engineering Education Conference (EDUCON)"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "311f08636de8bd0b4d24d26e681b1841c6780dee",
+      "title": "Flipped classroom in Introductory Linear Algebra by utilizing Computer Algebra System {\\sl SageMath} and a free electronic book",
+      "authors": [
+        "N. Karjanto",
+        "S. Lee"
+      ],
+      "year": 2017,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "This article describes the authors' teaching experience in flipping the class of a basic undergraduate mathematics course Introductory Linear Algebra. We utilize a full-featured free electronic textbook, online lecture notes, an intranet learning management system (LMS) {\\sl icampus}, the video-sharing website {\\sl YouTube} and a Computer Algebra System (CAS) {\\sl SageMath} in our flipped classroom approach. Prior coming to the class, the students are assigned to complete a portion of reading assignments from the free e-book and to watch recorded video lectures from {\\sl YouTube} that cover the relevant materials. Announcements are made through the LMS {\\sl icampus}, as well as disseminating teaching materials, assigning tasks, and fostering online communication outside the class hours. We dedicated in-class activities with problem-solving sessions, question and answer, discussion and providing instant feedback to the students. Hence, both out-of-class and in-class sessions are filled with active learning and interactive engagement. From the students' feedback and opinion, we discovered that some of them preferred the traditional classroom rather than the flipped classroom pedagogy. A possible reason is either they are used to the traditional lecture style where receiving information occurs inside the classroom or the flipped classroom approach that we implement does not satisfy students' learning styles. Nevertheless, several students enjoyed problem-solving activities where they have an opportunity to communicate with the instructors whenever they encounter some difficulty.",
+      "type": "article",
+      "doi": null,
+      "venue": "arXiv: History and Overview",
+      "journal": "arXiv: History and Overview",
+      "venue_name": "arXiv: History and Overview",
+      "primary_location": {
+        "source": {
+          "display_name": "arXiv: History and Overview"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "12333cba61ab073a73aa902e8ad1aeb8a49127fc",
+      "title": "Explicating mathematical thinking in differential equations using a computer algebra system",
+      "authors": [
+        "Fereshteh Zeynivandnezhad",
+        "Rachel Bates"
+      ],
+      "year": 2017,
+      "cited_by_count": 14,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1080/0020739X.2017.1409368",
+      "venue": "International Journal of Mathematical Education in Science and Technology",
+      "journal": "International Journal of Mathematical Education in Science and Technology",
+      "venue_name": "International Journal of Mathematical Education in Science and Technology",
+      "primary_location": {
+        "source": {
+          "display_name": "International Journal of Mathematical Education in Science and Technology"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "9c58e534d79246c19262e220d1512887b59c4c49",
+      "title": "Incorporating Computer Algebra System in Differential Equations Syllabus",
+      "authors": [
+        "N. Lohgheswary",
+        "Z. Nopiah",
+        "Effandi Zakaria",
+        "A. A. Aziz",
+        "S. Salmaliza"
+      ],
+      "year": 2019,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.36478/jeasci.2019.7475.7480",
+      "venue": "Journal of Engineering and Applied Sciences",
+      "journal": "Journal of Engineering and Applied Sciences",
+      "venue_name": "Journal of Engineering and Applied Sciences",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Engineering and Applied Sciences"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "b1e16955ac30d3e5dd5917fc1b7ec77efa6a5dab",
+      "title": "Using the Maple computer algebra system to study mathematical induction",
+      "authors": [
+        "A. Olenev",
+        "A. Shuvaev",
+        "M V Migacheva",
+        "E S Kulevskaya",
+        "A. Nazarenko"
+      ],
+      "year": 2020,
+      "cited_by_count": 12,
+      "is_english": true,
+      "abstract": "Mathematical induction is one of the main methods of the proof that students study and use it in their studies in higher education. This important method, in addition to mathematics, is widely used in computer science and a number of other related disciplines. However, even if the principles of proof using the method of induction are taught, understood and mastered by students well, many students have great difficulty with algebraic transformations necessary for proving, for example, finding the inductive step. The use of the Maple computer algebra system allows students to overcome this obstacle and, more attention and effort to pay to understanding the concept of proofs using the method of mathematical induction. In addition, students can prove more complex algebraic statements, and their activities can be of a pronounced research nature.",
+      "type": "article",
+      "doi": "10.1088/1742-6596/1691/1/012102",
+      "venue": "Journal of Physics: Conference Series",
+      "journal": "Journal of Physics: Conference Series",
+      "venue_name": "Journal of Physics: Conference Series",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Physics: Conference Series"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "66705690aaddd24a5a9913d0d80987153a3d1f57",
+      "title": "Capabilities of the Maple computer algebra system in the study of set theory and combinatorics",
+      "authors": [
+        "A. Olenev",
+        "K. A. Kirichek",
+        "E. V. Potekhina",
+        "O. Pelikh"
+      ],
+      "year": 2020,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "The basic branch of both discrete and continuous mathematics is Set theory, the study of which is a difficult task. Designed and developed in the Maple computer algebra system, the Maplets package–the set theory application–enables to provide assistance both in teaching (by demonstrating the performance of operations on sets, testing knowledge and skills in using operations), and in studying set theory and solving the simplest combinatorial tasks (can be used as a simulator for students). By using interactive worksheets and animated images in Maple, students are given the opportunity for numerous experiments that will contribute to the development of their math education as well as computational skills. The application will form a sustainable need for the use of computer systems by students in the study of various branches of mathematics.",
+      "type": "article",
+      "doi": "10.1088/1742-6596/1691/1/012097",
+      "venue": "Journal of Physics: Conference Series",
+      "journal": "Journal of Physics: Conference Series",
+      "venue_name": "Journal of Physics: Conference Series",
+      "primary_location": {
+        "source": {
+          "display_name": "Journal of Physics: Conference Series"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "b6ae23f2a795a8e2a91490ddb7564f34ad4873e3",
+      "title": "USE OF COMPUTER ALGEBRA SYSTEM MAXIMA IN THE PROCESS OF TEACHING FUTURE MATHEMATICS TEACHERS",
+      "authors": [
+        "V. Velychko",
+        "A. V. Stopkin",
+        "Olena H. Fedorenko"
+      ],
+      "year": 2019,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "The article is devoted to the research of a problem of the application of computer algebra systems in the course of skill training of future mathematics teachers. The possibility of study organization for students of pedagogical institutions of higher education receiving \"014 secondary education (mathematics)\" speciality with the use of computer algebra systems is considered. The term \"computer algebra system\" is understood as the software which is intended for the solving of various mathematical tasks by means of a computer with a possibility of visualization of all stages of calculations. Proceeding from the fact that the computer algebra systems are actively used in educational process all over the world and informational educational environments in the course of teaching mathematical disciplines are created on their basis, it is possible to make a conclusion that the computer algebra systems are very important components of the process of training future experts. The current state of the problem of introduction and application of the computer algebra systems in the training of future mathematics teachers is investigated. The role of the computer algebra systems in teaching mathematics subjects and general natural sciences in pedagogical establishments of higher education is defined. Such computer algebra systems as MathCAD, MatLab, Maple, Mathematica, Maxima, SAGE, and Axiom are marked out among the most modern and successfully used systems aimed at solving mathematical tasks. Arguments in favour of the use of the free computer algebra system Maxima in educational and scientific activity of students are adduced in the article. Its main advantages and disadvantages are presented. The main functional of this system is considered which allows to optimize the time of the solution of various mathematical tasks, to adjust a conclusion of the received result, to perform staged verification of correctness of calculations.",
+      "type": "article",
+      "doi": "10.33407/ITLT.V69I1.2284",
+      "venue": "Information Technologies and Learning Tools",
+      "journal": "Information Technologies and Learning Tools",
+      "venue_name": "Information Technologies and Learning Tools",
+      "primary_location": {
+        "source": {
+          "display_name": "Information Technologies and Learning Tools"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "7fb275e934ef48d68142b9e603a2eeb62db3541e",
+      "title": "Dynamic Geometry Software Supplemented with a Computer Algebra System as a Proving Tool",
+      "authors": [
+        "R. Hasek"
+      ],
+      "year": 2018,
+      "cited_by_count": 10,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s11786-018-0369-x",
+      "venue": "Mathematics in Computer Science",
+      "journal": "Mathematics in Computer Science",
+      "venue_name": "Mathematics in Computer Science",
+      "primary_location": {
+        "source": {
+          "display_name": "Mathematics in Computer Science"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "fb8e3c57fbbb108b7dd3ef16da1bd56cf48c672f",
+      "title": "Is Computer Algebra Ready for Conjecturing and Proving Geometric Inequalities in the Classroom?",
+      "authors": [
+        "Christopher W. Brown",
+        "Z. Kovács",
+        "T. Recio",
+        "Róbert Vajda",
+        "M. P. Vélez"
+      ],
+      "year": 2022,
+      "cited_by_count": 7,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/s11786-022-00532-9",
+      "venue": "Mathematics in Computer Science",
+      "journal": "Mathematics in Computer Science",
+      "venue_name": "Mathematics in Computer Science",
+      "primary_location": {
+        "source": {
+          "display_name": "Mathematics in Computer Science"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "9a3d9ef3cab2a89b0d7e7fc464c295baa11e06ce",
+      "title": "CASVI: Computer Algebra System Aimed at Visually Impaired People. Experiments",
+      "authors": [
+        "Paúl Mejía",
+        "L. Martini",
+        "Felipe Grijalva",
+        "A. Zambrano"
+      ],
+      "year": 2021,
+      "cited_by_count": 11,
+      "is_english": true,
+      "abstract": "The limitations in access to mathematical resources faced by visually impaired people (VIPs) are undoubtedly one of the most significant obstacles for them to obtain, e.g., a degree in science. In this context, computational tools such as Computer Algebra Systems (CAS) are not blind-friendly, which causes solving elementary mathematical problems to become a challenging task for this group of people. This paper presents the Casvi system, a CAS for people with visual disabilities that allows carried out basics and advanced numerical calculations using the Maxima mathematical engine. Twenty-five VIPs tested the Casvi system to assess its functionality and usability. As a result, VIPs achieved a 92% accuracy when executing mathematical operations through Casvi. Finally, our system outperforms the LAMBDA system regarding the time needed by VIPs to perform mathematical operations correctly.",
+      "type": "article",
+      "doi": "10.1109/ACCESS.2021.3129106",
+      "venue": "IEEE Access",
+      "journal": "IEEE Access",
+      "venue_name": "IEEE Access",
+      "primary_location": {
+        "source": {
+          "display_name": "IEEE Access"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "a142d501a71c93935a3d958628f8cc748f812e5f",
+      "title": "CASVI: A Computer Algebra System Aimed at Visually Impaired People",
+      "authors": [
+        "Paúl Mejía",
+        "L. Martini",
+        "J. Larco",
+        "Felipe Grijalva"
+      ],
+      "year": 2018,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1007/978-3-319-94277-3_89",
+      "venue": "International Conference on Computers for Handicapped Persons",
+      "journal": "International Conference on Computers for Handicapped Persons",
+      "venue_name": "International Conference on Computers for Handicapped Persons",
+      "primary_location": {
+        "source": {
+          "display_name": "International Conference on Computers for Handicapped Persons"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "5f806997d0b605689eaf296461e551d8c1ffedd3",
+      "title": "IrisMath: A Blind-Friendly Web-Based Computer Algebra System",
+      "authors": [
+        "A. Zambrano",
+        "Danilo Pilacuan",
+        "Mateo N. Salvador",
+        "Felipe Grijalva",
+        "N. V. Garzón",
+        "Henry Ramiro Carvajal Mora"
+      ],
+      "year": 2023,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "Visually impaired individuals face challenges in pursuing higher education, particularly in technical courses related to engineering. The lack of specialized tools and resources that allow for proper development in academic activities is a significant barrier to their admission, retention, and graduation from higher education institutions. By considering this, this paper presents the development of a blind-friendly Computer Algebra System (CAS) called IrisMath. This system enables visually impaired people to perform mathematical operations commonly used in engineering. IrisMath is a web application inspired by Jupyter Notebooks and developed using a Layered Architecture to provide modularity. It offers a variety of output formats, including LaTex, CMathML, JSON, and audio formats. Our CAS has undergone an extensive assessment of its functional, non-functional, and usability requirements, demonstrating its potential as a tool for engineering students with visual disabilities.",
+      "type": "article",
+      "doi": "10.1109/ACCESS.2023.3281761",
+      "venue": "IEEE Access",
+      "journal": "IEEE Access",
+      "venue_name": "IEEE Access",
+      "primary_location": {
+        "source": {
+          "display_name": "IEEE Access"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "09d5ab91868f486faf9b3f4507b461570090e4c9",
+      "title": "Symbolic computation and computer graphics as tools for developing and studying new root-finding methods",
+      "authors": [
+        "I. Petkovic",
+        "D. Herceg"
+      ],
+      "year": 2017,
+      "cited_by_count": 13,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.amc.2016.09.025",
+      "venue": "Appl. Math. Comput.",
+      "journal": "Appl. Math. Comput.",
+      "venue_name": "Appl. Math. Comput.",
+      "primary_location": {
+        "source": {
+          "display_name": "Appl. Math. Comput."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "d972d3410741c248dc3122037b7184e31ccdd182",
+      "title": "On an application of symbolic computation and computer graphics to root-finders: The case of multiple roots of unknown multiplicity",
+      "authors": [
+        "I. Petkovic",
+        "B. Neta"
+      ],
+      "year": 2016,
+      "cited_by_count": 13,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.1016/j.cam.2016.06.008",
+      "venue": "J. Comput. Appl. Math.",
+      "journal": "J. Comput. Appl. Math.",
+      "venue_name": "J. Comput. Appl. Math.",
+      "primary_location": {
+        "source": {
+          "display_name": "J. Comput. Appl. Math."
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "3cc2bb50710697f5640613212da02d34592556c6",
+      "title": "Not another computer algebra system: Highlighting wxMaxima in calculus",
+      "authors": [
+        "N. Karjanto",
+        "H. S. Husain"
+      ],
+      "year": 2021,
+      "cited_by_count": 10,
+      "is_english": true,
+      "abstract": "This article introduces and explains a computer algebra system (CAS) wxMaxima for Calculus teaching and learning at the tertiary level. The didactic reasoning behind this approach is the need to implement an element of technology into classrooms to enhance students’ understanding of Calculus concepts. For many mathematics educators who have been using CAS, this material is of great interest, particularly for secondary teachers and university instructors who plan to introduce an alternative CAS into their classrooms. By highlighting both the strengths and limitations of the software, we hope that it will stimulate further debate not only among mathematics educators and software users but also also among symbolic computation and software developers.",
+      "type": "article",
+      "doi": "10.3390/math9011317",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "fb9f7c671a1ac8b9580f4f665f5e6c92d169292d",
+      "title": "Adopting Maxima as an Open-Source Computer Algebra System into Mathematics Teaching and Learning",
+      "authors": [
+        "N. Karjanto",
+        "H. S. Husain"
+      ],
+      "year": 2017,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "In this workshop, a computer algebra system (CAS) Maxima will be introduced. The primary audience of this workshop is mathematics educators, particularly school teachers and university professors who have experience in teaching Calculus and Linear Algebra with a CAS and those who would like to introduce a possible alternative CAS into their classrooms. Maxima is a computer software can be used for the manipulation of symbolic and numerical expressions, including limit calculation, differentiation, integration, Taylor series, systems of linear equations, polynomials, matrices and tensors. It can also sketch some graphical objects with excellent quality. Some examples from Calculus will be presented and how Maxima plays a role in enhancing students’ understanding will also be discussed.",
+      "type": "article",
+      "doi": "10.1007/978-3-319-62597-3_128",
+      "venue": "",
+      "journal": "",
+      "venue_name": "",
+      "primary_location": {
+        "source": {}
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "f7be07bfbbf46f6400e38034bc6a5cfe5dc04be0",
+      "title": "Creating mathematics formative assessments using LaTeX, PDF forms and computer algebra",
+      "authors": [
+        "Katherine Herbert",
+        "D. Demskoi",
+        "Kerrie Cullis"
+      ],
+      "year": 2018,
+      "cited_by_count": 9,
+      "is_english": true,
+      "abstract": "Formative assessment benefits both students and teaching academics. In particular, formative assessment in mathematics subjects enables both students and teaching academics to assess individual performance and understanding through students’ responses. Over the last decade, educational technologies and learning management systems (LMSs) are used to support formative assessment design. In mathematics, this is problematic because of the inflexibility of LMS and educational technology tools.  Automating formative assessment generation and marking to support mathematics learning is made possible by utilising specific software and technologies in new ways. This paper proposes a new method of creating mathematics formative assessments using LaTeX and PDF forms in conjunction with a computer algebra system (e.g., Maple), independent of an LMS.  This method is implemented in undergraduate mathematics subjects servicing non-mathematics–focused higher education courses. The method generates individualised assessments that are automatically marked. Results show that the method provides the teaching academic with a more efficient way of designing formative mathematics assessments without compromising the effectiveness of the assessment task. This study contributes to the growing research on mathematics in higher education. The implication is an increased understanding of how existing technology, implemented in new ways, can potentially benefit both mathematics students and teaching academics.",
+      "type": "article",
+      "doi": "10.14742/AJET.4539",
+      "venue": "Australasian Journal of Educational Technology",
+      "journal": "Australasian Journal of Educational Technology",
+      "venue_name": "Australasian Journal of Educational Technology",
+      "primary_location": {
+        "source": {
+          "display_name": "Australasian Journal of Educational Technology"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "a3ff4df653b6970898c04e6b768e58b99786d073",
+      "title": "Learning gain differences between ChatGPT and human tutor generated algebra hints",
+      "authors": [
+        "Z. Pardos",
+        "Shreya Bhandari"
+      ],
+      "year": 2023,
+      "cited_by_count": 142,
+      "is_english": true,
+      "abstract": "Large Language Models (LLMs), such as ChatGPT, are quickly advancing AI to the frontiers of practical consumer use and leading industries to re-evaluate how they allocate resources for content production. Authoring of open educational resources and hint content within adaptive tutoring systems is labor intensive. Should LLMs like ChatGPT produce educational content on par with human-authored content, the implications would be significant for further scaling of computer tutoring system approaches. In this paper, we conduct the first learning gain evaluation of ChatGPT by comparing the efficacy of its hints with hints authored by human tutors with 77 participants across two algebra topic areas, Elementary Algebra and Intermediate Algebra. We find that 70% of hints produced by ChatGPT passed our manual quality checks and that both human and ChatGPT conditions produced positive learning gains. However, gains were only statistically significant for human tutor created hints. Learning gains from human-created hints were substantially and statistically significantly higher than ChatGPT hints in both topic areas, though ChatGPT participants in the Intermediate Algebra experiment were near ceiling and not even with the control at pre-test. We discuss the limitations of our study and suggest several future directions for the field. Problem and hint content used in the experiment is provided for replicability.",
+      "type": "article",
+      "doi": "10.48550/arXiv.2302.06871",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "768dc6e250183b3e0f6a4abc87a77a0e38029928",
+      "title": "SNC: A Cloud Service Platform for Symbolic-Numeric Computation Using Just-In-Time Compilation",
+      "authors": [
+        "P. Zhang",
+        "Yueming Liu",
+        "Meikang Qiu"
+      ],
+      "year": 2018,
+      "cited_by_count": 10,
+      "is_english": true,
+      "abstract": "Cloud services have been widely employed in IT industry and scientific research. By using Cloud services users can move computing tasks and data away from local computers to remote datacenters. By accessing Internet-based services over lightweight and mobile devices, users deploy diversified Cloud applications on powerful machines. The key drivers towards this paradigm for the scientific computing field include the substantial computing capacity, on-demand provisioning and cross-platform interoperability. To fully harness the Cloud services for scientific computing, however, we need to design an application-specific platform to help the users efficiently migrate their applications. In this, we propose a Cloud service platform for symbolic-numeric computation– SNC. SNC allows the Cloud users to describe tasks as symbolic expressions through C/C++, Python, Java APIs and SNC script. Just-In-Time (JIT) compilation through using LLVM/JVM is used to compile the user code to the machine code. We implemented the SNC design and tested a wide range of symbolic-numeric computation applications (including nonlinear minimization, Monte Carlo integration, finite element assembly and multibody dynamics) on several popular cloud platforms (including the Google Compute Engine, Amazon EC2, Microsoft Azure, Rackspace, HP Helion and VMWare vCloud). These results demonstrate that our approach can work across multiple cloud platforms, support different languages and significantly improve the performance of symbolic-numeric computation using cloud platforms. This offered a way to stimulate the need for using the cloud computing for the symbolic-numeric computation in the field of scientific research.",
+      "type": "article",
+      "doi": "10.1109/TCC.2017.2656088",
+      "venue": "IEEE Transactions on Cloud Computing",
+      "journal": "IEEE Transactions on Cloud Computing",
+      "venue_name": "IEEE Transactions on Cloud Computing",
+      "primary_location": {
+        "source": {
+          "display_name": "IEEE Transactions on Cloud Computing"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "33e58626b0a203848b1a523192a545be39066d55",
+      "title": "Numerical and Symbolic Computation",
+      "authors": [
+        "佚名"
+      ],
+      "year": 2020,
+      "cited_by_count": 1,
+      "is_english": true,
+      "abstract": "",
+      "type": "article",
+      "doi": "10.3390/books978-3-03936-303-2",
+      "venue": "",
+      "journal": "",
+      "venue_name": "",
+      "primary_location": {
+        "source": {}
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "ebd748d69a5276597578eb9046b1f15f70283f5b",
+      "title": "Explainable AI Insights for Symbolic Computation: A case study on selecting the variable ordering for cylindrical algebraic decomposition",
+      "authors": [
+        "Lynn Pickering",
+        "Tereso Del Rio Almajano",
+        "M. England",
+        "Kelly Cohen"
+      ],
+      "year": 2023,
+      "cited_by_count": 17,
+      "is_english": true,
+      "abstract": "In recent years there has been increased use of machine learning (ML) techniques within mathematics, including symbolic computation where it may be applied safely to optimise or select algorithms. This paper explores whether using explainable AI (XAI) techniques on such ML models can offer new insight for symbolic computation, inspiring new implementations within computer algebra systems that do not directly call upon AI tools. We present a case study on the use of ML to select the variable ordering for cylindrical algebraic decomposition. It has already been demonstrated that ML can make the choice well, but here we show how the SHAP tool for explainability can be used to inform new heuristics of a size and complexity similar to those human-designed heuristics currently commonly used in symbolic computation.",
+      "type": "article",
+      "doi": "10.1016/j.jsc.2023.102276",
+      "venue": "ArXiv",
+      "journal": "ArXiv",
+      "venue_name": "ArXiv",
+      "primary_location": {
+        "source": {
+          "display_name": "ArXiv"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "ac03fe878c3756a2887d5e09ecd1e704e777963a",
+      "title": "Automated programming, symbolic computation, machine learning: my personal view",
+      "authors": [
+        "B. Buchberger"
+      ],
+      "year": 2023,
+      "cited_by_count": 5,
+      "is_english": true,
+      "abstract": "In this note, I present my personal view on the interaction of the three areas Automated Programming, Symbolic Computation, and Machine Learning. Programming is the activity of finding a (hopefully) correct program (algorithm) for a given problem. Programming is central to automation in all areas and is considered one of the most creative human activities. However, already very early in the history of programming, people started to “jump to the meta-level” of programming, i.e., started to develop procedures that automate, or semi-automate, (various aspects or parts of) the process of programming. This area has various names like “Automated Programming”, “Automated Algorithm Synthesis”, etc. Developing compilers can be considered an early example of a problem in automated programming. Automated reasoners for proving the correctness of programs with respect to a specification is an advanced example of a topic in automated programming. ChatGPT producing (amazingly good) programs from problem specifications in natural language is a recent example of automated programming. Programming tends to become the most important activity as the level of technological sophistication increases. Therefore, automating programming is maybe the most exciting and relevant technological endeavor today. It also will have enormous impact on the global job market in the software industry. Roughly, I see two main approaches to automated programming: symbolic computation and machine learning. In this note, I explain how the two approaches work and that they are fundamentally different because they address two completely different ways of how problems are specified. Together, the two approaches constitute (part of) what some people like to call “artificial intelligence”. In my analysis, both approaches are just part of (algorithmic) mathematics. The approaches, like all non-trivial mathematical methods, need quite some intelligence on the side of the human inventors of the methods. However, applying the methods is just “machine execution” of algorithms. It is misleading to call the application “machine intelligence” or “artificial intelligence”. The analysis of the two approaches to automated programming also suggests that the two approaches, in the future, should be combined to achieve even higher levels of sophistication. At the end of this note, I propose some research questions for this new direction.",
+      "type": "article",
+      "doi": "10.1007/s10472-023-09894-7",
+      "venue": "Annals of Mathematics and Artificial Intelligence",
+      "journal": "Annals of Mathematics and Artificial Intelligence",
+      "venue_name": "Annals of Mathematics and Artificial Intelligence",
+      "primary_location": {
+        "source": {
+          "display_name": "Annals of Mathematics and Artificial Intelligence"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "9d12b14d82f1bb1b3e2a199d03e44156bb634aee",
+      "title": "Lessons on Datasets and Paradigms in Machine Learning for Symbolic Computation: A Case Study on CAD",
+      "authors": [
+        "Tereso del R'io",
+        "Matthew England"
+      ],
+      "year": 2024,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "Symbolic Computation algorithms and their implementation in computer algebra systems often contain choices which do not affect the correctness of the output but can significantly impact the resources required: such choices can benefit from having them made separately for each problem via a machine learning model. This study reports lessons on such use of machine learning in symbolic computation, in particular on the importance of analysing datasets prior to machine learning and on the different machine learning paradigms that may be utilised. We present results for a particular case study, the selection of variable ordering for cylindrical algebraic decomposition, but expect that the lessons learned are applicable to other decisions in symbolic computation. We utilise an existing dataset of examples derived from applications which was found to be imbalanced with respect to the variable ordering decision. We introduce an augmentation technique for polynomial systems problems that allows us to balance and further augment the dataset, improving the machine learning results by 28% and 38% on average, respectively. We then demonstrate how the existing machine learning methodology used for the problem—classification—might be recast into the regression paradigm. While this does not have a radical change on the performance, it does widen the scope in which the methodology can be applied to make choices.",
+      "type": "article",
+      "doi": "10.1007/s11786-024-00591-0",
+      "venue": "Mathematics in Computer Science",
+      "journal": "Mathematics in Computer Science",
+      "venue_name": "Mathematics in Computer Science",
+      "primary_location": {
+        "source": {
+          "display_name": "Mathematics in Computer Science"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Symbolic Computation"
+    },
+    {
+      "id": "daccf0057ec212399f53894be6ff5f33376cf541",
+      "title": "Robust Computer Algebra, Theorem Proving, and Oracle AI",
+      "authors": [
+        "G. Sarma",
+        "Nick J. Hay"
+      ],
+      "year": 2017,
+      "cited_by_count": 4,
+      "is_english": true,
+      "abstract": "In the context of superintelligent AI systems, the term “oracle” has two meanings. One refers to modular systems queried for domain-specific tasks. Another usage, referring to a class of systems which may be useful for addressing the value alignment and AI control problems, is a superintelligent AI system that only answers questions. The aim of this manuscript is to survey contemporary research problems related to oracles which align with long-term research goals of AI safety. We examine existing question answering systems and argue that their high degree of architectural heterogeneity makes them poor candidates for rigorous analysis as oracles. On the other hand, we identify computer algebra systems (CASs) as being primitive examples of domain-specific oracles for mathematics and argue that efforts to integrate computer algebra systems with theorem provers, systems which have largely been developed independent of one another, provide a concrete set of problems related to the notion of provable safety that has emerged in the AI safety community. We review approaches to interfacing CASs with theorem provers, describe well-defined architectural deficiencies that have been identified with CASs, and suggest possible lines of research and practical software projects for scientists interested in AI safety.",
+      "type": "article",
+      "doi": "10.2139/SSRN.3038545",
+      "venue": "Informatica (Slovenia)",
+      "journal": "Informatica (Slovenia)",
+      "venue_name": "Informatica (Slovenia)",
+      "primary_location": {
+        "source": {
+          "display_name": "Informatica (Slovenia)"
+        }
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "Computer Algebra System"
+    },
+    {
+      "id": "3925963d3883517c37676d0bc4c62e90840d7282",
+      "title": "RedCarD: A Quantum Assisted Algorithm for Fixed-Depth Unitary Synthesis via Cartan Decomposition",
+      "authors": [
+        "O. Alsheikh",
+        "Efekan K¨okc¨u",
+        "B. Bakalov",
+        "A. F. Kemper"
+      ],
+      "year": 2025,
+      "cited_by_count": 3,
+      "is_english": true,
+      "abstract": "A critical step in developing circuits for quantum simulation is to synthesize a desired unitary operator using the circuit building blocks. Studying unitaries and their generators from the Lie algebraic perspective has given rise to several algorithms for synthesis based on a Cartan decomposition of the dynamical Lie algebra. For unitaries of the form $e^{-itH}$, such as time-independent Hamiltonian simulation, the resulting circuits have depth that does not depend on simulation time $t$. However, finding such circuits has a large classical overhead in the cost function evaluation and the high dimensional optimization problem. In this work, by further partitioning the dynamical Lie algebra, we break down the optimization problem into smaller independent subproblems. Moreover, the resulting algebraic structure allows us to easily shift the evaluation of the cost function to the quantum computer, further cutting the classical overhead of the algorithm. As an application of the new hybrid algorithm, we synthesize the time evolution unitary for the 4-site transverse field Ising model on several IBM devices and Quantinuum's H1-1 quantum computer.",
+      "type": "article",
+      "doi": null,
+      "venue": "",
+      "journal": "",
+      "venue_name": "",
+      "primary_location": {
+        "source": {}
+      },
+      "concepts": [],
+      "source": "semantic_scholar",
+      "category": "\"computer algebra\" AND algorithm"
+    }
+  ],
+  "statistics": {
+    "total_time_seconds": 125.82,
+    "papers_collected": 292,
+    "papers_cited": 106,
+    "review_length": 29205,
+    "generated_at": "2026-04-05T14:27:02.805902"
+  },
+  "validation": {
+    "valid": false,
+    "issues": [
+      "规则4违反: 过度引用 {5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 19: 3, 42: 3, 44: 3, 49: 3, 62: 3, 63: 3, 65: 3, 67: 3, 68: 3, 71: 3, 72: 3, 76: 3, 81: 3, 82: 3, 91: 3, 93: 3}"
+    ]
+  }
+}
