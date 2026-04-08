@@ -193,6 +193,10 @@ class GenerateResponse(BaseModel):
 class ExportRequest(BaseModel):
     record_id: int
 
+
+class UnlockRequest(BaseModel):
+    record_id: int
+
 # 全局服务实例
 scholarflux = ScholarFlux()
 search_service = SmartPaperSearchService(scholarflux, get_db)
@@ -276,13 +280,21 @@ async def get_records(
 @app.get("/api/records/{record_id}")
 async def get_record(
     record_id: int,
-    db_session: Session = Depends(get_db)
+    db_session: Session = Depends(get_db),
+    user_id: Optional[int] = Depends(get_current_user_id)
 ):
     """获取单条记录详情"""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
     record = record_service.get_record(db_session, record_id)
 
     if not record:
         raise HTTPException(status_code=404, detail="记录不存在")
+
+    # 验证所有权
+    if record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="无权访问此综述")
 
     return {
         "success": True,
@@ -292,9 +304,21 @@ async def get_record(
 @app.delete("/api/records/{record_id}")
 async def delete_record(
     record_id: int,
-    db_session: Session = Depends(get_db)
+    db_session: Session = Depends(get_db),
+    user_id: Optional[int] = Depends(get_current_user_id)
 ):
     """删除记录"""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
+    # 先获取记录验证所有权
+    record = record_service.get_record(db_session, record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    if record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="无权删除此综述")
+
     deleted = record_service.delete_record(db_session, record_id)
 
     if not deleted:
@@ -331,21 +355,18 @@ async def export_review_docx(
 
     # 如果不是公开文档，检查用户权限
     if not is_public_doc:
-        # Word 导出仅限付费用户或文档是付费生成的
-        if getattr(record, 'is_paid', False):
-            # 文档是付费生成的，允许导出
-            pass
-        elif user_id:
-            from authkit.database import SessionLocal as AuthSessionLocal
-            if AuthSessionLocal:
-                auth_db = AuthSessionLocal()
-                try:
-                    from authkit.models import User
-                    user = auth_db.query(User).filter(User.id == user_id).first()
-                    if user and not user.get_meta("has_purchased", False):
-                        raise HTTPException(status_code=403, detail="Word 导出为付费功能，请购买套餐后使用")
-                finally:
-                    auth_db.close()
+        # 验证用户所有权
+        if not user_id:
+            raise HTTPException(status_code=401, detail="请先登录")
+
+        if record.user_id != user_id:
+            raise HTTPException(status_code=403, detail="无权访问此综述")
+
+        # Word 导出逻辑：
+        # 1. 已付费生成的文档（is_paid=True）：直接导出
+        # 2. 免费生成的文档（is_paid=False）：需要单次解锁（29.8元）或用付费额度重新生成
+        if not getattr(record, 'is_paid', False):
+            raise HTTPException(status_code=403, detail="该综述使用免费额度生成，导出 Word 需要单次解锁（29.8元）或使用付费额度重新生成")
 
     try:
         generator = DocxGenerator()
@@ -379,6 +400,94 @@ async def export_review_docx(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
+
+
+@app.post("/api/records/unlock")
+async def unlock_record_for_export(
+    request: UnlockRequest,
+    db_session: Session = Depends(get_db),
+    user_id: Optional[int] = Depends(get_current_user_id)
+):
+    """
+    单次解锁综述，允许导出 Word（29.8元）
+    - 将该综述标记为已付费（is_paid=True）
+    - 创建支付订单（29.8元）
+    - 支付成功后自动解锁
+    """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
+    record = record_service.get_record(db_session, request.record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    # 检查是否已经是付费状态
+    if getattr(record, 'is_paid', False):
+        return {
+            "success": True,
+            "message": "该综述已解锁",
+            "already_unlocked": True
+        }
+
+    # 检查是否是该用户的记录
+    if record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="无权解锁此综述")
+
+    # 创建解锁订单
+    from authkit.database import SessionLocal as AuthSessionLocal
+    from authkit.models.payment import Subscription, PaymentLog, PLANS
+    import uuid
+
+    if not AuthSessionLocal:
+        raise HTTPException(status_code=500, detail="支付服务不可用")
+
+    auth_db = AuthSessionLocal()
+    try:
+        # 生成订单号
+        order_no = f"UL{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:8].upper()}"
+
+        # 创建订阅记录（使用单次体验套餐的价格）
+        subscription = Subscription(
+            user_id=user_id,
+            order_no=order_no,
+            plan_type="unlock",
+            amount=29.8,
+            status="pending",
+            record_id=request.record_id,
+        )
+        auth_db.add(subscription)
+        auth_db.commit()
+        auth_db.refresh(subscription)
+
+        # 记录日志
+        log = PaymentLog(
+            subscription_id=subscription.id,
+            user_id=user_id,
+            action="unlock_record",
+            request_data=str({"record_id": request.record_id}),
+        )
+        auth_db.add(log)
+        auth_db.commit()
+
+        # 开发环境直接支付成功
+        if os.getenv("PAYMENT_ENV", "dev") == "dev":
+            from authkit.services.alipay_service import AlipayService
+            alipay_service = AlipayService()
+            await alipay_service.handle_payment_success(
+                order_no=order_no,
+                trade_no=f"dev_trade_{uuid.uuid4().hex[:16]}",
+                # 传递额外的元数据用于解锁记录
+                extra_data={"record_id": request.record_id}
+            )
+
+        return {
+            "success": True,
+            "order_no": order_no,
+            "amount": 29.8,
+            "message": "解锁订单已创建"
+        }
+    finally:
+        auth_db.close()
 
 @app.get("/api/health")
 async def health_check():
@@ -854,7 +963,9 @@ async def get_task_status(
 
     if task:
         # 非公开任务需要验证所有者
-        if not is_public and user_id:
+        if not is_public:
+            if not user_id:
+                raise HTTPException(status_code=401, detail="请先登录")
             task_user_id = getattr(task, 'user_id', None)
             if task_user_id and task_user_id != user_id:
                 raise HTTPException(status_code=403, detail="无权访问该任务")
@@ -876,9 +987,11 @@ async def get_task_status(
 
     # 非公开任务需要验证所有者
     if not is_public:
+        if not user_id:
+            raise HTTPException(status_code=401, detail="请先登录")
         if review_task.review_record_id:
             owner_record = db_session.query(ReviewRecord).filter_by(id=review_task.review_record_id).first()
-            if owner_record and owner_record.user_id and owner_record.user_id != user_id:
+            if owner_record and owner_record.user_id != user_id:
                 raise HTTPException(status_code=403, detail="无权访问该任务")
 
     response_data = review_task.to_dict()
@@ -924,6 +1037,8 @@ async def get_task_review(
     if task and task.status == TaskStatus.COMPLETED and task.result:
         # 非公开任务需要验证所有者
         if not is_public:
+            if not user_id:
+                raise HTTPException(status_code=401, detail="请先登录")
             task_user_id = getattr(task, 'user_id', None)
             if task_user_id and task_user_id != user_id:
                 raise HTTPException(status_code=403, detail="无权访问该综述")
@@ -962,7 +1077,9 @@ async def get_task_review(
 
     # 非公开任务需要验证所有者
     if not is_public:
-        if review_record.user_id and review_record.user_id != user_id:
+        if not user_id:
+            raise HTTPException(status_code=401, detail="请先登录")
+        if review_record.user_id != user_id:
             raise HTTPException(status_code=403, detail="无权访问该综述")
 
     # 返回与内存任务相同格式的数据
@@ -1166,7 +1283,8 @@ async def get_tasks_status():
 async def get_search_history(
     limit: int = 20,
     offset: int = 0,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    user_id: Optional[int] = Depends(get_current_user_id)
 ):
     """
     获取查找文献历史记录
@@ -1179,6 +1297,9 @@ async def get_search_history(
     返回：
     - 任务列表，包含各个阶段的数据
     """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
     try:
         from models import ReviewTask
         from models import OutlineGenerationStage, PaperSearchStage, PaperFilterStage
@@ -1187,8 +1308,15 @@ async def get_search_history(
         session_gen = db.get_session()
         session = next(session_gen)
         try:
-            # 构建查询
+            # 构建查询 - 只返回当前用户的任务
             query = session.query(ReviewTask)
+
+            # 通过关联的 review_record 筛选当前用户的任务
+            from models import ReviewRecord
+            query = query.join(ReviewRecord, ReviewTask.review_record_id == ReviewRecord.id).filter(
+                ReviewRecord.user_id == user_id
+            )
+
             if status:
                 query = query.filter(ReviewTask.status == status)
 
@@ -1242,7 +1370,10 @@ async def get_search_history(
 
 
 @app.get("/api/search-history/{task_id}")
-async def get_search_history_detail(task_id: str):
+async def get_search_history_detail(
+    task_id: str,
+    user_id: Optional[int] = Depends(get_current_user_id)
+):
     """
     获取单个查找文献任务的详细记录
 
@@ -1252,6 +1383,9 @@ async def get_search_history_detail(task_id: str):
     返回：
     - 任务的完整信息，包括所有阶段的数据
     """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
     try:
         from models import ReviewTask
         from models import OutlineGenerationStage, PaperSearchStage, PaperFilterStage
@@ -1264,6 +1398,17 @@ async def get_search_history_detail(task_id: str):
             task = session.query(ReviewTask).filter_by(id=task_id).first()
             if not task:
                 raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
+
+            # 验证所有权
+            if hasattr(task, 'user_id') and task.user_id and task.user_id != user_id:
+                raise HTTPException(status_code=403, detail="无权访问此任务")
+
+            # 如果任务有关联的记录，也需要验证
+            if task.review_record_id:
+                from models import ReviewRecord
+                record = session.query(ReviewRecord).filter_by(id=task.review_record_id).first()
+                if record and record.user_id and record.user_id != user_id:
+                    raise HTTPException(status_code=403, detail="无权访问此任务")
 
             task_dict = task.to_dict()
 
@@ -1300,7 +1445,10 @@ async def get_search_history_detail(task_id: str):
 
 
 @app.get("/api/tasks/{task_id}/search-sources")
-async def get_task_search_sources(task_id: str):
+async def get_task_search_sources(
+    task_id: str,
+    user_id: Optional[int] = Depends(get_current_user_id)
+):
     """
     获取任务的搜索来源统计（关键词-文献对应关系）
 
@@ -1310,6 +1458,25 @@ async def get_task_search_sources(task_id: str):
     返回：
     - 搜索来源统计信息
     """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
+    # 验证任务所有权
+    from models import ReviewTask, ReviewRecord
+    db_session = next(get_db())
+    try:
+        task = db_session.query(ReviewTask).filter_by(id=task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+
+        # 验证所有权
+        if task.review_record_id:
+            record = db_session.query(ReviewRecord).filter_by(id=task.review_record_id).first()
+            if record and record.user_id and record.user_id != user_id:
+                raise HTTPException(status_code=403, detail="无权访问此任务")
+    finally:
+        db_session.close()
+
     try:
         from services.stage_recorder import stage_recorder
         result = stage_recorder.get_paper_search_sources(task_id)
@@ -1324,7 +1491,10 @@ async def get_task_search_sources(task_id: str):
 
 
 @app.get("/api/search-history/{task_id}/search-sources")
-async def get_search_history_search_sources(task_id: str):
+async def get_search_history_search_sources(
+    task_id: str,
+    user_id: Optional[int] = Depends(get_current_user_id)
+):
     """
     获取查找文献历史记录的搜索来源统计
 
@@ -1334,6 +1504,25 @@ async def get_search_history_search_sources(task_id: str):
     返回：
     - 搜索来源统计信息
     """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
+    # 验证任务所有权
+    from models import ReviewTask, ReviewRecord
+    db_session = next(get_db())
+    try:
+        task = db_session.query(ReviewTask).filter_by(id=task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+
+        # 验证所有权
+        if task.review_record_id:
+            record = db_session.query(ReviewRecord).filter_by(id=task.review_record_id).first()
+            if record and record.user_id and record.user_id != user_id:
+                raise HTTPException(status_code=403, detail="无权访问此任务")
+    finally:
+        db_session.close()
+
     try:
         from services.stage_recorder import stage_recorder
         result = stage_recorder.get_paper_search_sources(task_id)

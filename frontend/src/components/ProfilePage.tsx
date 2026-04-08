@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { authApi, getLocalUserInfo, isLoggedIn } from '../authApi'
+import { getLocalUserInfo, isLoggedIn } from '../authApi'
+import { PaymentModal } from './PaymentModal'
 import type { ReviewRecord } from '../types'
 import './ProfilePage.css'
 
@@ -12,6 +13,10 @@ export function ProfilePage() {
   const [userInfo, setUserInfo] = useState<any>(null)
   const [credits, setCredits] = useState<number>(0)
   const [freeCredits, setFreeCredits] = useState<number>(0)
+  const [showPayModal, setShowPayModal] = useState(false)
+  const [pendingExportRecordId, setPendingExportRecordId] = useState<number | null>(null)
+  const [exportingId, setExportingId] = useState<number | null>(null)
+  const [unlockMode, setUnlockMode] = useState(false)  // true=单次解锁, false=购买套餐
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -20,7 +25,10 @@ export function ProfilePage() {
     }
     setUserInfo(getLocalUserInfo())
     loadRecords()
-    api.getCredits().then(data => { setCredits(data.credits); setFreeCredits(data.free_credits) }).catch(() => {})
+    api.getCredits().then(data => {
+      setCredits(data.credits)
+      setFreeCredits(data.free_credits)
+    }).catch(() => {})
   }, [])
 
   const loadRecords = async () => {
@@ -61,34 +69,36 @@ export function ProfilePage() {
 
   const handleExportRecord = async (id: number, event: React.MouseEvent) => {
     event.stopPropagation()
-    try {
-      const blob = await api.exportReview(id)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const record = records.find(r => r.id === id)
-      const filename = record ? record.topic.replace(/[\/\\:]/g, '-') : 'review'
-      a.download = `${filename}.docx`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      console.error('导出失败:', err)
-    }
-  }
+    const record = records.find(r => r.id === id)
+    if (!record) return
 
-  const handleDeleteRecord = async (id: number, event: React.MouseEvent) => {
-    event.stopPropagation()
-    if (!confirm('确定要删除这条记录吗？')) {
+    // 已付费生成的综述，直接导出
+    if (record.is_paid) {
+      setExportingId(id)
+      try {
+        const blob = await api.exportReview(id)
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const filename = record.topic.replace(/[\/\\:]/g, '-')
+        a.download = `${filename}.docx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch (err) {
+        console.error('导出失败:', err)
+        alert('导出失败，请稍后重试')
+      } finally {
+        setExportingId(null)
+      }
       return
     }
-    try {
-      await api.deleteRecord(id)
-      setRecords(records.filter(r => r.id !== id))
-    } catch (err) {
-      console.error('删除失败:', err)
-    }
+
+    // 免费生成的综述，弹出单次解锁支付弹窗
+    setUnlockMode(true)
+    setPendingExportRecordId(id)
+    setShowPayModal(true)
   }
 
   const handleLogout = () => {
@@ -190,6 +200,17 @@ export function ProfilePage() {
                           <span className="status-processing">⏳ 进行中</span>
                         )}
                       </div>
+                      {record.status === 'success' && (
+                        <button
+                          className={`export-button export-word-btn ${!record.is_paid ? 'export-word-premium' : ''}`}
+                          onClick={(e) => handleExportRecord(record.id, e)}
+                          disabled={exportingId === record.id}
+                        >
+                          {exportingId === record.id ? '导出中...' :
+                           record.is_paid ? '导出 Word' :
+                           '🔒 解锁导出 (29.8元)'}
+                        </button>
+                      )}
                     </div>
                     <div className="record-info">
                       <span className="record-time">{formatDate(record.created_at)}</span>
@@ -199,22 +220,6 @@ export function ProfilePage() {
                         </div>
                       )}
                     </div>
-                  </div>
-                  <div className="record-actions">
-                    <button
-                      className="action-btn action-export"
-                      onClick={(e) => handleExportRecord(record.id, e)}
-                      title="导出 Word"
-                    >
-                      📥
-                    </button>
-                    <button
-                      className="action-btn action-delete"
-                      onClick={(e) => handleDeleteRecord(record.id, e)}
-                      title="删除"
-                    >
-                      🗑
-                    </button>
                   </div>
                 </div>
               ))}
@@ -232,6 +237,52 @@ export function ProfilePage() {
           </a>
         </div>
       </footer>
+
+      {/* 支付弹窗 */}
+      {showPayModal && unlockMode && pendingExportRecordId !== null && (
+        <PaymentModal
+          onClose={() => {
+            setShowPayModal(false)
+            setUnlockMode(false)
+            setPendingExportRecordId(null)
+          }}
+          onPaymentSuccess={async () => {
+            setShowPayModal(false)
+            setUnlockMode(false)
+            // 刷新记录列表
+            await loadRecords()
+            // 继续导出
+            if (pendingExportRecordId !== null) {
+              handleExportRecord(pendingExportRecordId, { stopPropagation: () => {} } as React.MouseEvent)
+              setPendingExportRecordId(null)
+            }
+          }}
+          planType="unlock"
+          recordId={pendingExportRecordId}
+        />
+      )}
+      {showPayModal && !unlockMode && (
+        <PaymentModal
+          onClose={() => {
+            setShowPayModal(false)
+            setPendingExportRecordId(null)
+          }}
+          onPaymentSuccess={async () => {
+            setShowPayModal(false)
+            // 刷新用户状态和记录列表
+            const creditsData = await api.getCredits()
+            setCredits(creditsData.credits)
+            setFreeCredits(creditsData.free_credits)
+            await loadRecords()
+            // 如果有待导出的记录，继续导出
+            if (pendingExportRecordId !== null) {
+              handleExportRecord(pendingExportRecordId, { stopPropagation: () => {} } as React.MouseEvent)
+              setPendingExportRecordId(null)
+            }
+          }}
+          planType="single"
+        />
+      )}
     </div>
   )
 }

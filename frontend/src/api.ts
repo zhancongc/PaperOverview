@@ -206,6 +206,14 @@ export const api = {
     return response.data;
   },
 
+  // 单次解锁综述（29.8元）
+  async unlockRecord(recordId: number): Promise<{ success: boolean; message: string; order_no?: string; already_unlocked?: boolean }> {
+    const response = await axios.post(`${API_BASE}/records/unlock`, {
+      record_id: recordId
+    });
+    return response.data;
+  },
+
   // 健康检查
   async checkHealth(): Promise<{ status: string; deepseek_configured: boolean }> {
     const response = await axios.get(`${API_BASE}/health`);

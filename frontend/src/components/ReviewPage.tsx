@@ -36,24 +36,15 @@ export function ReviewPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('content')
-  const [userHasPurchased, setUserHasPurchased] = useState(false)
   const [showPayModal, setShowPayModal] = useState(false)
   const [exporting, setExporting] = useState(false)
-
-  // 加载用户付费状态
-  useEffect(() => {
-    api.getCredits().then(res => {
-      setUserHasPurchased(res.has_purchased)
-    }).catch(() => {
-      // 忽略错误，默认未付费
-    })
-  }, [])
+  const [unlockMode, setUnlockMode] = useState(false)
 
   // 计算文档显示状态（优先使用 API 返回的 taskData，fallback 到 state）
   const isPublicDocument = taskData?.isPublic ?? false
   const isPaidDocument = taskData?.isPaid ?? state?.isPaid ?? false
   const shouldShowWatermark = !isPublicDocument && !isPaidDocument
-  const canExportWord = isPublicDocument || isPaidDocument || userHasPurchased
+  const canExportDirectly = isPublicDocument || isPaidDocument
 
   // 如果 URL 中有 taskId，从后端加载完整数据（确保 isPaid/isPublic 正确）
   useEffect(() => {
@@ -138,45 +129,45 @@ export function ReviewPage() {
 
 
   const handleExportWord = async () => {
-    if (!canExportWord) {
-      setShowPayModal(true)
-      return
-    }
-    if (!reviewData.recordId) {
-      alert('该综述暂不支持导出')
-      return
-    }
-    setExporting(true)
-    try {
-      const token = localStorage.getItem('auth_token')
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers.Authorization = `Bearer ${token}`
-      const response = await fetch('/api/records/export', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ record_id: reviewData.recordId })
-      })
-      if (response.status === 403) {
-        setShowPayModal(true)
+    // 公开文档或已付费文档，直接导出
+    if (canExportDirectly) {
+      if (!reviewData.recordId) {
+        alert('该综述暂不支持导出')
         return
       }
-      if (!response.ok) throw new Error('导出失败')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const filename = reviewData.title.replace(/[\/\\:]/g, '-')
-      a.download = `${filename}.docx`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      alert('导出失败，请稍后重试')
-      console.error(err)
-    } finally {
-      setExporting(false)
+      setExporting(true)
+      try {
+        const token = localStorage.getItem('auth_token')
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers.Authorization = `Bearer ${token}`
+        const response = await fetch('/api/records/export', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ record_id: reviewData.recordId })
+        })
+        if (!response.ok) throw new Error('导出失败')
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const filename = reviewData.title.replace(/[\/\\:]/g, '-')
+        a.download = `${filename}.docx`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch (err) {
+        alert('导出失败，请稍后重试')
+        console.error(err)
+      } finally {
+        setExporting(false)
+      }
+      return
     }
+
+    // 免费文档，弹出单次解锁支付弹窗
+    setUnlockMode(true)
+    setShowPayModal(true)
   }
 
   return (
@@ -204,8 +195,10 @@ export function ReviewPage() {
             重新生成
           </button>
 
-          <button className={`export-button export-word-btn ${!canExportWord ? 'export-word-premium' : ''}`} onClick={handleExportWord} disabled={exporting}>
-            {exporting ? '导出中...' : canExportWord ? '导出 Word' : '🔒 导出 Word (付费)'}
+          <button className={`export-button export-word-btn ${!canExportDirectly ? 'export-word-premium' : ''}`} onClick={handleExportWord} disabled={exporting}>
+            {exporting ? '导出中...' :
+             canExportDirectly ? '导出 Word' :
+             '🔒 解锁导出 (29.8元)'}
           </button>
         </div>
       </div>
@@ -299,12 +292,40 @@ export function ReviewPage() {
           </div>
         )
       )}
-      {showPayModal && (
+      {showPayModal && unlockMode && (
+        <PaymentModal
+          onClose={() => {
+            setShowPayModal(false)
+            setUnlockMode(false)
+          }}
+          onPaymentSuccess={async () => {
+            setShowPayModal(false)
+            setUnlockMode(false)
+            // 刷新任务数据（is_paid 状态已更新）
+            if (taskId) {
+              api.getTaskReview(taskId).then(res => {
+                if (res.success && res.data) {
+                  setTaskData({
+                    title: res.data.topic,
+                    content: res.data.review,
+                    papers: res.data.papers || [],
+                    recordId: res.data.record_id,
+                    isPublic: res.data.is_public,
+                    isPaid: res.data.is_paid,
+                  })
+                }
+              }).catch(() => {})
+            }
+          }}
+          planType="unlock"
+          recordId={reviewData.recordId}
+        />
+      )}
+      {showPayModal && !unlockMode && (
         <PaymentModal
           onClose={() => setShowPayModal(false)}
-          onPaymentSuccess={() => {
+          onPaymentSuccess={async () => {
             setShowPayModal(false)
-            setUserHasPurchased(true)
           }}
           planType="single"
         />

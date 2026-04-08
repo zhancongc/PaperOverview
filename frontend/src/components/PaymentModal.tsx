@@ -6,9 +6,20 @@ interface PaymentModalProps {
   onClose: () => void
   onPaymentSuccess: () => void
   planType: string
+  recordId?: number  // 用于 unlock 模式
 }
 
 const PLANS = [
+  {
+    type: 'unlock',
+    name: '单次解锁',
+    price: 29.8,
+    credits: 0,
+    features: [
+      '解锁当前综述 Word 导出权限',
+      '无水印 Word 文档',
+    ],
+  },
   {
     type: 'single',
     name: '单次体验',
@@ -46,7 +57,7 @@ const PLANS = [
 const IS_DEV = window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1'
 
-export function PaymentModal({ onClose, onPaymentSuccess, planType }: PaymentModalProps) {
+export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: PaymentModalProps) {
   const [, setLoading] = useState(false)
   const [orderNo, setOrderNo] = useState('')
   const [payUrl, setPayUrl] = useState('')
@@ -95,11 +106,32 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType }: PaymentMod
     setPaymentStatus('creating')
 
     try {
-      const result = await api.createSubscription(planType)
-      setOrderNo(result.order_no)
-      setPayUrl(result.pay_url)
-      setAmount(result.amount)
-      setPaymentStatus('waiting')
+      if (planType === 'unlock' && recordId) {
+        // 单次解锁模式
+        const result = await api.unlockRecord(recordId)
+        if (result.already_unlocked) {
+          // 已经解锁，直接成功
+          setPaymentStatus('paid')
+          onPaymentSuccess()
+          return
+        }
+        setOrderNo(result.order_no || '')
+        setAmount(29.8)
+        // 开发环境直接支付成功
+        if (IS_DEV) {
+          setPaymentStatus('paid')
+          onPaymentSuccess()
+        } else {
+          setPaymentStatus('waiting')
+        }
+      } else {
+        // 套餐购买模式
+        const result = await api.createSubscription(planType)
+        setOrderNo(result.order_no)
+        setPayUrl(result.pay_url)
+        setAmount(result.amount)
+        setPaymentStatus('waiting')
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || '创建订单失败，请稍后重试'
       setError(msg)
@@ -107,7 +139,7 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType }: PaymentMod
     } finally {
       setLoading(false)
     }
-  }, [planType])
+  }, [planType, recordId, onPaymentSuccess])
 
   // 自动创建订单
   useEffect(() => {
@@ -200,7 +232,7 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType }: PaymentMod
             <div className="payment-modal-success">
               <span className="payment-success-icon">✓</span>
               <h3>支付成功</h3>
-              <p>已获得 {plan.credits} 篇综述生成额度</p>
+              <p>{plan.type === 'unlock' ? '已解锁该综述 Word 导出权限' : `已获得 ${plan.credits} 篇综述生成额度`}</p>
               <button className="payment-modal-btn" onClick={handleClose}>完成</button>
             </div>
           )}

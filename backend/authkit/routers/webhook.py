@@ -101,16 +101,28 @@ def process_payment(params: dict, db: Session) -> str:
         sub.payment_time = datetime.now()
         sub.trade_no = trade_no
 
-        # 增加综述额度
-        from ..models.payment import PLAN_CREDITS
-        from ..models import User
-        user = db.query(User).filter(User.id == sub.user_id).first()
-        if user:
-            credits_to_add = PLAN_CREDITS.get(sub.plan_type, 1)
-            current_credits = user.get_meta("review_credits", 0)
-            user.set_meta("review_credits", current_credits + credits_to_add)
-            user.set_meta("has_purchased", True)
-            logger.info(f"用户 {user.id} 获得 {credits_to_add} 篇付费额度，当前付费 {current_credits + credits_to_add}")
+        # 根据订单类型处理不同的逻辑
+        if sub.plan_type == "unlock":
+            # 单次解锁：解锁指定的综述
+            if sub.record_id:
+                from models import ReviewRecord
+                record = db.query(ReviewRecord).filter(ReviewRecord.id == sub.record_id).first()
+                if record:
+                    record.is_paid = True
+                    logger.info(f"解锁综述 {sub.record_id} for user {sub.user_id}")
+                else:
+                    logger.warning(f"综述记录 {sub.record_id} 不存在")
+        else:
+            # 套餐购买：增加综述额度
+            from ..models.payment import PLAN_CREDITS
+            from ..models import User
+            user = db.query(User).filter(User.id == sub.user_id).first()
+            if user:
+                credits_to_add = PLAN_CREDITS.get(sub.plan_type, 1)
+                current_credits = user.get_meta("review_credits", 0)
+                user.set_meta("review_credits", current_credits + credits_to_add)
+                user.set_meta("has_purchased", True)
+                logger.info(f"用户 {user.id} 获得 {credits_to_add} 篇付费额度，当前付费 {current_credits + credits_to_add}")
 
         db.commit()
 

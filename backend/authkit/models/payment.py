@@ -18,13 +18,15 @@ class Subscription(PaymentBase):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True, comment="用户ID")
     order_no = Column(String(64), unique=True, nullable=False, index=True, comment="商户订单号")
-    plan_type = Column(String(32), nullable=False, comment="套餐类型: monthly/yearly")
+    plan_type = Column(String(32), nullable=False, comment="套餐类型: single(体验包1篇)/semester(基础包3篇)/yearly(进阶包6篇)/unlock(单次解锁)")
     amount = Column(Float, nullable=False, comment="订单金额")
     status = Column(String(20), default="pending", comment="订单状态: pending/paid/cancelled")
     payment_method = Column(String(20), nullable=True, comment="支付方式: alipay")
     payment_time = Column(DateTime(timezone=True), nullable=True, comment="支付时间")
     trade_no = Column(String(64), nullable=True, comment="支付宝交易号")
     expires_at = Column(DateTime(timezone=True), nullable=True, comment="会员到期时间")
+    record_id = Column(Integer, nullable=True, comment="关联的综述记录ID（unlock类型时使用）")
+    extra_data = Column(Text, nullable=True, comment="额外数据（JSON格式）")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
 
     def to_dict(self):
@@ -60,7 +62,7 @@ class PaymentLog(PaymentBase):
 
 class SubscriptionCreate(BaseModel):
     """创建订阅请求"""
-    plan_type: str  # monthly / yearly
+    plan_type: str  # single(体验包1篇)/semester(基础包3篇)/yearly(进阶包6篇)/unlock(单次解锁)
 
 
 class PaymentCreateResponse(BaseModel):

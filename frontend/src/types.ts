@@ -36,6 +36,7 @@ export interface ReviewRecord {
   status: string;
   error_message?: string;
   is_paid?: boolean;
+  task_id?: string;
   created_at: string;
   updated_at: string;
 }
