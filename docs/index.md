@@ -1,6 +1,6 @@
 # AutoOverview 文档中心
 
-> 最后更新: 2026-04-07
+> 最后更新: 2026-04-08
 
 欢迎使用 AutoOverview 文档中心！本页面为您提供渐进式的文档导航，帮助您快速找到所需信息。
 
@@ -30,6 +30,7 @@
 - [../CLAUDE.md](../CLAUDE.md) - Claude Code 项目指引（关键约定）
 - [../AUTH_INTEGRATION.md](../AUTH_INTEGRATION.md) - AuthKit 集成指南
 - [../backend/authkit/README.md](../backend/authkit/README.md) - AuthKit 认证模块文档
+- [SCRIPTS.md](SCRIPTS.md) - 辅助脚本使用说明（用户管理、服务器部署等）
 
 ---
 

@@ -42,7 +42,7 @@ export function ReviewPage() {
   const [unlockMode, setUnlockMode] = useState(false)
   const [showCreditConfirmModal, setShowCreditConfirmModal] = useState(false)
   const [credits, setCredits] = useState<number>(0)
-  const [freeCredits, setFreeCredits] = useState<number>(0)
+  const [, setFreeCredits] = useState<number>(0)
 
   // 计算文档显示状态（优先使用 API 返回的 taskData，fallback 到 state）
   const isPublicDocument = taskData?.isPublic ?? false

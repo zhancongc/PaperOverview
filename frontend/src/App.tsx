@@ -34,8 +34,8 @@ function App() {
 
   // 异步任务状态
   const [taskId, setTaskId] = useState<string | null>(null)
-  const [taskProgress, setTaskProgress] = useState('')
-  const [taskStatus, setTaskStatus] = useState<'idle' | 'polling' | 'completed' | 'failed'>('idle')
+  const [, setTaskProgress] = useState('')
+  const [, setTaskStatus] = useState<'idle' | 'polling' | 'completed' | 'failed'>('idle')
 
   // 查找文献结果
   const [searchPapersLogs, setSearchPapersLogs] = useState<string[]>([])

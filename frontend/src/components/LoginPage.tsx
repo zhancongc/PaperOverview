@@ -8,7 +8,7 @@ type LoginTab = 'password' | 'code'
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as any)?.from?.pathname || '/'
+  void ((location.state as any)?.from?.pathname || '/')
 
   const [tab, setTab] = useState<LoginTab>('password')
   const [email, setEmail] = useState('')

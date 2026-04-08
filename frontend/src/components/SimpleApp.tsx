@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { isLoggedIn as checkLoggedIn, getLocalUserInfo, authApi } from '../authApi'
+import { isLoggedIn as checkLoggedIn, getLocalUserInfo } from '../authApi'
 import { LoginModal } from './LoginModal'
 import { PaymentModal } from './PaymentModal'
 import './SimpleApp.css'
@@ -20,10 +20,13 @@ export function SimpleApp() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState<string | false>(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
+  const [, setActiveTaskId] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [userInfo, setUserInfo] = useState<any>(null)
+  const [, setUserInfo] = useState<any>(null)
   const [credits, setCredits] = useState<number>(0)
+  const [prevCredits, setPrevCredits] = useState<number>(0)
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
     const loggedIn = checkLoggedIn()
@@ -218,6 +221,33 @@ export function SimpleApp() {
     setShowLoginModal(false)
   }
 
+  const handlePaymentSuccess = async (_addedCredits: number = 0) => {
+    setShowPaymentModal(false)
+    setUserInfo(getLocalUserInfo())
+
+    // 刷新额度
+    try {
+      const data = await api.getCredits()
+      setPrevCredits(credits)
+      setCredits(data.credits)
+
+      // 显示成功提示
+      setToastMessage('🎉 支付成功！额度已到账')
+      setShowToast(true)
+      setTimeout(() => setShowToast(false), 3000)
+
+      // 滚动到综述生成区域
+      setTimeout(() => {
+        const generateSection = document.getElementById('generate')
+        if (generateSection) {
+          generateSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 500)
+    } catch (err) {
+      console.error('刷新额度失败', err)
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user_info')
@@ -254,6 +284,7 @@ export function SimpleApp() {
           <span className={`hamburger ${mobileMenuOpen ? 'open' : ''}`} />
         </button>
         <div className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+          <a href="#generate" onClick={() => setMobileMenuOpen(false)}>综述生成</a>
           <a href="#features" onClick={() => setMobileMenuOpen(false)}>产品特色</a>
           <a href="#process" onClick={() => setMobileMenuOpen(false)}>使用流程</a>
           <a href="#cases" onClick={() => setMobileMenuOpen(false)}>案例展示</a>
@@ -287,7 +318,7 @@ export function SimpleApp() {
       </nav>
 
       <div className="home-container">
-        <div className="home-hero-wrapper">
+        <div id="generate" className="home-hero-wrapper">
           <div className="home-hero">
             <span className="hero-accent">学术研究 · 高效利器</span>
             <h1 className="home-title">
@@ -319,7 +350,9 @@ export function SimpleApp() {
           <div className="input-section-header">
             <div className="input-section-title-row">
               <h2 className="input-section-title">一键生成论文综述</h2>
-              {isLoggedIn && <span className="credits-badge">剩余 {credits} 次</span>}
+              {isLoggedIn && <span className={`credits-badge ${prevCredits !== credits ? 'credits-updated' : ''}`}>
+                剩余 <span className="credits-number">{credits}</span> 次
+              </span>}
             </div>
             <p className="input-section-subtitle">输入研究主题，AI 为您生成专业文献综述</p>
           </div>
@@ -582,12 +615,16 @@ export function SimpleApp() {
       {showPaymentModal && (
         <PaymentModal
           onClose={() => setShowPaymentModal(false)}
-          onPaymentSuccess={() => {
-            setShowPaymentModal(false)
-            setUserInfo(getLocalUserInfo())
-          }}
+          onPaymentSuccess={handlePaymentSuccess}
           planType={showPaymentModal}
         />
+      )}
+
+      {showToast && (
+        <div className="toast toast-success">
+          <span className="toast-icon">✓</span>
+          <span className="toast-message">{toastMessage}</span>
+        </div>
       )}
     </div>
   )

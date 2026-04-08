@@ -24,10 +24,10 @@ interface ReviewViewerProps {
   hasPurchased?: boolean
 }
 
-export function ReviewViewer({ title, content, papers = [], hasPurchased = false }: ReviewViewerProps) {
+export function ReviewViewer({ content, papers = [], hasPurchased = false }: ReviewViewerProps) {
   const [toc, setToc] = useState<TableOfContents[]>([])
   const [activeId, setActiveId] = useState<string>('')
-  const mainRef = useRef<HTMLElement>(null)
+  useRef<HTMLElement>(null)
   const isClickScrolling = useRef(false)
 
   // 生成标题 ID（与 Markdown 渲染器保持一致）
@@ -177,12 +177,12 @@ export function ReviewViewer({ title, content, papers = [], hasPurchased = false
   )
 
   // 生成第三方平台验证链接
-  const getVerificationLinks = (paper: any, index: number) => {
+  const getVerificationLinks = (paper: any, _index: number) => {
     const links = []
 
     // 构建搜索查询
     const searchQuery = encodeURIComponent(paper.title)
-    const yearQuery = paper.year ? `&as_ylo=${paper.year - 2}&as_yhi=${paper.year + 2}` : ''
+    void (paper.year ? `&as_ylo=${paper.year - 2}&as_yhi=${paper.year + 2}` : '')
 
     // Google Scholar
     links.push({

@@ -212,12 +212,26 @@ export const api = {
   },
 
   // 单次解锁综述（29.8元）
-  async unlockRecord(recordId: number): Promise<{ success: boolean; message: string; order_no?: string; already_unlocked?: boolean }> {
+  async unlockRecord(recordId: number): Promise<{ success: boolean; message: string; order_no?: string; pay_url?: string; already_unlocked?: boolean }> {
     const token = localStorage.getItem('auth_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
 
     const response = await axios.post(`${API_BASE}/records/unlock`, {
+      record_id: recordId
+    }, {
+      headers
+    });
+    return response.data;
+  },
+
+  // 使用额度解锁综述（扣除1个付费额度）
+  async unlockRecordWithCredit(recordId: number): Promise<{ success: boolean; message: string }> {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const response = await axios.post(`${API_BASE}/records/unlock-with-credit`, {
       record_id: recordId
     }, {
       headers

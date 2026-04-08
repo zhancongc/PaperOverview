@@ -4,7 +4,7 @@ import './PaymentModal.css'
 
 interface PaymentModalProps {
   onClose: () => void
-  onPaymentSuccess: () => void
+  onPaymentSuccess: (addedCredits?: number) => void
   planType: string
   recordId?: number  // 用于 unlock 模式
 }
@@ -87,7 +87,7 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
         if (result.status === 'paid') {
           setPaymentStatus('paid')
           if (pollingRef.current) clearInterval(pollingRef.current)
-          onPaymentSuccess()
+          onPaymentSuccess(plan.credits)
         }
       } catch {
         // 忽略轮询错误，继续轮询
@@ -129,7 +129,7 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
         if (result.already_unlocked) {
           // 已经解锁，直接成功
           setPaymentStatus('paid')
-          onPaymentSuccess()
+          onPaymentSuccess(0)
           return
         }
         setOrderNo(result.order_no || '')
