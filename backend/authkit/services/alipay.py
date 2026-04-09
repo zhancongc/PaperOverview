@@ -5,60 +5,14 @@
 
 注意：即使在证书模式下，也需要配置 app_private_key 来签名请求！
 证书仅用于验证支付宝的响应签名。
+
+私钥格式要求：PKCS#1 格式（带 BEGIN RSA PRIVATE KEY 标记）
 """
 import logging
 import traceback
 from typing import Optional
 
 logger = logging.getLogger(__name__)
-
-
-def _convert_pkcs8_to_pkcs1(private_key: str) -> str:
-    """
-    将 PKCS#8 格式私钥转换为 PKCS#1 格式
-    支付宝 SDK 使用的 rsa 库只支持 PKCS#1 格式
-    """
-    # 如果已经是 PKCS#1 格式，直接返回
-    if "BEGIN RSA PRIVATE KEY" in private_key:
-        logger.info("私钥已是 PKCS#1 格式")
-        return private_key
-
-    # 如果是 PKCS#8 格式，尝试转换
-    if "BEGIN PRIVATE KEY" in private_key and "BEGIN RSA PRIVATE KEY" not in private_key:
-        logger.info("检测到 PKCS#8 格式私钥，尝试转换为 PKCS#1")
-        try:
-            # 尝试使用 cryptography 库转换
-            from cryptography.hazmat.primitives import serialization
-            from cryptography.hazmat.backends import default_backend
-
-            # 加载 PKCS#8 私钥
-            private_key_obj = serialization.load_pem_private_key(
-                private_key.encode(),
-                password=None,
-                backend=default_backend()
-            )
-
-            # 转换为 PKCS#1 格式 (TraditionalOpenSSL)
-            pkcs1_pem = private_key_obj.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-
-            result = pkcs1_pem.decode()
-            logger.info("成功将 PKCS#8 私钥转换为 PKCS#1 格式")
-            return result
-
-        except ImportError:
-            logger.warning("cryptography 库未安装，无法自动转换私钥格式")
-            logger.warning("请手动转换私钥格式，或安装 cryptography: pip install cryptography")
-            # 不能转换，只能返回原始格式，可能会失败
-            return private_key
-        except Exception as e:
-            logger.error(f"私钥格式转换失败: {e}", exc_info=True)
-            return private_key
-
-    return private_key
 
 
 class AlipayService:
@@ -82,15 +36,12 @@ class AlipayService:
             raise ValueError("必须配置真实的 ALIPAY_APP_PRIVATE_KEY（应用私钥）")
 
         # 记录私钥格式用于调试
-        if "BEGIN PRIVATE KEY" in app_private_key and "BEGIN RSA PRIVATE KEY" not in app_private_key:
-            logger.info("检测到 PKCS#8 格式私钥")
-        elif "BEGIN RSA PRIVATE KEY" in app_private_key:
-            logger.info("检测到 PKCS#1 格式私钥")
+        if "BEGIN RSA PRIVATE KEY" in app_private_key:
+            logger.info("检测到 PKCS#1 格式私钥（正确格式）")
+        elif "BEGIN PRIVATE KEY" in app_private_key:
+            logger.warning("检测到 PKCS#8 格式私钥，rsa 库需要 PKCS#1 格式")
         else:
-            logger.warning("私钥格式未知，尝试继续")
-
-        # 尝试转换为 PKCS#1 格式（rsa 库只支持 PKCS#1）
-        app_private_key = _convert_pkcs8_to_pkcs1(app_private_key)
+            logger.warning("私钥格式未知")
 
         config = AlipayClientConfig()
         config.server_url = server_url

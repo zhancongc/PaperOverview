@@ -8,52 +8,100 @@ import base64
 logger = logging.getLogger(__name__)
 
 
-def _fix_base64_padding(s: str) -> str:
-    """修复 base64 字符串的 padding"""
-    return s + '=' * ((4 - len(s) % 4) % 4)
-
-
-def _read_private_key_from_secrets(base_dir: str) -> str | None:
-    """从 secrets.txt 读取私钥并格式化为 PKCS#1 格式"""
+def _load_private_key_from_secrets(base_dir: str) -> str | None:
+    """
+    直接从 secrets.txt 读取私钥，返回完整的 PKCS#1 PEM 格式
+    包含 -----BEGIN RSA PRIVATE KEY----- 和 -----END RSA PRIVATE KEY----- 标记
+    """
     secrets_path = os.path.join(base_dir, "secrets.txt")
     if not os.path.exists(secrets_path):
         logger.warning(f"secrets.txt 不存在: {secrets_path}")
         return None
+
     try:
         with open(secrets_path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
+            content = f.read()
 
-        logger.info(f"从 secrets.txt 读取到内容，长度: {len(content)}")
+        # 清理内容
+        content = content.strip()
 
-        # 如果已经是完整的 PEM 格式，直接返回
-        if "-----BEGIN" in content:
-            logger.info("私钥已经是 PEM 格式")
+        # 如果已经是完整的 PKCS#1 PEM，直接返回
+        if "BEGIN RSA PRIVATE KEY" in content:
+            logger.info("secrets.txt 已是 PKCS#1 格式")
             return content
 
-        # 否则，添加 PKCS#8 格式标记（支付宝生成的通常是 PKCS#8）
-        # 先清理内容
-        content = content.replace("\n", "").replace("\r", "").replace(" ", "").strip()
+        # 如果是 PKCS#8，尝试转换
+        if "BEGIN PRIVATE KEY" in content and "BEGIN RSA PRIVATE KEY" not in content:
+            logger.info("检测到 PKCS#8 格式，尝试转换为 PKCS#1")
+            try:
+                from cryptography.hazmat.primitives import serialization
+                from cryptography.hazmat.backends import default_backend
 
-        # 尝试修复 base64 padding
-        try:
-            content = _fix_base64_padding(content)
-            # 测试解码
-            base64.b64decode(content)
-            logger.info("Base64 padding 修复成功")
-        except Exception as e:
-            logger.warning(f"Base64 padding 修复可能有问题: {e}，继续尝试")
+                private_key_obj = serialization.load_pem_private_key(
+                    content.encode(),
+                    password=None,
+                    backend=default_backend()
+                )
 
-        # 格式化为 PKCS#8 PEM
-        # 每 64 个字符换行
-        lines = []
-        for i in range(0, len(content), 64):
-            lines.append(content[i:i+64])
-        content_with_newlines = "\n".join(lines)
+                pkcs1_pem = private_key_obj.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
 
-        pem_content = f"-----BEGIN PRIVATE KEY-----\n{content_with_newlines}\n-----END PRIVATE KEY-----"
+                result = pkcs1_pem.decode()
+                logger.info("PKCS#8 转换 PKCS#1 成功")
+                return result
+            except ImportError:
+                logger.warning("cryptography 未安装，无法转换格式")
+                return content
+            except Exception as e:
+                logger.warning(f"转换失败: {e}，尝试直接使用")
+                return content
 
-        logger.info(f"成功格式化私钥为 PKCS#8 PEM 格式")
-        return pem_content
+        # 如果是纯 base64 内容
+        if "-----BEGIN" not in content:
+            logger.info("检测到纯 base64 内容")
+            # 先清理
+            content = content.replace("\n", "").replace("\r", "").replace(" ", "").strip()
+
+            # 尝试用 cryptography 转换
+            try:
+                from cryptography.hazmat.primitives import serialization
+                from cryptography.hazmat.backends import default_backend
+
+                # 先包装成 PKCS#8
+                pkcs8_pem = f"-----BEGIN PRIVATE KEY-----\n{content}\n-----END PRIVATE KEY-----"
+
+                private_key_obj = serialization.load_pem_private_key(
+                    pkcs8_pem.encode(),
+                    password=None,
+                    backend=default_backend()
+                )
+
+                pkcs1_pem = private_key_obj.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
+
+                result = pkcs1_pem.decode()
+                logger.info("纯 base64 转换 PKCS#1 成功")
+                return result
+            except Exception as e:
+                logger.warning(f"自动转换失败: {e}")
+                # 如果转换失败，至少加上 PKCS#1 标记试试
+                # 每 64 字符换行
+                lines = []
+                for i in range(0, len(content), 64):
+                    lines.append(content[i:i+64])
+                content_with_newlines = "\n".join(lines)
+                result = f"-----BEGIN RSA PRIVATE KEY-----\n{content_with_newlines}\n-----END RSA PRIVATE KEY-----"
+                logger.info("使用简单格式化的 PKCS#1")
+                return result
+
+        return content
+
     except Exception as e:
         logger.error(f"读取 secrets.txt 失败: {e}", exc_info=True)
         return None
@@ -73,14 +121,15 @@ def get_payment_config():
     # 默认证书路径在 backend 目录下
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    # 优先从环境变量读私钥，没有则尝试从 secrets.txt 读取
-    app_private_key = os.getenv("ALIPAY_APP_PRIVATE_KEY", "")
-    if not app_private_key or app_private_key == "your-alipay-app-private-key":
-        app_private_key = _read_private_key_from_secrets(base_dir) or ""
-        if app_private_key:
-            logger.info("使用 secrets.txt 中的私钥")
-        else:
-            logger.error("无法获取应用私钥")
+    # 优先从 secrets.txt 读取私钥
+    app_private_key = _load_private_key_from_secrets(base_dir) or ""
+    if app_private_key:
+        logger.info("使用 secrets.txt 中的私钥")
+    else:
+        # 备用：从环境变量读
+        app_private_key = os.getenv("ALIPAY_APP_PRIVATE_KEY", "")
+        if app_private_key and app_private_key != "your-alipay-app-private-key":
+            logger.info("使用环境变量 ALIPAY_APP_PRIVATE_KEY")
 
     return {
         "alipay_app_id": os.getenv("ALIPAY_APP_ID", ""),
@@ -129,7 +178,7 @@ def init_alipay():
             logger.info("[Payment] 生产模式 - 证书模式")
             return AlipayService(
                 app_id=config["alipay_app_id"],
-                app_private_key=config["alipay_app_private_key"],  # 证书模式也需要私钥来签名
+                app_private_key=config["alipay_app_private_key"],
                 alipay_public_key=config["alipay_public_key"],
                 app_cert_path=app_cert,
                 alipay_cert_path=alipay_cert,
