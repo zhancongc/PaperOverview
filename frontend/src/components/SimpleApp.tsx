@@ -497,16 +497,16 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
           <h2 className="section-title">写综述，你还在用"笨办法"？</h2>
           <div className="comparison-flow">
             <div className="comparison-flow-card comparison-flow-manual">
-              <div className="comparison-flow-label">手动检索</div>
+              <div className="comparison-flow-label">传统方式</div>
               <ul className="comparison-flow-steps">
-                <li><span className="comparison-flow-step-num">Day 1-3</span> 确定关键词，检索数据库</li>
-                <li><span className="comparison-flow-step-num">Day 4-7</span> 逐篇筛选文献、下载 PDF</li>
-                <li><span className="comparison-flow-step-num">Day 8-12</span> 阅读摘要、做笔记</li>
-                <li><span className="comparison-flow-step-num">Day 13-14</span> 排版、调格式、校对引用</li>
+                <li><span className="comparison-flow-step-num">Day 1-3</span> 反复检索数据库，关键词试了又试</li>
+                <li><span className="comparison-flow-step-num">Day 4-7</span> 逐篇筛选、下载，手动排版引用格式</li>
+                <li><span className="comparison-flow-step-num">Day 8-12</span> 拼凑逻辑框架，频繁出现内容断层</li>
+                <li><span className="comparison-flow-step-num">Day 13-14</span> 校对引用、降重、反复修改到崩溃</li>
               </ul>
               <div className="comparison-flow-result">
                 <span className="comparison-flow-time">≈ 14 天</span>
-                <span className="comparison-flow-mood">😵 焦头烂额</span>
+                <span className="comparison-flow-mood">😵 痛苦煎熬</span>
               </div>
             </div>
             <div className="comparison-flow-vs">VS</div>
@@ -514,11 +514,11 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               <div className="comparison-flow-label">AutoOverview</div>
               <ul className="comparison-flow-steps">
                 <li><span className="comparison-flow-step-num">Step 1</span> 输入研究主题</li>
-                <li><span className="comparison-flow-step-num">Step 2</span> 点击"告别空白页，点此开始"</li>
-                <li><span className="comparison-flow-step-num">Step 3</span> 等待 5 分钟，初稿到手</li>
+                <li><span className="comparison-flow-step-num">Step 2</span> AI 自动检索权威数据库，梳理逻辑框架</li>
+                <li><span className="comparison-flow-step-num">Step 3</span> 一键生成引用格式，查重率友好</li>
               </ul>
               <div className="comparison-flow-result">
-                <span className="comparison-flow-time">≈ 3 分钟</span>
+                <span className="comparison-flow-time">≈ 5 分钟</span>
                 <span className="comparison-flow-mood">🎉 轻松搞定</span>
               </div>
             </div>

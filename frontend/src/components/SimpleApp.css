@@ -432,13 +432,15 @@
 }
 
 .comparison-flow-manual {
-  background: #FFF5F5;
-  border: 1.5px solid #FEB2B2;
+  background: #F5F0EB;
+  border: 1.5px solid #D5CEC7;
+  box-shadow: none;
 }
 
 .comparison-flow-auto {
   background: #F0FFF4;
   border: 1.5px solid #9AE6B4;
+  box-shadow: 0 8px 24px rgba(39, 103, 73, 0.1);
 }
 
 .comparison-flow-label {
@@ -450,7 +452,7 @@
 }
 
 .comparison-flow-manual .comparison-flow-label {
-  color: #C53030;
+  color: #8B7E74;
 }
 
 .comparison-flow-auto .comparison-flow-label {
@@ -490,8 +492,8 @@
 }
 
 .comparison-flow-manual .comparison-flow-step-num {
-  background: rgba(197, 48, 48, 0.1);
-  color: #C53030;
+  background: rgba(139, 126, 116, 0.15);
+  color: #8B7E74;
 }
 
 .comparison-flow-auto .comparison-flow-step-num {
@@ -516,7 +518,7 @@
 }
 
 .comparison-flow-manual .comparison-flow-time {
-  color: #C53030;
+  color: #8B7E74;
 }
 
 .comparison-flow-auto .comparison-flow-time {
