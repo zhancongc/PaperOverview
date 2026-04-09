@@ -33,6 +33,12 @@ class AlipayService:
         if not app_private_key or app_private_key == "your-alipay-app-private-key":
             raise ValueError("必须配置真实的 ALIPAY_APP_PRIVATE_KEY（应用私钥）")
 
+        # 记录私钥格式信息用于调试
+        if "BEGIN PRIVATE KEY" in app_private_key and "BEGIN RSA PRIVATE KEY" not in app_private_key:
+            logger.info("检测到 PKCS#8 格式私钥，将直接传递给 SDK")
+        elif "BEGIN RSA PRIVATE KEY" in app_private_key:
+            logger.info("检测到 PKCS#1 格式私钥")
+
         config = AlipayClientConfig()
         config.server_url = server_url
         config.app_id = app_id

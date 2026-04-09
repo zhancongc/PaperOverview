@@ -7,6 +7,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _read_private_key_from_secrets(base_dir: str) -> str | None:
+    """从 secrets.txt 读取私钥并格式化为 PKCS#8 格式"""
+    secrets_path = os.path.join(base_dir, "secrets.txt")
+    if not os.path.exists(secrets_path):
+        return None
+    try:
+        with open(secrets_path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        # 如果没有 BEGIN/END 标记，添加 PKCS#8 格式标记
+        if not content.startswith("-----BEGIN"):
+            content = f"-----BEGIN PRIVATE KEY-----\n{content}\n-----END PRIVATE KEY-----"
+        logger.info(f"从 secrets.txt 读取应用私钥成功")
+        return content
+    except Exception as e:
+        logger.warning(f"读取 secrets.txt 失败: {e}")
+        return None
+
+
 def _resolve_cert_path(env_value: str | None, default_name: str, base_dir: str) -> str | None:
     """解析证书路径：环境变量优先，相对路径基于 base_dir 解析"""
     if env_value is None:
@@ -20,9 +38,15 @@ def get_payment_config():
     """获取支付配置"""
     # 默认证书路径在 backend 目录下
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    # 优先从环境变量读私钥，没有则尝试从 secrets.txt 读取
+    app_private_key = os.getenv("ALIPAY_APP_PRIVATE_KEY", "")
+    if not app_private_key or app_private_key == "your-alipay-app-private-key":
+        app_private_key = _read_private_key_from_secrets(base_dir) or ""
+
     return {
         "alipay_app_id": os.getenv("ALIPAY_APP_ID", ""),
-        "alipay_app_private_key": os.getenv("ALIPAY_APP_PRIVATE_KEY", ""),
+        "alipay_app_private_key": app_private_key,
         "alipay_public_key": os.getenv("ALIPAY_PUBLIC_KEY", ""),
         "alipay_server_url": os.getenv("ALIPAY_SERVER_URL", "https://openapi.alipay.com/gateway.do"),
         # 证书路径配置：环境变量优先，相对路径基于 backend 目录解析
