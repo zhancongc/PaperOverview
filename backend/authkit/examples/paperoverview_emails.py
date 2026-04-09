@@ -11,9 +11,9 @@ VERIFICATION_CODE_TEMPLATE = Template("""
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #FFFBF5; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
+        .header { background: linear-gradient(135deg, #D63031 0%, #B71C1C 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
         .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
         .content { background: white; padding: 40px 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .greeting { font-size: 16px; margin-bottom: 20px; }
@@ -62,9 +62,9 @@ WELCOME_TEMPLATE = Template("""
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #FFFBF5; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
+        .header { background: linear-gradient(135deg, #D63031 0%, #B71C1C 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
         .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
         .content { background: white; padding: 40px 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .welcome-text { font-size: 16px; margin-bottom: 20px; }
@@ -145,9 +145,9 @@ PASSWORD_RESET_TEMPLATE = Template("""
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #FFFBF5; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
+        .header { background: linear-gradient(135deg, #D63031 0%, #B71C1C 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
         .content { background: white; padding: 40px 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .code-box { background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%); border: 2px dashed #667eea; padding: 25px; text-align: center; margin: 25px 0; border-radius: 8px; }
         .code { font-size: 36px; font-weight: 700; color: #667eea; letter-spacing: 8px; font-family: 'Courier New', monospace; }

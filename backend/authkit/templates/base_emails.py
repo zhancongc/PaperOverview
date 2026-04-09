@@ -35,7 +35,7 @@ VERIFICATION_CODE_TEMPLATE = Template("""
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #FFFBF5; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
         .header { background: {{ gradient }}; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
         .header h1 { margin: 10px 0 0 0; font-size: 24px; font-weight: 600; color: #ffffff !important; }
@@ -92,7 +92,7 @@ WELCOME_TEMPLATE = Template("""
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #FFFBF5; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
         .header { background: {{ gradient }}; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
         .header h1 { margin: 10px 0 0 0; font-size: 24px; font-weight: 600; color: #ffffff !important; }
@@ -151,7 +151,7 @@ PASSWORD_RESET_TEMPLATE = Template("""
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #FFFBF5; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
         .header { background: {{ gradient }}; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; }
         .header h1 { color: #ffffff !important; }

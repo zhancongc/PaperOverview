@@ -1,6 +1,7 @@
 # 环境变量
 .env
 .env.local
+.env.auth
 
 # Python
 __pycache__/
