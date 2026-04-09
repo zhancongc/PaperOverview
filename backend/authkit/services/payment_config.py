@@ -179,7 +179,7 @@ def init_alipay():
             return AlipayService(
                 app_id=config["alipay_app_id"],
                 app_private_key=config["alipay_app_private_key"],
-                alipay_public_key=config["alipay_public_key"],
+                alipay_public_key=None,  # 证书模式不传，让 SDK 从证书读取
                 app_cert_path=app_cert,
                 alipay_cert_path=alipay_cert,
                 alipay_root_cert_path=root_cert,

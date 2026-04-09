@@ -57,8 +57,7 @@ class AlipayService:
             config.app_cert_path = app_cert_path
             config.alipay_cert_path = alipay_cert_path
             config.alipay_root_cert_path = alipay_root_cert_path
-            if alipay_public_key:
-                config.alipay_public_key = alipay_public_key
+            # 证书模式下不设置 alipay_public_key，让 SDK 从证书读取
             logger.info(f"支付宝客户端初始化成功（证书模式），APP_ID: {app_id}")
         else:
             # 公钥模式
