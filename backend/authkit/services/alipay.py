@@ -16,7 +16,7 @@ class AlipayService:
     def __init__(
         self,
         app_id: str,
-        app_private_key: str,
+        app_private_key: Optional[str] = None,
         alipay_public_key: Optional[str] = None,
         app_cert_path: Optional[str] = None,
         alipay_cert_path: Optional[str] = None,
@@ -30,24 +30,27 @@ class AlipayService:
         config = AlipayClientConfig()
         config.server_url = server_url
         config.app_id = app_id
-        config.app_private_key = app_private_key
         config.sign_type = sign_type
 
         # 判断使用证书模式还是公钥模式
         use_cert_mode = all([app_cert_path, alipay_cert_path, alipay_root_cert_path])
 
         if use_cert_mode:
-            # 证书模式
+            # 证书模式 - 私钥从证书读取，不需要单独设置 app_private_key
             config.app_cert_path = app_cert_path
             config.alipay_cert_path = alipay_cert_path
             config.alipay_root_cert_path = alipay_root_cert_path
+            # 即使在证书模式下，也可以设置 alipay_public_key 作为备用（非必须）
             if alipay_public_key:
                 config.alipay_public_key = alipay_public_key
             logger.info(f"支付宝客户端初始化成功（证书模式），APP_ID: {app_id}")
         else:
-            # 公钥模式
+            # 公钥模式 - 必须设置 app_private_key 和 alipay_public_key
+            if not app_private_key:
+                raise ValueError("公钥模式必须配置 app_private_key")
             if not alipay_public_key:
-                raise ValueError("必须配置 alipay_public_key（公钥模式）或三个证书路径（证书模式）")
+                raise ValueError("公钥模式必须配置 alipay_public_key")
+            config.app_private_key = app_private_key
             config.alipay_public_key = alipay_public_key
             logger.info(f"支付宝客户端初始化成功（公钥模式），APP_ID: {app_id}")
 
