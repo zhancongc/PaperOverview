@@ -4,6 +4,10 @@
 .env.auth
 # 密钥文件
 backend/secrets.txt
+backend/app_secrets.txt
+backend/app_public_key.txt
+backend/alipay_public_key.txt
+backend/public_key.txt
 *.key
 *.pem
 
