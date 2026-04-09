@@ -150,7 +150,7 @@ fi
 if [ -f "$PROJECT_DIR/nginx-autooverview.conf" ]; then
     cp "$PROJECT_DIR/nginx-autooverview.conf" "/etc/nginx/sites-available/autooverview"
     if nginx -t &> /dev/null; then
-        systemctl reload-or-restart nginx
+        systemctl reload-or-restart nginx || true
         echo -e "${GREEN}✓ Nginx 配置已更新并重载${NC}"
     else
         echo -e "${YELLOW}警告：Nginx 配置测试失败${NC}"
