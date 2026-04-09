@@ -326,7 +326,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               5分钟，生成一份<span className="highlight">高水平文献综述</span>
             </h1>
             <p className="home-subtitle">
-              深度检索最新核心文献，不只是生成文字——AutoOverview 为您完成 100+ 篇文献统计、智能逻辑建构与自动格式排版。5 分钟，综述初稿到手。
+              告别彻夜查文献的痛苦。AI 深度检索Web of Science、IEEE等权威数据库，自动梳理逻辑框架，生成自带规范引用的专业综述
             </p>
           </div>
 
