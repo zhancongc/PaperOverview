@@ -35,30 +35,6 @@ class AlipayService:
         if not app_private_key or app_private_key == "your-alipay-app-private-key":
             raise ValueError("必须配置真实的 ALIPAY_APP_PRIVATE_KEY（应用私钥）")
 
-        # 记录私钥格式用于调试
-        key_preview = app_private_key[:150].replace("\n", "\\n") if app_private_key else "empty"
-        logger.info(f"私钥预览（前150字符）: {key_preview}...")
-        logger.info(f"私钥总长度: {len(app_private_key) if app_private_key else 0}")
-
-        # 尝试验证私钥格式（提前发现问题）
-        try:
-            import rsa
-            # 尝试用 rsa 库加载，提前验证
-            if app_private_key and "BEGIN RSA PRIVATE KEY" in app_private_key:
-                rsa.PrivateKey.load_pkcs1(app_private_key.encode(), format='PEM')
-                logger.info("私钥格式验证通过（rsa.load_pkcs1 成功）")
-        except ImportError:
-            logger.warning("rsa 库不可用，跳过私钥预验证")
-        except Exception as e:
-            logger.error(f"私钥格式验证失败: {e}", exc_info=True)
-
-        if "BEGIN RSA PRIVATE KEY" in app_private_key:
-            logger.info("检测到 PKCS#1 格式私钥")
-        elif "BEGIN PRIVATE KEY" in app_private_key:
-            logger.info("检测到 PKCS#8 格式私钥")
-        else:
-            logger.info("检测到纯 base64 格式私钥（无 PEM 标记）")
-
         config = AlipayClientConfig()
         config.server_url = server_url
         config.app_id = app_id
@@ -125,13 +101,18 @@ class AlipayService:
                 logger.info(f"创建预下单成功: {out_trade_no}, 金额: {total_amount}")
                 return resp.qr_code
             else:
-                logger.error(f"创建预下单失败: {resp.sub_code} - {resp.sub_msg}")
-                return None
+                logger.warning(f"当面付不可用({resp.sub_code})，回退到电脑网站支付")
+                return self._create_page_pay_order(
+                    out_trade_no, total_amount, subject,
+                    timeout_express, return_url, notify_url,
+                )
 
         except Exception as e:
-            logger.error(f"创建预下单异常: {str(e)}")
-            traceback.print_exc()
-            return None
+            logger.warning(f"创建预下单异常({str(e)})，回退到电脑网站支付")
+            return self._create_page_pay_order(
+                out_trade_no, total_amount, subject,
+                timeout_express, return_url, notify_url,
+            )
 
     def _create_page_pay_order(
         self,
