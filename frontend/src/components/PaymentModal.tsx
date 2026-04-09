@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api'
+// @ts-ignore
 import { QRCodeSVG } from 'qrcode.react'
 import './PaymentModal.css'
 
