@@ -8,6 +8,33 @@ import base64
 logger = logging.getLogger(__name__)
 
 
+def _load_public_key_from_file(base_dir: str) -> str | None:
+    """从 public_key.txt 读取支付宝公钥"""
+    public_key_path = os.path.join(base_dir, "public_key.txt")
+    if not os.path.exists(public_key_path):
+        logger.warning(f"public_key.txt 不存在: {public_key_path}")
+        return None
+    try:
+        with open(public_key_path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        # 如果是纯 base64，格式化为 PEM
+        if "-----BEGIN" not in content:
+            content = content.replace("\n", "").replace("\r", "").replace(" ", "").strip()
+            # 每 64 字符换行
+            lines = []
+            for i in range(0, len(content), 64):
+                lines.append(content[i:i+64])
+            content_with_newlines = "\n".join(lines)
+            pem_content = f"-----BEGIN PUBLIC KEY-----\n{content_with_newlines}\n-----END PUBLIC KEY-----"
+            logger.info("从 public_key.txt 读取并格式化支付宝公钥成功")
+            return pem_content
+        logger.info("从 public_key.txt 读取支付宝公钥成功")
+        return content
+    except Exception as e:
+        logger.error(f"读取 public_key.txt 失败: {e}", exc_info=True)
+        return None
+
+
 def _load_private_key_from_secrets(base_dir: str) -> str | None:
     """
     直接从 secrets.txt 读取私钥，返回完整的 PKCS#1 PEM 格式
@@ -131,10 +158,20 @@ def get_payment_config():
         if app_private_key and app_private_key != "your-alipay-app-private-key":
             logger.info("使用环境变量 ALIPAY_APP_PRIVATE_KEY")
 
+    # 优先从 public_key.txt 读取支付宝公钥
+    alipay_public_key = _load_public_key_from_file(base_dir) or ""
+    if alipay_public_key:
+        logger.info("使用 public_key.txt 中的支付宝公钥")
+    else:
+        # 备用：从环境变量读
+        alipay_public_key = os.getenv("ALIPAY_PUBLIC_KEY", "")
+        if alipay_public_key:
+            logger.info("使用环境变量 ALIPAY_PUBLIC_KEY")
+
     return {
         "alipay_app_id": os.getenv("ALIPAY_APP_ID", ""),
         "alipay_app_private_key": app_private_key,
-        "alipay_public_key": os.getenv("ALIPAY_PUBLIC_KEY", ""),
+        "alipay_public_key": alipay_public_key,
         "alipay_server_url": os.getenv("ALIPAY_SERVER_URL", "https://openapi.alipay.com/gateway.do"),
         # 证书路径配置：环境变量优先，相对路径基于 backend 目录解析
         "alipay_app_cert_path": _resolve_cert_path(
