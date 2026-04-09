@@ -269,3 +269,18 @@
   color: var(--text-gray);
   margin: 0 0 20px;
 }
+
+.payment-qrcode-container {
+  display: inline-block;
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--light-gray);
+  margin: 16px 0;
+}
+
+.payment-or-hint {
+  font-size: 13px;
+  color: var(--text-gray);
+  margin: 12px 0;
+}
