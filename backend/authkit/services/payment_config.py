@@ -39,7 +39,8 @@ def _load_public_key_from_file(base_dir: str) -> str | None:
 
 def _load_private_key_from_secrets(base_dir: str) -> str | None:
     """
-    直接从 secrets.txt 读取私钥，保持原始格式
+    从 secrets.txt 读取私钥，确保返回 PKCS#1 格式的 PEM
+    alipay-sdk-python + rsa 库需要 PKCS#1 格式: -----BEGIN RSA PRIVATE KEY-----
     """
     secrets_path = os.path.join(base_dir, "secrets.txt")
     if not os.path.exists(secrets_path):
@@ -50,18 +51,47 @@ def _load_private_key_from_secrets(base_dir: str) -> str | None:
         with open(secrets_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # 简单清理首尾空白
+        # 第一步：提取纯 base64 内容（移除所有标记、空白、换行）
         content = content.strip()
 
-        # 记录一下私钥格式特征用于调试
-        if "BEGIN RSA PRIVATE KEY" in content:
-            logger.info("secrets.txt: 检测到 PKCS#1 格式")
-        elif "BEGIN PRIVATE KEY" in content:
-            logger.info("secrets.txt: 检测到 PKCS#8 格式")
+        # 移除 PEM 标记（如果有）
+        if "-----BEGIN" in content:
+            lines = content.split("\n")
+            base64_lines = []
+            in_key = False
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                if "-----BEGIN" in line:
+                    in_key = True
+                    continue
+                if "-----END" in line:
+                    break
+                if in_key:
+                    base64_lines.append(line)
+            pure_base64 = "".join(base64_lines)
         else:
-            logger.info("secrets.txt: 检测到纯密钥内容（无 PEM 标记）")
+            # 已经是纯内容，移除所有空白
+            pure_base64 = content.replace("\n", "").replace("\r", "").replace(" ", "").strip()
 
-        return content
+        logger.info(f"提取到纯 base64 密钥，长度: {len(pure_base64)}")
+
+        # 第二步：格式化为标准 PKCS#1 PEM
+        # 每 64 字符换行
+        lines = []
+        for i in range(0, len(pure_base64), 64):
+            lines.append(pure_base64[i:i+64])
+        content_with_newlines = "\n".join(lines)
+
+        pkcs1_pem = (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            f"{content_with_newlines}\n"
+            "-----END RSA PRIVATE KEY-----"
+        )
+
+        logger.info("secrets.txt: 已格式化为 PKCS#1 格式")
+        return pkcs1_pem
 
     except Exception as e:
         logger.error(f"读取 secrets.txt 失败: {e}", exc_info=True)
