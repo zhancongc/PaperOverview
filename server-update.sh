@@ -212,10 +212,10 @@ echo ""
 
 # HTTP 健康检查
 echo "HTTP 健康检查..."
-HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/health 2>/dev/null || echo "000")
+HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8006/api/health 2>/dev/null || echo "000")
 if [ "$HEALTH_RESPONSE" = "200" ]; then
     echo -e "${GREEN}✓ /api/health → 200${NC}"
-    curl -s http://localhost:8000/api/health 2>/dev/null | "$PROJECT_DIR/backend/.venv/bin/python" -m json.tool 2>/dev/null || true
+    curl -s http://localhost:8006/api/health 2>/dev/null | "$PROJECT_DIR/backend/.venv/bin/python" -m json.tool 2>/dev/null || true
 else
     echo -e "${RED}✗ /api/health → $HEALTH_RESPONSE${NC}"
     all_services_ok=false
@@ -246,7 +246,7 @@ else
     echo "手动检查命令："
     echo "  sudo systemctl status autooverview"
     echo "  sudo journalctl -u autooverview -f"
-    echo "  curl http://localhost:8000/api/health"
+    echo "  curl http://localhost:8006/api/health"
     echo ""
 
     exit 1
