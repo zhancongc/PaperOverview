@@ -284,39 +284,80 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
           <span className="logo-icon">📚</span>
           <span className="logo-text">AutoOverview</span>
         </div>
+        <div className="nav-links">
+          <a href="#generate">综述生成</a>
+          <a href="#features">产品特色</a>
+          <a href="#process">使用流程</a>
+          <a href="#cases">案例展示</a>
+          <a href="#pricing">价格方案</a>
+        </div>
+        <div className="nav-actions">
+          {isLoggedIn ? (
+            <div className="user-menu">
+              <button className="user-info" onClick={() => navigate('/profile')}>
+                <span className="user-avatar">👤</span>
+                <span className="user-name">个人中心</span>
+              </button>
+              <button className="nav-btn nav-btn-logout" onClick={handleLogout}>
+                退出
+              </button>
+            </div>
+          ) : (
+            <div className="auth-buttons">
+              <button
+                className="nav-btn nav-btn-register"
+                onClick={() => setShowLoginModal(true)}
+              >
+                登录 / 注册
+              </button>
+            </div>
+          )}
+        </div>
         <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
           <span className={`hamburger ${mobileMenuOpen ? 'open' : ''}`} />
         </button>
-        <div className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+      </nav>
+
+      {/* 移动端侧边栏遮罩 */}
+      {mobileMenuOpen && (
+        <div className="mobile-sidebar-overlay" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
+      {/* 移动端侧边栏 */}
+      <aside className={`mobile-sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-header">
+          <span className="logo-icon">📚</span>
+          <span className="logo-text">AutoOverview</span>
+          <button className="sidebar-close" onClick={() => setMobileMenuOpen(false)}>&times;</button>
+        </div>
+        <nav className="sidebar-links">
           <a href="#generate" onClick={() => setMobileMenuOpen(false)}>综述生成</a>
           <a href="#features" onClick={() => setMobileMenuOpen(false)}>产品特色</a>
           <a href="#process" onClick={() => setMobileMenuOpen(false)}>使用流程</a>
           <a href="#cases" onClick={() => setMobileMenuOpen(false)}>案例展示</a>
           <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>价格方案</a>
-          <div className={`nav-actions ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-            {isLoggedIn ? (
-              <div className="user-menu">
-                <button className="user-info" onClick={() => navigate('/profile')}>
-                  <span className="user-avatar">👤</span>
-                  <span className="user-name">个人中心</span>
-                </button>
-                <button className="nav-btn nav-btn-logout" onClick={handleLogout}>
-                  退出
-                </button>
-              </div>
-            ) : (
-              <div className="auth-buttons">
-                <button
-                  className="nav-btn nav-btn-register"
-                  onClick={() => setShowLoginModal(true)}
-                >
-                  登录 / 注册
-                </button>
-              </div>
-            )}
-          </div>
+        </nav>
+        <div className="sidebar-bottom">
+          {isLoggedIn ? (
+            <>
+              <button className="sidebar-user-btn" onClick={() => { setMobileMenuOpen(false); navigate('/profile') }}>
+                <span className="user-avatar">👤</span>
+                <span className="user-name">个人中心</span>
+              </button>
+              <button className="nav-btn nav-btn-logout" onClick={() => { setMobileMenuOpen(false); handleLogout() }}>
+                退出
+              </button>
+            </>
+          ) : (
+            <button
+              className="nav-btn nav-btn-register"
+              onClick={() => { setMobileMenuOpen(false); setShowLoginModal(true) }}
+            >
+              登录 / 注册
+            </button>
+          )}
         </div>
-      </nav>
+      </aside>
 
       <div className="home-container">
         <div id="generate" className="home-hero-wrapper">
