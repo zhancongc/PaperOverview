@@ -2,6 +2,10 @@
 .env
 .env.local
 .env.auth
+# 密钥文件
+backend/secrets.txt
+*.key
+*.pem
 
 # Python
 __pycache__/
