@@ -266,20 +266,27 @@
 
 .history-empty {
   text-align: center;
-  padding: 4rem 2rem;
+  padding: 2rem 2rem;
 }
 
 .empty-icon {
-  font-size: 4rem;
-  margin-bottom: 1.5rem;
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
   opacity: 0.5;
 }
 
-.history-empty p {
+.empty-title {
   font-family: 'Source Sans Pro', sans-serif;
   font-size: 1.1rem;
   color: var(--text-gray);
-  margin: 0 0 2rem 0;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-desc {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.95rem;
+  color: var(--text-light);
+  margin: 0 0 1.5rem 0;
 }
 
 .empty-button {
@@ -536,7 +543,21 @@
   }
 
   .profile-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  .stat-card {
+    padding: 1rem 0.5rem;
+    border-radius: 14px;
+  }
+
+  .stat-number {
+    font-size: 2rem;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
   }
 
   .profile-history {
