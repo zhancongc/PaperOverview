@@ -9,11 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 def _load_public_key_from_file(base_dir: str) -> str | None:
-    """从 public_key.txt 读取支付宝公钥"""
-    public_key_path = os.path.join(base_dir, "public_key.txt")
+    """从 alipay_public_key.txt 或 public_key.txt 读取支付宝公钥"""
+    # 优先尝试 alipay_public_key.txt
+    public_key_path = os.path.join(base_dir, "alipay_public_key.txt")
     if not os.path.exists(public_key_path):
-        logger.warning(f"public_key.txt 不存在: {public_key_path}")
-        return None
+        # 备用：public_key.txt
+        public_key_path = os.path.join(base_dir, "public_key.txt")
+        if not os.path.exists(public_key_path):
+            logger.warning(f"alipay_public_key.txt 和 public_key.txt 都不存在")
+            return None
     try:
         with open(public_key_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
@@ -39,13 +43,17 @@ def _load_public_key_from_file(base_dir: str) -> str | None:
 
 def _load_private_key_from_secrets(base_dir: str) -> str | None:
     """
-    从 secrets.txt 读取私钥，确保返回 PKCS#1 格式的 PEM
+    从 app_secrets.txt 或 secrets.txt 读取私钥，确保返回 PKCS#1 格式的 PEM
     alipay-sdk-python + rsa 库需要 PKCS#1 格式: -----BEGIN RSA PRIVATE KEY-----
     """
-    secrets_path = os.path.join(base_dir, "secrets.txt")
+    # 优先尝试 app_secrets.txt
+    secrets_path = os.path.join(base_dir, "app_secrets.txt")
     if not os.path.exists(secrets_path):
-        logger.warning(f"secrets.txt 不存在: {secrets_path}")
-        return None
+        # 备用：secrets.txt
+        secrets_path = os.path.join(base_dir, "secrets.txt")
+        if not os.path.exists(secrets_path):
+            logger.warning(f"app_secrets.txt 和 secrets.txt 都不存在")
+            return None
 
     try:
         with open(secrets_path, "r", encoding="utf-8") as f:
@@ -209,36 +217,14 @@ def init_alipay():
     else:
         from .alipay import AlipayService
 
-        # 检查证书文件是否存在
-        app_cert = config["alipay_app_cert_path"]
-        alipay_cert = config["alipay_alipay_cert_path"]
-        root_cert = config["alipay_root_cert_path"]
-
-        use_cert_mode = all([
-            app_cert and os.path.exists(app_cert),
-            alipay_cert and os.path.exists(alipay_cert),
-            root_cert and os.path.exists(root_cert),
-        ])
-
-        if use_cert_mode:
-            logger.warning("[DEBUG] [Payment] 生产模式 - 证书模式")
-            return AlipayService(
-                app_id=config["alipay_app_id"],
-                app_private_key=config["alipay_app_private_key"],
-                alipay_public_key=None,  # 证书模式不传，让 SDK 从证书读取
-                app_cert_path=app_cert,
-                alipay_cert_path=alipay_cert,
-                alipay_root_cert_path=root_cert,
-                server_url=config["alipay_server_url"],
-            )
-        else:
-            logger.warning("[DEBUG] [Payment] 生产模式 - 公钥模式")
-            return AlipayService(
-                app_id=config["alipay_app_id"],
-                app_private_key=config["alipay_app_private_key"],
-                alipay_public_key=config["alipay_public_key"],
-                server_url=config["alipay_server_url"],
-            )
+        # 强制使用公钥模式（不再使用证书）
+        logger.warning("[DEBUG] [Payment] 生产模式 - 强制使用公钥模式")
+        return AlipayService(
+            app_id=config["alipay_app_id"],
+            app_private_key=config["alipay_app_private_key"],
+            alipay_public_key=config["alipay_public_key"],
+            server_url=config["alipay_server_url"],
+        )
 
 
 # 全局支付服务实例
