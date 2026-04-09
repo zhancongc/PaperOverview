@@ -52,7 +52,7 @@ def _load_private_key_from_secrets(base_dir: str) -> str | None:
             content = f.read()
 
         content = content.strip()
-        logger.info(f"原始密钥内容长度: {len(content)}")
+        logger.warning(f"[DEBUG] 原始密钥内容长度: {len(content)}")
 
         # 先清理内容，提取纯 base64
         if "-----BEGIN" in content:
@@ -74,7 +74,7 @@ def _load_private_key_from_secrets(base_dir: str) -> str | None:
         else:
             pure_base64 = content.replace("\n", "").replace("\r", "").replace(" ", "").strip()
 
-        logger.info(f"提取到纯 base64 密钥，长度: {len(pure_base64)}")
+        logger.warning(f"[DEBUG] 提取到纯 base64 密钥，长度: {len(pure_base64)}")
 
         # 尝试用 cryptography 解析并转换为 PKCS#1
         try:
@@ -89,7 +89,7 @@ def _load_private_key_from_secrets(base_dir: str) -> str | None:
                     password=None,
                     backend=default_backend()
                 )
-                logger.info("成功解析为 PKCS#8 格式")
+                logger.warning("[DEBUG] 成功解析为 PKCS#8 格式")
             except Exception:
                 # 如果 PKCS#8 失败，尝试 PKCS#1
                 pkcs1_pem = f"-----BEGIN RSA PRIVATE KEY-----\n{pure_base64}\n-----END RSA PRIVATE KEY-----"
@@ -98,7 +98,7 @@ def _load_private_key_from_secrets(base_dir: str) -> str | None:
                     password=None,
                     backend=default_backend()
                 )
-                logger.info("成功解析为 PKCS#1 格式")
+                logger.warning("[DEBUG] 成功解析为 PKCS#1 格式")
 
             # 转换为 PKCS#1 (TraditionalOpenSSL) 格式
             pkcs1_der = private_key_obj.private_bytes(
@@ -108,7 +108,7 @@ def _load_private_key_from_secrets(base_dir: str) -> str | None:
             )
 
             result = pkcs1_der.decode()
-            logger.info("secrets.txt: 已转换为 PKCS#1 格式")
+            logger.warning("[DEBUG] secrets.txt: 已转换为 PKCS#1 格式")
             return result
 
         except ImportError:
@@ -204,7 +204,7 @@ def init_alipay():
     is_dev = config["is_dev"]
 
     if is_dev:
-        logger.info("[Payment] 开发模式 - 模拟支付")
+        logger.warning("[DEBUG] [Payment] 开发模式 - 模拟支付")
         return DevAlipayService()
     else:
         from .alipay import AlipayService
@@ -221,7 +221,7 @@ def init_alipay():
         ])
 
         if use_cert_mode:
-            logger.info("[Payment] 生产模式 - 证书模式")
+            logger.warning("[DEBUG] [Payment] 生产模式 - 证书模式")
             return AlipayService(
                 app_id=config["alipay_app_id"],
                 app_private_key=config["alipay_app_private_key"],
@@ -232,7 +232,7 @@ def init_alipay():
                 server_url=config["alipay_server_url"],
             )
         else:
-            logger.info("[Payment] 生产模式 - 公钥模式")
+            logger.warning("[DEBUG] [Payment] 生产模式 - 公钥模式")
             return AlipayService(
                 app_id=config["alipay_app_id"],
                 app_private_key=config["alipay_app_private_key"],
@@ -248,8 +248,12 @@ _payment_service = None
 def get_payment_service():
     """获取支付服务实例"""
     global _payment_service
+    logger.warning("[DEBUG] ====== get_payment_service() 被调用 ======")
     if _payment_service is None:
+        logger.warning("[DEBUG] ====== 初始化新的支付服务实例 ======")
         _payment_service = init_alipay()
+    else:
+        logger.warning("[DEBUG] ====== 使用已缓存的支付服务实例 ======")
     return _payment_service
 
 
