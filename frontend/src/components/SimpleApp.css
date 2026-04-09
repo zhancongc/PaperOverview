@@ -1392,8 +1392,8 @@
   }
 
   .process-steps {
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
   }
 
   .process-arrow {
@@ -1401,7 +1401,8 @@
   }
 
   .process-step {
-    max-width: 280px;
+    max-width: 100%;
+    width: 100%;
   }
 
   .cases-grid {
