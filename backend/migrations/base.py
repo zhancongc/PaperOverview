@@ -73,6 +73,9 @@ def ensure_version_table():
 
 def is_applied(version: str) -> bool:
     """检查迁移是否已执行"""
+    # 先确保版本表存在
+    ensure_version_table()
+
     session = get_session()
     try:
         result = session.query(SchemaVersion).filter_by(version=version).first()
