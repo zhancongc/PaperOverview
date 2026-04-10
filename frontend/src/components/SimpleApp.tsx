@@ -443,7 +443,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
         <div className="social-proof-bar">
           <span className="social-proof-icon">🏆</span>
-          <span className="social-proof-text">已有 <strong>1000+</strong> 位同学通过 AutoOverview 累计节省了 <strong>10,000+</strong> 小时</span>
+          <span className="social-proof-text">已有 <strong>250+</strong> 位同学通过 AutoOverview 累计节省了 <strong>10,000+</strong> 小时</span>
         </div>
       </div>
 
