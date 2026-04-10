@@ -10,50 +10,17 @@ interface PaymentModalProps {
   recordId?: number  // 用于 unlock 模式
 }
 
-const PLANS = [
-  {
-    type: 'unlock',
-    name: '单次解锁',
-    price: 29.8,
-    credits: 0,
-    features: [
-      '解锁当前综述 Word 导出权限',
-      '无水印 Word 文档',
-    ],
-  },
-  {
-    type: 'single',
-    name: '体验包',
-    price: 29.8,
-    credits: 1,
-    features: [
-      '1 篇综述生成额度',
-      '在线查看 + PDF 导出',
-    ],
-  },
-  {
-    type: 'semester',
-    name: '标准包',
-    price: 69.8,
-    credits: 3,
-    features: [
-      '3 篇综述生成额度',
-      '在线查看 + PDF 导出',
-      '约 ¥23.2/篇',
-    ],
-  },
-  {
-    type: 'yearly',
-    name: '进阶包',
-    price: 109.8,
-    credits: 6,
-    features: [
-      '6 篇综述生成额度',
-      '在线查看 + PDF 导出',
-      '约 ¥18.3/篇',
-    ],
-  },
-]
+// 单次解锁的固定配置
+const UNLOCK_PLAN = {
+  type: 'unlock',
+  name: '单次解锁',
+  price: 29.8,
+  credits: 0,
+  features: [
+    '解锁当前综述 Word 导出权限',
+    '无水印 Word 文档',
+  ],
+}
 
 const IS_DEV = window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1'
@@ -67,8 +34,21 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
   const [amount, setAmount] = useState(0)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qrCanvasRef = useRef<HTMLCanvasElement>(null)
+  const [plans, setPlans] = useState<any[]>([])
 
-  const plan = PLANS.find(p => p.type === planType) || PLANS[0]
+  // 获取套餐数据
+  useEffect(() => {
+    api.getSubscriptionPlans().then(data => {
+      setPlans(data.plans)
+    }).catch(err => {
+      console.error('获取套餐失败:', err)
+    })
+  }, [])
+
+  // 单次解锁使用固定配置，其他套餐从 API 获取
+  const plan = planType === 'unlock'
+    ? UNLOCK_PLAN
+    : plans.find(p => p.type === planType) || { ...UNLOCK_PLAN, name: '未知套餐', price: 0, credits: 0, features: [] }
 
   // Esc 关闭弹窗
   useEffect(() => {
@@ -195,7 +175,7 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
           </p>
           <p className="payment-modal-credits">{plan.credits} 篇综述生成额度</p>
           <ul className="payment-modal-features">
-            {plan.features.map((f, i) => (
+            {plan.features.map((f: string, i: number) => (
               <li key={i}>✓ {f}</li>
             ))}
           </ul>

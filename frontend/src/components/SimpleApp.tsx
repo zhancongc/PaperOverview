@@ -27,6 +27,8 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
   const [prevCredits, setPrevCredits] = useState<number>(0)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
+  const [plans, setPlans] = useState<any[]>([])
+  const [plansLoading, setPlansLoading] = useState(true)
 
   useEffect(() => {
     const loggedIn = checkLoggedIn()
@@ -51,6 +53,15 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         }
       }).catch(err => console.error('获取活跃任务失败:', err))
     }
+
+    // 获取套餐价格数据
+    api.getSubscriptionPlans().then(data => {
+      setPlans(data.plans)
+      setPlansLoading(false)
+    }).catch(err => {
+      console.error('获取套餐失败:', err)
+      setPlansLoading(false)
+    })
   }, [])
 
   const pollTask = (taskId: string) => {
@@ -639,48 +650,53 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         <div className="section-inner">
           <h2 className="section-title">价格方案</h2>
           <p className="section-subtitle">按需购买，注册即送 1 篇免费综述</p>
-          <div className="pricing-grid">
-            <div className="pricing-card">
-              <h3 className="pricing-name">体验包</h3>
-              <div className="pricing-price">
-                <span className="pricing-original">{'\u00A539.8'}</span>
-                {'\u00A529.8'}
+          {plansLoading ? (
+            <div className="pricing-grid">
+              <div className="pricing-card">
+                <div className="pricing-price">加载中...</div>
               </div>
-              <ul className="pricing-features">
-                <li>1 篇深度综述</li>
-                <li>在线查看 + Word 导出</li>
-                <li>首购特惠，省 {'\u00A510'}</li>
-              </ul>
-              <button className="pricing-btn pricing-btn-primary" onClick={() => { isLoggedIn ? setShowPaymentModal('single') : setShowLoginModal(true) }}>立即购买</button>
             </div>
-            <div className="pricing-card pricing-featured">
-              <div className="pricing-badge">推荐</div>
-              <h3 className="pricing-name">标准包</h3>
-              <div className="pricing-price">
-                <span className="pricing-original">{'\u00A5119.4'}</span>
-                {'\u00A569.8'}
-              </div>
-              <ul className="pricing-features">
-                <li>3 篇深度综述</li>
-                <li>在线查看 + Word 导出</li>
-                <li>约 {'\u00A523.2'}/篇</li>
-              </ul>
-              <button className="pricing-btn pricing-btn-primary" onClick={() => { isLoggedIn ? setShowPaymentModal('semester') : setShowLoginModal(true) }}>选择标准包</button>
+          ) : (
+            <div className="pricing-grid">
+              {plans.map((plan) => (
+                <div
+                  key={plan.type}
+                  className={`pricing-card ${plan.recommended ? 'pricing-featured' : ''}`}
+                >
+                  {plan.recommended && <div className="pricing-badge">推荐</div>}
+                  <h3 className="pricing-name">{plan.name}</h3>
+                  <div className="pricing-price">
+                    {plan.type === 'single' && (
+                      <span className="pricing-original">{'\u00A539.8'}</span>
+                    )}
+                    {plan.type === 'semester' && (
+                      <span className="pricing-original">{'\u00A5119.4'}</span>
+                    )}
+                    {plan.type === 'yearly' && (
+                      <span className="pricing-original">{'\u00A5238.8'}</span>
+                    )}
+                    {'\u00A5'}
+                    {plan.price}
+                  </div>
+                  <ul className="pricing-features">
+                    {plan.features.map((feature: string, index: number) => (
+                      <li key={index}>{feature}</li>
+                    ))}
+                  </ul>
+                  <button
+                    className="pricing-btn pricing-btn-primary"
+                    onClick={() => {
+                      isLoggedIn ? setShowPaymentModal(plan.type) : setShowLoginModal(true)
+                    }}
+                  >
+                    {plan.type === 'single' && '立即购买'}
+                    {plan.type === 'semester' && '选择标准包'}
+                    {plan.type === 'yearly' && '选择进阶包'}
+                  </button>
+                </div>
+              ))}
             </div>
-            <div className="pricing-card">
-              <h3 className="pricing-name">进阶包</h3>
-              <div className="pricing-price">
-                <span className="pricing-original">{'\u00A5238.8'}</span>
-                {'\u00A5109.8'}
-              </div>
-              <ul className="pricing-features">
-                <li>6 篇深度综述</li>
-                <li>在线查看 + Word 导出</li>
-                <li>约 {'\u00A518.3'}/篇</li>
-              </ul>
-              <button className="pricing-btn pricing-btn-primary" onClick={() => { isLoggedIn ? setShowPaymentModal('yearly') : setShowLoginModal(true) }}>选择进阶包</button>
-            </div>
-          </div>
+          )}
           <p className="pricing-note">额度永久有效，不设过期时间。注册即送 1 篇免费综述额度。</p>
 
           <div className="testimonials">
