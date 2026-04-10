@@ -19,54 +19,66 @@
   min-height: 100vh;
   background: var(--cream-white);
   font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
-  overflow-x: visible !important;
-  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
 }
 
 .review-page-header {
   background: white;
   color: var(--ink-black);
-  padding: 1.5rem 3rem;
+  padding: 0.75rem 1rem;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
+  justify-content: space-between;
+  gap: 0.75rem;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   border-bottom: 2px solid var(--academic-red);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
+  height: 52px;
+  width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
+  box-sizing: border-box;
+  touch-action: none;
 }
 
 /* 移动端菜单按钮靠右 */
 .mobile-menu-toggle.review-mobile-toggle {
-  position: absolute;
-  right: 0.5rem;
+  z-index: 9999 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed !important;
+  right: 0.75rem;
+  top: 4px;
 }
 
 .back-button {
-  padding: 0.625rem 1.25rem;
-  background: var(--cream-white);
+  padding: 0.5rem;
+  background: transparent;
   color: var(--charcoal);
-  border: 2px solid var(--border-gray);
-  border-radius: 10px;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 1.25rem;
+  font-weight: 700;
+  transition: background 0.2s;
   font-family: 'Source Sans Pro', sans-serif;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  position: absolute;
-  left: 3rem;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  line-height: 1;
 }
 
 .back-button:hover {
-  background: white;
-  border-color: var(--academic-red);
-  color: var(--academic-red);
-  transform: translateX(-3px);
+  background: var(--cream-white);
 }
 
 .review-page-title {
@@ -88,7 +100,7 @@
   font-weight: 700;
   color: var(--ink-black);
   text-align: center;
-  margin: 0;
+  margin: 80px 0 0 0;
   padding: 1.5rem 2rem 0.5rem;
   max-width: 1400px;
   margin-left: auto;
@@ -116,8 +128,6 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  position: absolute;
-  right: 3rem;
 }
 
 .regenerate-button {
@@ -185,90 +195,102 @@
 }
 
 @media (max-width: 900px) {
-  .review-page-header {
-    padding: 1rem 1.5rem;
-    gap: 0.75rem;
-  }
-
   .review-inline-title {
     font-size: 1.15rem;
+    margin-top: 65px;
     padding: 1rem 1.5rem 0.25rem;
   }
 }
 
 /* ==================== 移动端菜单按钮 ==================== */
 
-.review-mobile-toggle {
-  display: none;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.5rem;
-  z-index: 101;
+/* 桌面端样式 */
+@media (min-width: 769px) {
+  .review-page-header {
+    padding: 1rem 2rem;
+    height: 64px;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .header-actions {
+    position: absolute;
+    right: 3rem;
+  }
+
+  .back-button {
+    position: absolute;
+    left: 2rem;
+    padding: 0.625rem 1.25rem;
+    background: var(--cream-white);
+    border: 2px solid var(--border-gray);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    min-width: auto;
+    height: auto;
+  }
+
+  .back-button:hover {
+    background: white;
+    border-color: var(--academic-red);
+    color: var(--academic-red);
+    transform: translateX(-3px);
+  }
+
+  .back-button::after {
+    content: '返回';
+    margin-left: 0.25rem;
+  }
+
+  .review-segmented-tabs {
+    flex: 0 0 auto;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 768px) {
   /* 移动端隐藏桌面端的操作按钮，显示菜单按钮 */
   .header-actions {
-    display: none;
+    display: none !important;
   }
 
-  .review-mobile-toggle {
-    display: block;
+  .review-page-header .review-mobile-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 
   .review-segmented-tabs {
-    flex: none;
-    justify-content: center;
-  }
-
-  .back-button {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.85rem;
-    left: 0.5rem;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 180px;
   }
 
   .review-page-header {
-    padding: 0.75rem 0.5rem;
-    gap: 0.25rem;
+    height: 52px;
+    padding: 0.5rem 0.75rem;
   }
 
   .review-inline-title {
     font-size: 1rem;
-    padding: 0.75rem 1rem 0.25rem;
+    margin-top: 60px;
+    padding: 0.75rem 1rem 0.5rem;
   }
 
   .segmented-tab {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.82rem;
+    padding: 0.45rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .review-page .mobile-sidebar {
+    top: 0 !important;
   }
 }
 
-.review-mobile-toggle .hamburger {
-  display: block;
-  width: 22px;
-  height: 2px;
-  background: var(--charcoal);
-  position: relative;
-  transition: background 0.3s;
-}
-
-.review-mobile-toggle .hamburger::before,
-.review-mobile-toggle .hamburger::after {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 2px;
-  background: var(--charcoal);
-  left: 0;
-  transition: transform 0.3s;
-}
-
-.review-mobile-toggle .hamburger::before { top: -6px; }
-.review-mobile-toggle .hamburger::after { top: 6px; }
-.review-mobile-toggle .hamburger.open { background: transparent; }
-.review-mobile-toggle .hamburger.open::before { transform: rotate(45deg); top: 0; }
-.review-mobile-toggle .hamburger.open::after { transform: rotate(-45deg); top: 0; }
 
 /* ==================== 移动端侧边栏 ==================== */
 
@@ -338,20 +360,73 @@
   box-sizing: border-box;
 }
 
+/* 引用格式选择区域 */
+.sidebar-format-section {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-gray);
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-format-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-format-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.sidebar-format-btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-gray);
+  background: var(--pure-white);
+  color: var(--charcoal);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Source Sans Pro', sans-serif;
+  text-align: center;
+}
+
+.sidebar-format-btn:hover {
+  background: var(--cream-white);
+  border-color: var(--academic-red);
+  color: var(--academic-red);
+}
+
+.sidebar-format-btn.active {
+  background: var(--academic-red);
+  color: white;
+  border-color: var(--academic-red);
+}
+
+.sidebar-format-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .sidebar-action-btn {
   width: 100%;
   max-width: 100%;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
   border: none;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   font-family: 'Source Sans Pro', sans-serif;
   background: var(--academic-red);
   color: white;
-  line-height: 1.3;
+  line-height: 1.4;
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -372,13 +447,13 @@
 }
 
 .sidebar-action-secondary {
-  background: var(--cream-white);
+  background: var(--pure-white);
   color: var(--charcoal);
   border: 1px solid var(--border-gray);
 }
 
 .sidebar-action-secondary:hover {
-  background: var(--light-gray);
+  background: var(--cream-white);
 }
 
 /* 侧边栏目录 */
@@ -461,7 +536,7 @@
 .sidebar-toc-level-4 a { padding-left: 2.25rem; font-size: 0.8rem; color: var(--text-gray); }
 
 @media (min-width: 769px) {
-  .review-mobile-toggle {
+  .review-page-header .review-mobile-toggle {
     display: none !important;
   }
 }

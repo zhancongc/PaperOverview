@@ -1,6 +1,9 @@
 .review-viewer {
   min-height: calc(100vh - 64px);
   background: #f5f5f5;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* 防复制保护 */
@@ -25,6 +28,9 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  width: 100vw;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .watermark-text {
@@ -34,6 +40,9 @@
   white-space: nowrap;
   transform: rotate(-30deg);
   position: absolute;
+  width: 100vw;
+  text-align: center;
+  overflow: hidden;
 }
 
 .watermark-text::before,
@@ -71,8 +80,9 @@
   display: flex;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 80px 2rem 2rem;
   gap: 2rem;
+  align-items: flex-start;
 }
 
 /* 侧边栏目录 */
@@ -84,8 +94,8 @@
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: sticky;
-  top: 5rem;
-  max-height: calc(100vh - 6rem);
+  top: 80px;
+  max-height: calc(100vh - 96px);
   overflow-y: auto;
 }
 
@@ -157,6 +167,7 @@
 .review-main {
   flex: 1;
   min-width: 0;
+  overflow-x: hidden;
 }
 
 .review-body {
@@ -165,6 +176,9 @@
   padding: 2rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin-bottom: 2rem;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow-x: hidden;
 }
 
 .review-body h1 {
@@ -205,6 +219,13 @@
   line-height: 1.8;
   margin-bottom: 1rem;
   color: #333;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.review-body a {
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 
 .review-body ul,
@@ -216,6 +237,8 @@
 .review-body li {
   margin-bottom: 0.5rem;
   line-height: 1.6;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .review-body code {
@@ -224,6 +247,7 @@
   border-radius: 3px;
   font-family: 'Courier New', monospace;
   font-size: 0.9em;
+  word-break: break-all;
 }
 
 .review-body pre {
@@ -233,6 +257,14 @@
   border-radius: 4px;
   overflow-x: auto;
   margin-bottom: 1rem;
+  max-width: 100%;
+}
+
+.review-body pre code {
+  background: none;
+  padding: 0;
+  word-break: normal;
+  white-space: pre;
 }
 
 .review-body pre code {
@@ -246,6 +278,8 @@
   margin: 1rem 0;
   color: #666;
   font-style: italic;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .review-body table {
@@ -253,6 +287,9 @@
   border-collapse: collapse;
   margin: 1rem 0;
   font-size: 0.9rem;
+  overflow-x: auto;
+  display: block;
+  max-width: fit-content;
 }
 
 .review-body table th,
@@ -260,6 +297,8 @@
   border: 1px solid #ddd;
   padding: 0.5rem 0.75rem;
   text-align: left;
+  word-break: break-word;
+  max-width: 200px;
 }
 
 .review-body table th {
@@ -460,15 +499,26 @@
   .review-content-wrapper {
     padding: 0.75rem;
     gap: 0.75rem;
+    padding-top: 60px;
+  }
+
+  .review-main {
+    overflow-x: hidden;
   }
 
   .review-body {
     padding: 1rem;
     border-radius: 6px;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    overflow-x: hidden;
   }
 
   .review-references {
     padding: 1rem;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    overflow-x: hidden;
   }
 }
 
@@ -484,5 +534,34 @@
 
   .verification-link .link-icon {
     font-size: 1.1rem;
+  }
+
+  .review-body table {
+    font-size: 0.8rem;
+  }
+
+  .review-body table th,
+  .review-body table td {
+    padding: 0.4rem 0.5rem;
+    max-width: 150px;
+  }
+
+  .review-body pre {
+    font-size: 0.85rem;
+    padding: 0.75rem;
+  }
+}
+
+/* 超小屏幕优化（iPhone SE 等） */
+@media (max-width: 375px) {
+  .review-content-wrapper {
+    padding: 0.5rem;
+    gap: 0.5rem;
+    padding-top: 60px;
+  }
+
+  .review-body {
+    padding: 0.75rem;
+    font-size: 0.95rem;
   }
 }

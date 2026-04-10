@@ -123,7 +123,7 @@ export const api = {
   },
 
   // 通过 task_id 获取综述结果
-  async getTaskReview(taskId: string): Promise<{ success: boolean; data: {
+  async getTaskReview(taskId: string, format: string = 'ieee'): Promise<{ success: boolean; data: {
     task_id: string;
     topic: string;
     review: string;
@@ -138,7 +138,33 @@ export const api = {
     const token = localStorage.getItem('auth_token');
     const headers: Record<string, string> = {};
     if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await axios.get(`${API_BASE}/tasks/${taskId}/review`, { headers });
+    const response = await axios.get(`${API_BASE}/tasks/${taskId}/review`, {
+      headers,
+      params: { format }
+    });
+    return response.data;
+  },
+
+  // 通过 record_id 获取综述结果（支持引用格式切换）
+  async getRecordReview(recordId: number, format: string = 'ieee'): Promise<{ success: boolean; data: {
+    task_id: string | null;
+    topic: string;
+    review: string;
+    papers: any[];
+    cited_papers_count: number;
+    created_at: string;
+    statistics: any;
+    record_id: number;
+    is_public: boolean;
+    is_paid: boolean;
+  } }> {
+    const token = localStorage.getItem('auth_token');
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await axios.get(`${API_BASE}/records/${recordId}/review`, {
+      headers,
+      params: { format }
+    });
     return response.data;
   },
 

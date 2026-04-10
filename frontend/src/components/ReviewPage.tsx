@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { ReviewViewer } from './ReviewViewer'
 import { PaymentModal } from './PaymentModal'
 import { ConfirmModal } from './ConfirmModal'
+import { CitationFormatSelector } from './CitationFormatSelector'
 import { api } from '../api'
 import type { Paper } from '../types'
 import './ReviewPage.css'
@@ -17,6 +18,7 @@ interface ReviewState {
 }
 
 type TabType = 'content' | 'references'
+type CitationFormat = 'ieee' | 'apa' | 'mla' | 'gb_t_7714'
 
 interface TocItem {
   id: string
@@ -30,9 +32,11 @@ export function ReviewPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const taskId = searchParams.get('task_id') || ''
+  const recordIdParam = searchParams.get('record_id')
   const state = location.state as ReviewState | null
+  const [hasUpdatedUrl, setHasUpdatedUrl] = useState(false) // 标记是否已更新过URL
 
-  // 通过 taskId 加载的数据
+  // 通过 taskId 或 recordId 加载的数据
   const [taskData, setTaskData] = useState<{
     title: string
     content: string
@@ -52,6 +56,8 @@ export function ReviewPage() {
   const [, setFreeCredits] = useState<number>(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [tocItems, setTocItems] = useState<TocItem[]>([])
+  const [citationFormat, setCitationFormat] = useState<CitationFormat>('ieee')
+  const [formatLoading, setFormatLoading] = useState(false)
 
   const handleTocUpdate = useCallback((toc: TocItem[]) => {
     setTocItems(toc)
@@ -63,6 +69,9 @@ export function ReviewPage() {
   const shouldShowWatermark = !isPublicDocument && !isPaidDocument
   const canExportDirectly = isPublicDocument || isPaidDocument
 
+  // 判断是否可以使用引用格式切换（有 taskId 或 recordId）
+  const canSwitchFormat = !!(taskId || state?.recordId || recordIdParam || taskData?.recordId)
+
   // 加载用户额度
   useEffect(() => {
     api.getCredits().then(data => {
@@ -71,11 +80,14 @@ export function ReviewPage() {
     }).catch(err => console.error('获取额度失败:', err))
   }, [])
 
-  // 如果 URL 中有 taskId，从后端加载完整数据（确保 isPaid/isPublic 正确）
+  // 如果 URL 中有 taskId 或 recordId，从后端加载完整数据
   useEffect(() => {
+    // 优先使用 taskId，其次使用 recordId（从 URL 或 state）
+    const effectiveRecordId = recordIdParam ? parseInt(recordIdParam) : (state?.recordId || taskData?.recordId)
+
     if (taskId) {
       setLoading(true)
-      api.getTaskReview(taskId)
+      api.getTaskReview(taskId, citationFormat)
         .then(res => {
           if (res.success && res.data) {
             setTaskData({
@@ -93,12 +105,46 @@ export function ReviewPage() {
         .catch(err => {
           setError('加载失败：' + (err.response?.data?.detail || err.message))
         })
-        .finally(() => setLoading(false))
+        .finally(() => {
+          setLoading(false)
+          setFormatLoading(false)
+        })
+    } else if (effectiveRecordId) {
+      // 通过 recordId 加载数据
+      setLoading(true)
+      api.getRecordReview(effectiveRecordId, citationFormat)
+        .then(res => {
+          if (res.success && res.data) {
+            setTaskData({
+              title: res.data.topic,
+              content: res.data.review,
+              papers: res.data.papers || [],
+              recordId: res.data.record_id,
+              isPublic: res.data.is_public,
+              isPaid: res.data.is_paid,
+            })
+
+            // 如果返回了 task_id 且 URL 中没有，更新 URL（只执行一次）
+            if (res.data.task_id && !taskId && !hasUpdatedUrl) {
+              setHasUpdatedUrl(true)
+              navigate(`/review?task_id=${res.data.task_id}`, { replace: true })
+            }
+          } else {
+            setError('综述不存在或尚未完成')
+          }
+        })
+        .catch(err => {
+          setError('加载失败：' + (err.response?.data?.detail || err.message))
+        })
+        .finally(() => {
+          setLoading(false)
+          setFormatLoading(false)
+        })
     } else if (!state) {
       // 没有 taskId 也没有 state，回到首页
       navigate('/')
     }
-  }, [taskId, state])
+  }, [taskId, recordIdParam, state, citationFormat, hasUpdatedUrl, navigate])
 
   // 确定使用哪个数据源
   const reviewData = state || taskData
@@ -255,6 +301,17 @@ export function ReviewPage() {
     setShowPayModal(true)
   }
 
+  // 格式切换处理
+  const handleFormatChange = (format: CitationFormat) => {
+    if (format !== citationFormat) {
+      // 只有通过 taskId 或 recordId 加载的页面才需要 loading（因为会重新请求后端）
+      if (canSwitchFormat) {
+        setFormatLoading(true)
+      }
+      setCitationFormat(format)
+    }
+  }
+
   // 侧边栏目录点击
   const handleSidebarTocClick = (id: string) => {
     setMobileMenuOpen(false)
@@ -284,7 +341,7 @@ export function ReviewPage() {
     <div className="review-page">
       <div className="review-page-header">
         <button className="back-button" onClick={handleBack}>
-          ← 返回
+          ←
         </button>
         <div className="review-segmented-tabs">
           <button
@@ -301,6 +358,11 @@ export function ReviewPage() {
           </button>
         </div>
         <div className="header-actions">
+          <CitationFormatSelector
+            currentFormat={citationFormat}
+            onFormatChange={handleFormatChange}
+            disabled={!canSwitchFormat || formatLoading || loading}
+          />
           <button className="regenerate-button" onClick={handleRegenerate}>
             重新生成
           </button>
@@ -311,25 +373,41 @@ export function ReviewPage() {
              '🔒 解锁导出 (29.8元)'}
           </button>
         </div>
-        <button className="mobile-menu-toggle review-mobile-toggle" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          <span className={`hamburger ${mobileMenuOpen ? 'open' : ''}`} />
+        <button
+          className="mobile-menu-toggle review-mobile-toggle"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{
+            display: 'flex',
+            minWidth: '44px',
+            height: '44px',
+            fontSize: '1.5rem',
+            color: '#1A1A1A',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            borderRadius: '8px',
+            padding: '0.5rem',
+            flexShrink: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }}
+        >
+          ☰
         </button>
       </div>
-      {activeTab === 'content' && (
-        <h2 className="review-inline-title">{reviewData.title}</h2>
-      )}
       {activeTab === 'content' ? (
         <ReviewViewer
           title={reviewData.title}
           content={reviewData.content}
-          papers={[]}
+          papers={reviewData.papers}
           hasPurchased={!shouldShowWatermark}
           onTocUpdate={handleTocUpdate}
           onRequestUnlock={handleRequestUnlock}
         />
       ) : (
         reviewData.papers.length > 0 ? (
-          <div className="review-references" style={{ maxWidth: 960, margin: '0 auto', padding: '2rem' }}>
+          <div className="review-references" style={{ maxWidth: 960, margin: '80px auto 0', padding: '2rem' }}>
             <h2>参考文献</h2>
             <p className="references-summary">
               共 {reviewData.papers.length} 篇文献
@@ -471,6 +549,26 @@ export function ReviewPage() {
           <button className="sidebar-close" onClick={() => setMobileMenuOpen(false)}>&times;</button>
         </div>
         <div className="sidebar-actions">
+          {/* 引用格式选择 */}
+          <div className="sidebar-format-section">
+            <div className="sidebar-format-label">引用格式</div>
+            <div className="sidebar-format-options">
+              {(['ieee', 'apa', 'mla', 'gb_t_7714'] as const).map((format) => (
+                <button
+                  key={format}
+                  className={`sidebar-format-btn ${citationFormat === format ? 'active' : ''}`}
+                  onClick={() => {
+                    handleFormatChange(format);
+                  }}
+                  disabled={!canSwitchFormat || formatLoading || loading}
+                >
+                  {format === 'ieee' ? 'IEEE' :
+                   format === 'apa' ? 'APA' :
+                   format === 'mla' ? 'MLA' : 'GB/T 7714'}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             className={`sidebar-action-btn ${!canExportDirectly ? 'sidebar-action-premium' : ''}`}
             onClick={() => { setMobileMenuOpen(false); handleExportWord() }}

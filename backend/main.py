@@ -200,6 +200,7 @@ class GenerateResponse(BaseModel):
 
 class ExportRequest(BaseModel):
     record_id: int
+    format: str = "ieee"  # 引用格式 (ieee/apa/mla/gb_t_7714)
 
 
 class UnlockRequest(BaseModel):
@@ -349,8 +350,8 @@ async def export_review_docx(
     """
     from models import ReviewTask
 
-    # 公开文档列表（案例展示）
-    PUBLIC_TASK_IDS = {"feae8f9d", "c851aa9a", "84bba875"}
+    # 公开文档列表（案例展示）- 从环境变量读取
+    DEMO_TASK_IDS = set(os.getenv("DEMO_TASK_IDS", "").split(",")) if os.getenv("DEMO_TASK_IDS") else set()
 
     record = record_service.get_record(db_session, request.record_id)
 
@@ -359,7 +360,7 @@ async def export_review_docx(
 
     # 查找对应的 task_id 判断是否为公开文档
     review_task = db_session.query(ReviewTask).filter_by(review_record_id=record.id).first()
-    is_public_doc = review_task and review_task.id in PUBLIC_TASK_IDS
+    is_public_doc = review_task and review_task.id in DEMO_TASK_IDS
 
     # 如果不是公开文档，检查用户权限
     if not is_public_doc:
@@ -382,7 +383,8 @@ async def export_review_docx(
             topic=record.topic,
             review=record.review,
             papers=record.papers,
-            statistics=record.statistics
+            statistics=record.statistics,
+            citation_format=request.format
         )
 
         from fastapi.responses import Response
@@ -1046,8 +1048,9 @@ async def get_task_status(
     """
     from models import ReviewTask, ReviewRecord
 
-    PUBLIC_TASK_IDS = {"feae8f9d", "c851aa9a", "84bba875"}
-    is_public = task_id in PUBLIC_TASK_IDS
+    # 公开文档列表（案例展示）- 从环境变量读取
+    DEMO_TASK_IDS = set(os.getenv("DEMO_TASK_IDS", "").split(",")) if os.getenv("DEMO_TASK_IDS") else set()
+    is_public = task_id in DEMO_TASK_IDS
 
     # 首先尝试从内存中获取任务
     task = task_manager.get_task(task_id)
@@ -1105,9 +1108,78 @@ async def get_task_status(
     }
 
 
+@app.get("/api/records/{record_id}/review")
+async def get_record_review(
+    record_id: int,
+    format: str = "ieee",
+    user_id: Optional[int] = Depends(get_current_user_id),
+    db_session: Session = Depends(get_db)
+):
+    """
+    通过 record_id 获取综述结果（支持引用格式切换）
+
+    用于从个人中心等没有 task_id 的场景访问综述
+
+    参数：
+    - record_id: 综述记录ID
+    - format: 引用格式 (ieee/apa/mla/gb_t_7714，默认 ieee)
+    """
+    from models import ReviewRecord, ReviewTask
+
+    # 获取综述记录
+    review_record = db_session.query(ReviewRecord).filter_by(id=record_id).first()
+
+    if not review_record:
+        raise HTTPException(status_code=404, detail="综述记录不存在")
+
+    # 验证所有权
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录")
+
+    if review_record.user_id != user_id:
+        raise HTTPException(status_code=403, detail="该综述不属于您，无法访问")
+
+    # 查找关联的 task_id（如果有）
+    review_task = db_session.query(ReviewTask).filter_by(review_record_id=review_record.id).first()
+    task_id = review_task.id if review_task else None
+
+    # 获取论文列表
+    papers = review_record.papers if isinstance(review_record.papers, list) else []
+
+    # 获取综述内容
+    review_content = review_record.review
+
+    # 如果指定了非 IEEE 格式，重新格式化参考文献
+    if format != "ieee" and "## References" in review_content:
+        from services.citation_formatter import format_references
+
+        if papers:
+            parts = review_content.split("## References", 1)
+            content_part = parts[0]
+            new_references = format_references(papers, format)
+            review_content = content_part + "## References\n\n" + new_references
+
+    return {
+        "success": True,
+        "data": {
+            "task_id": task_id,
+            "topic": review_record.topic,
+            "review": review_content,
+            "papers": papers,
+            "cited_papers_count": len(papers),
+            "created_at": review_record.created_at.isoformat() if review_record.created_at else "",
+            "statistics": review_record.statistics if isinstance(review_record.statistics, dict) else {},
+            "record_id": review_record.id,
+            "is_public": False,
+            "is_paid": getattr(review_record, 'is_paid', False)
+        }
+    }
+
+
 @app.get("/api/tasks/{task_id}/review")
 async def get_task_review(
     task_id: str,
+    format: str = "ieee",
     user_id: Optional[int] = Depends(get_current_user_id),
     db_session: Session = Depends(get_db)
 ):
@@ -1115,12 +1187,15 @@ async def get_task_review(
     通过 task_id 获取综述结果
 
     用于分享链接：/review/{task_id}
+
+    参数：
+    - format: 引用格式 (ieee/apa/mla/gb_t_7714，默认 ieee)
     """
     from models import ReviewTask, ReviewRecord
 
-    # 公开文档列表（案例展示）
-    PUBLIC_TASK_IDS = {"feae8f9d", "c851aa9a", "84bba875"}
-    is_public = task_id in PUBLIC_TASK_IDS
+    # 公开文档列表（案例展示）— 从环境变量读取，与 /api/health 保持一致
+    _demo_ids = [s.strip() for s in os.getenv("DEMO_TASK_IDS", "c851aa9a,feae8f9d,84bba875").split(",") if s.strip()]
+    is_public = task_id in _demo_ids
 
     # 首先尝试从内存中获取任务
     task = task_manager.get_task(task_id)
@@ -1135,20 +1210,33 @@ async def get_task_review(
                 raise HTTPException(status_code=403, detail="该综述不属于您，无法访问")
 
         # 内存中有完整的任务数据
+        result_data = {
+            "task_id": task_id,
+            "topic": task.topic,
+            "review": task.result.get("review", ""),
+            "papers": task.result.get("papers", []),
+            "cited_papers_count": task.result.get("cited_papers_count", 0),
+            "created_at": task.result.get("created_at", ""),
+            "statistics": task.result.get("statistics", {}),
+            "record_id": task.result.get("id"),
+            "is_public": is_public,
+            "is_paid": getattr(task, 'is_paid', False)
+        }
+
+        # 如果指定了非 IEEE 格式，重新格式化参考文献
+        if format != "ieee" and "## References" in result_data["review"]:
+            from services.citation_formatter import format_references
+
+            papers = result_data["papers"]
+            if papers:
+                parts = result_data["review"].split("## References", 1)
+                content_part = parts[0]
+                new_references = format_references(papers, format)
+                result_data["review"] = content_part + "## References\n\n" + new_references
+
         return {
             "success": True,
-            "data": {
-                "task_id": task_id,
-                "topic": task.topic,
-                "review": task.result.get("review", ""),
-                "papers": task.result.get("papers", []),
-                "cited_papers_count": task.result.get("cited_papers_count", 0),
-                "created_at": task.result.get("created_at", ""),
-                "statistics": task.result.get("statistics", {}),
-                "record_id": task.result.get("id"),
-                "is_public": is_public,
-                "is_paid": getattr(task, 'is_paid', False)
-            }
+            "data": result_data
         }
 
     # 内存中没有，从数据库查询
@@ -1174,20 +1262,33 @@ async def get_task_review(
             raise HTTPException(status_code=403, detail="该综述不属于您，无法访问")
 
     # 返回与内存任务相同格式的数据
+    result_data = {
+        "task_id": task_id,
+        "topic": review_record.topic,
+        "review": review_record.review,
+        "papers": review_record.papers if isinstance(review_record.papers, list) else [],
+        "cited_papers_count": len(review_record.papers) if isinstance(review_record.papers, list) else 0,
+        "created_at": review_record.created_at.isoformat() if review_record.created_at else "",
+        "statistics": review_record.statistics if isinstance(review_record.statistics, dict) else {},
+        "record_id": review_record.id,
+        "is_public": is_public,
+        "is_paid": getattr(review_record, 'is_paid', False)
+    }
+
+    # 如果指定了非 IEEE 格式，重新格式化参考文献
+    if format != "ieee" and "## References" in result_data["review"]:
+        from services.citation_formatter import format_references
+
+        papers = result_data["papers"]
+        if papers:
+            parts = result_data["review"].split("## References", 1)
+            content_part = parts[0]
+            new_references = format_references(papers, format)
+            result_data["review"] = content_part + "## References\n\n" + new_references
+
     return {
         "success": True,
-        "data": {
-            "task_id": task_id,
-            "topic": review_record.topic,
-            "review": review_record.review,
-            "papers": review_record.papers if isinstance(review_record.papers, list) else [],
-            "cited_papers_count": len(review_record.papers) if isinstance(review_record.papers, list) else 0,
-            "created_at": review_record.created_at.isoformat() if review_record.created_at else "",
-            "statistics": review_record.statistics if isinstance(review_record.statistics, dict) else {},
-            "record_id": review_record.id,
-            "is_public": is_public,
-            "is_paid": getattr(review_record, 'is_paid', False)
-        }
+        "data": result_data
     }
 
 

@@ -19,7 +19,8 @@ class DocxGenerator:
         topic: str,
         review: str,
         papers: List[Dict],
-        statistics: Dict | None = None
+        statistics: Dict | None = None,
+        citation_format: str = "ieee"
     ) -> bytes:
         """
         生成文献综述的 Word 文档
@@ -29,6 +30,7 @@ class DocxGenerator:
             review: 综述内容（Markdown 格式）
             papers: 文献列表
             statistics: 统计信息
+            citation_format: 引用格式 (ieee/apa/mla/gb_t_7714)
 
         Returns:
             Word 文档的二进制内容
@@ -45,6 +47,18 @@ class DocxGenerator:
         # 添加摘要/统计信息
         if statistics:
             self._add_statistics(doc, statistics)
+
+        # 根据格式重新格式化参考文献
+        if "## References" in review and papers and citation_format != "ieee":
+            from services.citation_formatter import format_references
+
+            # 分离正文和参考文献
+            parts = review.split("## References", 1)
+            content_part = parts[0]
+
+            # 重新格式化参考文献
+            new_references = format_references(papers, citation_format)
+            review = content_part + "## References\n\n" + new_references
 
         # 解析并添加 Markdown 内容
         self._add_markdown_content(doc, review)

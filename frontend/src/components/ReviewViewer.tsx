@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { CitationMarker } from './CitationTooltip'
 import './ReviewViewer.css'
 
 interface TableOfContents {
@@ -31,6 +32,98 @@ export function ReviewViewer({ content, papers = [], hasPurchased = false, onToc
   const [activeId, setActiveId] = useState<string>('')
   useRef<HTMLElement>(null)
   const isClickScrolling = useRef(false)
+
+  // 渲染带引用标记的文本
+  const renderTextWithCitations = useCallback((text: any): any => {
+    // 处理 null/undefined
+    if (text === null || text === undefined) {
+      return text
+    }
+
+    // 如果是数组，递归处理每个元素
+    if (Array.isArray(text)) {
+      return text.map((item, i) => (
+        <Fragment key={i}>{renderTextWithCitations(item)}</Fragment>
+      ))
+    }
+
+    // 如果是对象（React 元素），递归处理其 children
+    if (typeof text === 'object' && text !== null) {
+      // 如果已经是 React 元素，直接返回（避免重复处理）
+      // 简单检查：是否有 $$typeof 和 type 属性
+      if (text.$$typeof && text.type) {
+        return text
+      }
+      return text
+    }
+
+    // 处理字符串
+    if (typeof text !== 'string') {
+      return text
+    }
+
+    // 清理：去掉引用标记前面不必要的逗号和空格（如 ", [1]" -> "[1]"）
+    let cleanedText = text.replace(/,\s*(?=\[\d+\])/g, ' ')
+
+    // 检测并排序连续的引用标记
+    // 匹配连续的 [数字] 引用，如 [5][8][4]
+    const consecutiveCitationsPattern = /(\[\d+\]\s*){2,}/g
+    cleanedText = cleanedText.replace(consecutiveCitationsPattern, (match) => {
+      // 提取所有引用数字
+      const citations = match.match(/\[(\d+)\]/g)
+      if (citations) {
+        const numbers = citations.map(c => parseInt(c.replace(/[\[\]]/g, '')))
+        // 排序
+        numbers.sort((a, b) => a - b)
+        // 重新组合
+        return numbers.map(n => `[${n}]`).join('')
+      }
+      return match
+    })
+
+    // 匹配 [数字] 或 [数字, 数字, ...] 格式的引用
+    // 使用捕获组保留分隔符
+    const parts = cleanedText.split(/(\[\d+(?:,\s*\d+)*\])/g)
+
+    return parts.map((part, index) => {
+      // 跳过空字符串
+      if (part === '' || part === ' ') {
+        return null
+      }
+
+      // 检查是否是引用标记
+      const match = part.match(/\[(\d+(?:,\s*\d+)*)\]/)
+      if (match) {
+        const indices = match[1].split(',').map((s) => parseInt(s.trim()))
+        // 如果是单个引用
+        if (indices.length === 1) {
+          const citationIndex = indices[0] - 1
+          const paper = papers[citationIndex]
+          console.log(`[ReviewViewer] Single citation [${indices[0]}]`, { citationIndex, paper, papersLength: papers.length })
+          return <CitationMarker key={`${index}-${indices[0]}`} index={indices[0]} paper={paper} />
+        }
+        // 如果是多个引用 [1,2,3]，分别渲染
+        return (
+          <span key={index}>
+            [
+            {indices.map((idx, i) => {
+              const citationIndex = idx - 1
+              const paper = papers[citationIndex]
+              console.log(`[ReviewViewer] Multi citation [${idx}]`, { citationIndex, paper, papersLength: papers.length })
+              return (
+                <span key={`${index}-${i}-${idx}`}>
+                  {i > 0 && ', '}
+                  <CitationMarker index={idx} paper={paper} />
+                </span>
+              )
+            })}
+            ]
+          </span>
+        )
+      }
+      return part
+    }).filter(Boolean)
+  }, [papers])
 
   // 生成标题 ID（与 Markdown 渲染器保持一致）
   const headingIdMap = useRef<Map<string, string>>(new Map())
@@ -151,7 +244,7 @@ export function ReviewViewer({ content, papers = [], hasPurchased = false, onToc
   }, [activeId])
 
   // 点击目录项滚动到对应标题
-  const handleTocClick = useCallback((id: string) => (e: React.MouseEvent) => {
+  const handleTocClick = useCallback((id: string) => (e: any) => {
     e.preventDefault()
     const element = document.getElementById(id) as HTMLElement
     if (!element) return
@@ -185,61 +278,6 @@ export function ReviewViewer({ content, papers = [], hasPurchased = false, onToc
     </li>
   )
 
-  // 生成第三方平台验证链接
-  const getVerificationLinks = (paper: any, _index: number) => {
-    const links = []
-
-    // 构建搜索查询
-    const searchQuery = encodeURIComponent(paper.title)
-    void (paper.year ? `&as_ylo=${paper.year - 2}&as_yhi=${paper.year + 2}` : '')
-
-    // Google Scholar
-    links.push({
-      name: 'Google Scholar',
-      url: `https://scholar.google.com/scholar?q=${searchQuery}`,
-      icon: '🔬',
-      color: '#4285f4'
-    })
-
-    // 百度学术
-    links.push({
-      name: '百度学术',
-      url: `https://xueshu.baidu.com/s?wd=${searchQuery}`,
-      icon: '🎓',
-      color: '#2932e1'
-    })
-
-    // 学术搜索验证
-    if (paper.url) {
-      links.push({
-        name: '查看原文',
-        url: paper.url,
-        icon: '📄',
-        color: '#1a73e8'
-      })
-    }
-    if (paper.doi) {
-      links.push({
-        name: 'DOI',
-        url: `https://doi.org/${paper.doi}`,
-        icon: '🔗',
-        color: '#7f8c8d'
-      })
-    }
-
-    // DOI
-    if (paper.doi) {
-      links.push({
-        name: 'DOI',
-        url: `https://doi.org/${paper.doi}`,
-        icon: '🔗',
-        color: '#7f8c8d'
-      })
-    }
-
-    return links
-  }
-
   // 自定义 Markdown 渲染器，添加 id 到标题（与目录 ID 保持一致）
   const components = useMemo(() => ({
     h1: ({ children, ...props }: any) => {
@@ -261,8 +299,74 @@ export function ReviewViewer({ content, papers = [], hasPurchased = false, onToc
       const text = extractText(children)
       const id = headingIdMap.current.get(text) || makeId(text)
       return <h4 id={id} {...props}>{children}</h4>
+    },
+    // 自定义段落渲染，处理引用标记
+    p: ({ children, ...props }: any) => {
+      return (
+        <p {...props}>
+          {Array.isArray(children)
+            ? children.map((child, i) => <Fragment key={i}>{renderTextWithCitations(child)}</Fragment>)
+            : renderTextWithCitations(children)
+          }
+        </p>
+      )
+    },
+    // 列表项也处理引用标记
+    li: ({ children, ...props }: any) => {
+      return (
+        <li {...props}>
+          {Array.isArray(children)
+            ? children.map((child, i) => <Fragment key={i}>{renderTextWithCitations(child)}</Fragment>)
+            : renderTextWithCitations(children)
+          }
+        </li>
+      )
+    },
+    // 表格单元格也处理引用标记
+    td: ({ children, ...props }: any) => {
+      return (
+        <td {...props}>
+          {Array.isArray(children)
+            ? children.map((child, i) => <Fragment key={i}>{renderTextWithCitations(child)}</Fragment>)
+            : renderTextWithCitations(children)
+          }
+        </td>
+      )
+    },
+    // 表格标题单元格也处理引用标记
+    th: ({ children, ...props }: any) => {
+      return (
+        <th {...props}>
+          {Array.isArray(children)
+            ? children.map((child, i) => <Fragment key={i}>{renderTextWithCitations(child)}</Fragment>)
+            : renderTextWithCitations(children)
+          }
+        </th>
+      )
+    },
+    // 粗体文本也处理引用标记
+    strong: ({ children, ...props }: any) => {
+      return (
+        <strong {...props}>
+          {Array.isArray(children)
+            ? children.map((child, i) => <Fragment key={i}>{renderTextWithCitations(child)}</Fragment>)
+            : renderTextWithCitations(children)
+          }
+        </strong>
+      )
+    },
+    // 斜体文本也处理引用标记
+    em: ({ children, ...props }: any) => {
+      return (
+        <em {...props}>
+          {Array.isArray(children)
+            ? children.map((child, i) => <Fragment key={i}>{renderTextWithCitations(child)}</Fragment>)
+            : renderTextWithCitations(children)
+          }
+        </em>
+      )
     }
-  }), [])
+  }), [headingIdMap, makeId, renderTextWithCitations])
 
   return (
     <div className={`review-viewer ${!hasPurchased ? 'review-protected' : ''}`}>
@@ -292,62 +396,6 @@ export function ReviewViewer({ content, papers = [], hasPurchased = false, onToc
               {processedContent}
             </ReactMarkdown>
           </div>
-
-          {/* 参考文献 */}
-          {papers.length > 0 && (
-            <div className="review-references">
-              <h2>参考文献</h2>
-              <ol className="references-list">
-                {papers.map((paper, index) => {
-                  const verificationLinks = getVerificationLinks(paper, index)
-                  return (
-                    <li key={paper.id} className="reference-item">
-                      <div className="reference-header">
-                        <span className="ref-number">{index + 1}.</span>
-                        <div className="ref-verification">
-                          {verificationLinks.map((link) => (
-                            <a
-                              key={link.name}
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="verification-link"
-                              title={`在 ${link.name} 中验证`}
-                              style={{ '--link-color': link.color } as any}
-                            >
-                              <span className="link-icon">{link.icon}</span>
-                              <span className="link-name">{link.name}</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="ref-content">
-                        <a
-                          href={verificationLinks[0]?.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ref-title-link"
-                          title="点击在第三方平台查看"
-                        >
-                          {paper.title}
-                        </a>
-                        <div className="ref-meta">
-                          <span className="ref-authors">{paper.authors.join(', ')}</span>
-                          <span className="ref-year"> ({paper.year})</span>
-                        </div>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ol>
-              <div className="references-notice">
-                <span className="notice-icon">💡</span>
-                <span className="notice-text">
-                  点击文献标题或右侧平台图标，可在第三方平台验证文献真实性
-                </span>
-              </div>
-            </div>
-          )}
         </main>
       </div>
     </div>
