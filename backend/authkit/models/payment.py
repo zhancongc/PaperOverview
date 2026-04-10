@@ -1,14 +1,56 @@
 """
 支付相关数据模型
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 # 使用独立的 Base，由 main.py 通过 engine 创建表
 PaymentBase = declarative_base()
+
+
+class Plan(PaymentBase):
+    """套餐价格模型"""
+    __tablename__ = "plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String(32), unique=True, nullable=False, comment="套餐类型: single/semester/yearly/unlock")
+    name = Column(String(50), nullable=False, comment="套餐名称")
+    price = Column(Float, nullable=False, comment="价格（元）")
+    credits = Column(Integer, nullable=False, comment="包含的综述额度数量")
+    recommended = Column(Boolean, default=False, comment="是否推荐")
+    features = Column(Text, nullable=True, comment="套餐特性（JSON格式）")
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    sort_order = Column(Integer, default=0, comment="显示顺序")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.type,
+            "name": self.name,
+            "price": self.price,
+            "credits": self.credits,
+            "recommended": self.recommended,
+            "features": self.parse_features() if self.features else [],
+            "is_active": self.is_active,
+            "sort_order": self.sort_order,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    def parse_features(self):
+        """解析 JSON 格式的特性列表"""
+        if not self.features:
+            return []
+        import json
+        try:
+            return json.loads(self.features)
+        except:
+            return []
 
 
 class Subscription(PaymentBase):
@@ -82,13 +124,15 @@ class MembershipInfo(BaseModel):
 
 # ==================== 套餐定义 ====================
 
-PLANS = [
+# 默认套餐配置（用于初始化数据库）
+DEFAULT_PLANS = [
     {
         "type": "single",
         "name": "体验包",
         "price": 29.8,
         "credits": 1,
         "recommended": False,
+        "sort_order": 1,
         "features": [
             "1 篇综述生成额度",
             "在线查看 + PDF 导出",
@@ -100,6 +144,7 @@ PLANS = [
         "price": 69.8,
         "credits": 3,
         "recommended": True,
+        "sort_order": 2,
         "features": [
             "3 篇综述生成额度",
             "在线查看 + PDF 导出",
@@ -112,6 +157,7 @@ PLANS = [
         "price": 109.8,
         "credits": 6,
         "recommended": False,
+        "sort_order": 3,
         "features": [
             "6 篇综述生成额度",
             "在线查看 + PDF 导出",
@@ -120,5 +166,51 @@ PLANS = [
     },
 ]
 
+# 保持向后兼容的常量（从数据库读取）
+PLANS = DEFAULT_PLANS
 PLAN_CREDITS = {p["type"]: p["credits"] for p in PLANS}
 PLAN_DURATION = {p["type"]: 365 for p in PLANS}  # 额度不过期，保持兼容
+
+
+def get_plans_from_db(session):
+    """
+    从数据库获取启用的套餐列表
+
+    Args:
+        session: 数据库会话
+
+    Returns:
+        套餐列表
+    """
+    plans = session.query(Plan).filter_by(is_active=True).order_by(Plan.sort_order).all()
+    if plans:
+        return [plan.to_dict() for plan in plans]
+    # 如果数据库中没有套餐，返回默认配置
+    return DEFAULT_PLANS
+
+
+def init_plans_in_db(session):
+    """
+    初始化套餐数据到数据库
+
+    Args:
+        session: 数据库会话
+    """
+    existing_plans = session.query(Plan).count()
+    if existing_plans > 0:
+        return  # 已经初始化过
+
+    import json
+    for plan_data in DEFAULT_PLANS:
+        plan = Plan(
+            type=plan_data["type"],
+            name=plan_data["name"],
+            price=plan_data["price"],
+            credits=plan_data["credits"],
+            recommended=plan_data["recommended"],
+            features=json.dumps(plan_data["features"]),  # 存储 JSON
+            sort_order=plan_data.get("sort_order", 0)
+        )
+        session.add(plan)
+    session.commit()
+    print("[Init] 已初始化套餐数据到数据库")

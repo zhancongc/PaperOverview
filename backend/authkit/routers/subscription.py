@@ -11,7 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from ..models.payment import (
-    Subscription, PaymentLog, PLANS, PLAN_DURATION, PLAN_CREDITS,
+    Subscription, PaymentLog, Plan, get_plans_from_db, PLAN_DURATION, PLAN_CREDITS,
     SubscriptionCreate, PaymentCreateResponse, MembershipInfo,
 )
 from ..models.schemas import UserResponse
@@ -75,9 +75,10 @@ def _add_credits(user_id: int, plan_type: str, db: Session):
 
 
 @router.get("/plans")
-def get_plans():
+def get_plans(db: Session = Depends(get_db)):
     """获取套餐列表"""
-    return {"plans": PLANS}
+    plans = get_plans_from_db(db)
+    return {"plans": plans}
 
 
 @router.post("/create", response_model=PaymentCreateResponse)
@@ -89,8 +90,9 @@ def create_subscription(
     """创建订阅订单并生成支付链接"""
     user_id = current_user.id
 
-    # 查找套餐
-    plan = next((p for p in PLANS if p["type"] == data.plan_type), None)
+    # 从数据库获取套餐列表
+    plans = get_plans_from_db(db)
+    plan = next((p for p in plans if p["type"] == data.plan_type), None)
     if not plan:
         raise HTTPException(status_code=400, detail="套餐不存在")
 

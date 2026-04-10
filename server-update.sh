@@ -114,25 +114,33 @@ fi
 echo ""
 
 # 6. 检查并执行数据库迁移
-echo -e "${YELLOW}[6/10] 检查数据库状态...${NC}"
+echo -e "${YELLOW}[6/10] 检查并执行数据库迁移...${NC}"
 echo ""
 
-# 获取当前数据库表状态（简单检查）
-if command -v psql &> /dev/null; then
-    # 检查是否有新的迁移脚本
-    MIGRATION_SCRIPTS=$(find "$PROJECT_DIR/backend" -name "migrate_*.py" -type f | sort)
-    if [ -n "$MIGRATION_SCRIPTS" ]; then
-        echo -e "${BLUE}发现迁移脚本：${NC}"
-        echo "$MIGRATION_SCRIPTS" | while read script; do
-            echo "  - $(basename "$script")"
-        done
+# 检查是否有迁移脚本
+MIGRATION_SCRIPTS=$(find "$PROJECT_DIR/backend" -name "migrate_*.py" -type f | sort)
+if [ -n "$MIGRATION_SCRIPTS" ]; then
+    echo -e "${BLUE}发现迁移脚本，开始执行...${NC}"
+    echo ""
+
+    # 执行每个迁移脚本
+    echo "$MIGRATION_SCRIPTS" | while read script; do
+        script_name=$(basename "$script")
+        echo -e "${YELLOW}执行: $script_name${NC}"
+
+        # 使用项目的 Python 环境执行脚本
+        if "$PROJECT_DIR/backend/.venv/bin/python" "$script"; then
+            echo -e "${GREEN}✓ $script_name 执行成功${NC}"
+        else
+            echo -e "${RED}✗ $script_name 执行失败${NC}"
+            exit 1
+        fi
         echo ""
-        echo -e "${YELLOW}注意：请手动运行需要的迁移脚本${NC}"
-    else
-        echo -e "${GREEN}✓ 未发现待执行的迁移脚本${NC}"
-    fi
+    done
+
+    echo -e "${GREEN}✓ 所有迁移脚本执行完成${NC}"
 else
-    echo -e "${YELLOW}警告：psql 不可用，跳过数据库检查${NC}"
+    echo -e "${GREEN}✓ 未发现待执行的迁移脚本${NC}"
 fi
 echo ""
 

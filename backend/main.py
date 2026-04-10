@@ -141,6 +141,12 @@ async def lifespan(app: FastAPI):
     payment_cb_router.set_get_db(authkit_get_db)
     logger.debug("[Startup] 支付模块已初始化")
 
+    # 初始化套餐数据到数据库
+    from authkit.models.payment import init_plans_in_db
+    with next(authkit_get_db()) as session:
+        init_plans_in_db(session)
+    logger.debug("[Startup] 套餐数据已初始化")
+
     # 从 Redis 恢复重启前的活跃任务
     task_manager.restore_from_redis()
 
@@ -445,7 +451,7 @@ async def unlock_record_for_export(
 
     # 创建解锁订单
     from authkit.database import SessionLocal as AuthSessionLocal
-    from authkit.models.payment import Subscription, PaymentLog, PLANS
+    from authkit.models.payment import Subscription, PaymentLog
     import uuid
 
     if not AuthSessionLocal:
