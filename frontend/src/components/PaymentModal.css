@@ -204,10 +204,19 @@
   font-weight: 500;
   cursor: pointer;
   transition: 0.2s ease;
+  text-decoration: none;
 }
 
 .payment-modal-btn:hover {
   background: var(--academic-red-dark);
+}
+
+.payment-modal-btn.primary {
+  display: block;
+  width: 100%;
+  padding: 14px 32px;
+  font-size: 16px;
+  margin-bottom: 16px;
 }
 
 .payment-cancel-btn {
@@ -252,31 +261,22 @@
 }
 
 /* 生产环境支付 */
-.payment-modal-qrcode {
+.payment-modal-payurl {
   text-align: center;
   padding: 20px 0;
 }
 
-.payment-scan-hint {
+.payment-pay-hint {
   font-size: 15px;
   color: var(--charcoal);
   font-weight: 500;
-  margin: 0 0 8px;
+  margin: 0 0 16px;
 }
 
 .payment-order-info {
   font-size: 12px;
   color: var(--text-gray);
-  margin: 0 0 20px;
-}
-
-.payment-qrcode-container {
-  display: inline-block;
-  background: white;
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid var(--light-gray);
-  margin: 16px 0;
+  margin: 0 0 16px;
 }
 
 .payment-or-hint {

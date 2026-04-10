@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import QRCode from 'qrcode'
 import { api } from '../api'
 import './PaymentModal.css'
 
@@ -33,7 +32,6 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'creating' | 'waiting' | 'paid' | 'failed'>('idle')
   const [amount, setAmount] = useState(0)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null)
   const [plans, setPlans] = useState<any[]>([])
 
   // 获取套餐数据
@@ -58,13 +56,6 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
   }, [onClose])
-
-  // 生成二维码
-  useEffect(() => {
-    if (payUrl && qrCanvasRef.current) {
-      QRCode.toCanvas(qrCanvasRef.current, payUrl, { width: 180, margin: 2 })
-    }
-  }, [payUrl])
 
   // 轮询支付状态
   useEffect(() => {
@@ -209,12 +200,17 @@ export function PaymentModal({ onClose, onPaymentSuccess, planType, recordId }: 
                   </div>
                 </div>
               ) : (
-                <div className="payment-modal-qrcode">
-                  <p className="payment-scan-hint">请使用支付宝扫码完成支付</p>
-                  <div className="payment-qrcode-container">
-                    <canvas ref={qrCanvasRef} />
-                  </div>
+                <div className="payment-modal-payurl">
+                  <p className="payment-pay-hint">请点击下方按钮跳转到支付宝完成支付</p>
                   <p className="payment-order-info">订单号：{orderNo} · 金额：¥{amount}</p>
+                  <a
+                    href={payUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="payment-modal-btn primary"
+                  >
+                    立即支付
+                  </a>
                   <div className="payment-modal-polling">
                     <div className="payment-spinner small"></div>
                     <p>支付完成后将自动确认...</p>
