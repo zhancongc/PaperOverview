@@ -45,9 +45,6 @@ backend/fix_*.py
 backend/test_*.py
 backend/init_*.py
 
-# Migration Scripts
-backend/migrate_*.py
-
 # Backup Files
 backend/*_new.py
 backend/*_old.py
