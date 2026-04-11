@@ -32,8 +32,8 @@ import authkit.routers.auth
 authkit.routers.auth.set_get_db(auth_get_db)
 
 from authkit.routers import router as auth_router
-from authkit.routers import stats_router
-from authkit.routers import admin_stats_router
+import authkit.routers.stats as stats_router_module
+import authkit.routers.admin_stats as admin_stats_router_module
 from authkit.middleware import StatsMiddleware
 
 # 支付模块
@@ -173,8 +173,8 @@ async def lifespan(app: FastAPI):
         # 设置共享 Redis 客户端（供中间件和路由使用）
         from authkit.middleware import StatsMiddleware
         StatsMiddleware._shared_redis_client = redis_client
-        stats_router.set_redis_client(redis_client)
-        admin_stats_router.set_redis_client(redis_client)
+        stats_router_module.set_redis_client(redis_client)
+        admin_stats_router_module.set_redis_client(redis_client)
 
         # 启动统计批量写入任务
         from authkit.middleware.stats_middleware import StatsBatchWriter
@@ -214,12 +214,12 @@ app.add_middleware(StatsMiddleware, get_db_func=auth_get_db)
 app.include_router(auth_router)
 
 # 集成统计路由
-stats_router.set_get_db(auth_get_db)
-app.include_router(stats_router)
+stats_router_module.set_get_db(auth_get_db)
+app.include_router(stats_router_module.router)
 
 # 集成管理员统计路由
-admin_stats_router.set_get_db(auth_get_db)
-app.include_router(admin_stats_router)
+admin_stats_router_module.set_get_db(auth_get_db)
+app.include_router(admin_stats_router_module.router)
 
 # 集成支付路由
 app.include_router(sub_router.router)
