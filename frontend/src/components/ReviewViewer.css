@@ -1,7 +1,6 @@
 .review-viewer {
   min-height: calc(100vh - 64px);
   background: #f5f5f5;
-  overflow-x: hidden;
   width: 100%;
   box-sizing: border-box;
 }
@@ -83,6 +82,7 @@
   padding: 80px 2rem 2rem;
   gap: 2rem;
   align-items: flex-start;
+  overflow: visible;
 }
 
 /* 侧边栏目录 */
