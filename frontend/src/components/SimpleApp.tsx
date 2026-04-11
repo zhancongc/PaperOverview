@@ -612,7 +612,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
           <h2 className="section-title">案例展示</h2>
           <p className="section-subtitle">看看 AI 生成的综述效果</p>
           <div className="cases-grid">
-            <div className="case-card" onClick={() => navigate('/review?task_id=c851aa9a')} role="button" tabIndex={0}>
+            <div className="case-card" onClick={() => navigate('/review?task_id=81fac90d')} role="button" tabIndex={0}>
               <div className="case-icon">🧮</div>
               <h3 className="case-title">Computer Algebra System 的算法实现及应用</h3>
               <p className="case-desc">涵盖了计算机代数系统中的多项式运算、符号计算、Groebner 基等核心算法，以及在密码学和机器人学中的应用。</p>
@@ -622,7 +622,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               </div>
               <div className="case-action">查看详情 &rarr;</div>
             </div>
-            <div className="case-card" onClick={() => navigate('/review?task_id=feae8f9d')} role="button" tabIndex={0}>
+            <div className="case-card" onClick={() => navigate('/review?task_id=59c01cc4')} role="button" tabIndex={0}>
               <div className="case-icon">🔬</div>
               <h3 className="case-title">光催化杀菌技术的机理、影响因素及应用前景研究</h3>
               <p className="case-desc">系统综述了 TiO₂ 等光催化材料的杀菌机理、影响催化效率的关键因素，以及在医疗卫生、食品保鲜等领域的前沿应用。</p>
@@ -632,7 +632,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               </div>
               <div className="case-action">查看详情 &rarr;</div>
             </div>
-            <div className="case-card" onClick={() => navigate('/review?task_id=84bba875')} role="button" tabIndex={0}>
+            <div className="case-card" onClick={() => navigate('/review?task_id=2a90e24d')} role="button" tabIndex={0}>
               <div className="case-icon">🧠</div>
               <h3 className="case-title">脑机接口在卒中运动康复中的研究进展与临床转化</h3>
               <p className="case-desc">全面梳理了脑机接口技术在卒中患者运动功能康复中的最新研究进展，包括信号解码算法、神经可塑性机制及临床转化挑战。</p>
