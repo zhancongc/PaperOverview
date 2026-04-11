@@ -806,6 +806,11 @@ Table content must include:
         if language == "en":
             return f"""Please write a literature review on "{topic}".
 
+**【Important】Language Requirements**:
+- Write the entire review in English, including the title, all headings, and content
+- Translate any non-English topic into English for the title
+- Use academic English expressions
+
 **【Important】Paper Selection Principles (Must Read)**:
 When browsing the following paper list and writing the review, please strictly follow:
 1. **Topic relevance (veto power)**: Only cite papers truly relevant to "{topic}", firmly do not cite irrelevant papers
