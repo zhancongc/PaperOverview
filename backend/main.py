@@ -590,7 +590,7 @@ async def unlock_record_with_credit(
 async def health_check():
     """健康检查接口"""
     api_key = os.getenv("DEEPSEEK_API_KEY")
-    demo_task_ids = [s.strip() for s in os.getenv("DEMO_TASK_IDS", "c851aa9a,feae8f9d,84bba875").split(",") if s.strip()]
+    demo_task_ids = [s.strip() for s in os.getenv("DEMO_TASK_IDS", "").split(",") if s.strip()]
     return {
         "status": "ok",
         "deepseek_configured": bool(api_key),
@@ -1200,7 +1200,7 @@ async def get_task_review(
     from models import ReviewTask, ReviewRecord
 
     # 公开文档列表（案例展示）— 从环境变量读取，与 /api/health 保持一致
-    _demo_ids = [s.strip() for s in os.getenv("DEMO_TASK_IDS", "c851aa9a,feae8f9d,84bba875").split(",") if s.strip()]
+    _demo_ids = [s.strip() for s in os.getenv("DEMO_TASK_IDS", "").split(",") if s.strip()]
     is_public = task_id in _demo_ids
 
     # 首先尝试从内存中获取任务
