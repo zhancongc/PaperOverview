@@ -75,8 +75,8 @@ export function ReviewViewer({ content, papers = [], hasPurchased = false, onToc
         const numbers = citations.map(c => parseInt(c.replace(/[\[\]]/g, '')))
         // 排序
         numbers.sort((a, b) => a - b)
-        // 重新组合
-        return numbers.map(n => `[${n}]`).join('')
+        // 重新组合为 [1, 2, 3] 格式
+        return `[${numbers.join(', ')}]`
       }
       return match
     })
