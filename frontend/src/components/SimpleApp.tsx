@@ -257,6 +257,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
   const handlePaymentSuccess = async (_addedCredits: number = 0) => {
     setShowPaymentModal(false)
     setUserInfo(getLocalUserInfo())
+    setError('') // 清除之前的错误状态
 
     // 刷新额度
     try {
