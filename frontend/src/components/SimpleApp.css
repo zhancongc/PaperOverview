@@ -369,15 +369,6 @@
 
 /* Hero 区域 - 左右分栏 */
 
-.home-hero-wrapper {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 4rem;
-  align-items: center;
-  margin-bottom: 5rem;
-  scroll-margin-top: 125px; /* 补偿固定导航栏高度，避免内容被遮挡 */
-}
-
 .home-hero {
   text-align: left;
   margin-bottom: 0;
@@ -429,6 +420,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  order: 2;
 }
 
 .visual-card {
@@ -485,6 +477,15 @@
 
 /* ==================== 输入区域 ==================== */
 
+.home-hero-wrapper {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 4rem;
+  align-items: center;
+  margin-bottom: 5rem;
+  scroll-margin-top: 125px; /* 补偿固定导航栏高度，避免内容被遮挡 */
+}
+
 .home-input-section {
   background: white;
   border-radius: 24px;
@@ -494,6 +495,8 @@
   margin-bottom: 2rem;
   position: relative;
   overflow: visible;
+  grid-column: 1 / -1;
+  order: 3;
 }
 
 /* ==================== 社会证明条 ==================== */
@@ -1576,18 +1579,25 @@
   .home-hero-wrapper {
     grid-template-columns: 1fr;
     gap: 3rem;
+    display: flex;
+    flex-direction: column;
   }
 
   .home-hero {
     text-align: center;
+    order: 1;
   }
 
   .home-subtitle {
     margin: 0 auto;
   }
 
+  .home-input-section {
+    order: 2;
+  }
+
   .hero-visual {
-    order: -1;
+    order: 3;
   }
 
   .home-features {

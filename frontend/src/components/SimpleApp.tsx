@@ -415,9 +415,8 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="home-input-section">
+          <div className="home-input-section">
           {isLoggedIn && <span className={`credits-badge ${prevCredits !== credits ? 'credits-updated' : ''}`}>
             剩余 <span className="credits-number">{credits}</span> 次
           </span>}
@@ -491,6 +490,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               </div>
             </div>
           )}
+        </div>
         </div>
 
         <div className="social-proof-bar">
