@@ -60,3 +60,6 @@ docs/paper_*.md
 *.bak
 *.backup
 config.py.bak
+
+# Archive Branch README (only used in archive branches)
+ARCHIVE_README.md
