@@ -240,6 +240,12 @@ class GenerateRequest(BaseModel):
         description="研究方向ID（可选）。可选值：computer（计算机科学）、materials（材料科学）、management（管理学）。如果不指定，系统将自动推断。",
     )
 
+    # 可选参数：生成语言
+    language: str = Field(
+        "zh",
+        description="综述生成语言（可选）。可选值：zh（中文）、en（英文）。默认为中文。",
+    )
+
     # 基本配置（有默认值）
     target_count: int = Field(50, description="目标文献数量", ge=10, le=100)
     recent_years_ratio: float = Field(0.5, description="近5年占比", ge=0.1, le=1.0)
@@ -1148,6 +1154,7 @@ async def submit_review_task(
             params={
                 "research_direction_id": request.research_direction_id,
                 "research_direction": research_direction,  # 实际的方向名称
+                "language": request.language,  # 生成语言
                 "target_count": request.target_count,
                 "recent_years_ratio": request.recent_years_ratio,
                 "english_ratio": request.english_ratio,

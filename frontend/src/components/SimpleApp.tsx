@@ -14,6 +14,7 @@ interface TaskProgress {
 export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
   const navigate = useNavigate()
   const [topic, setTopic] = useState('')
+  const [language, setLanguage] = useState<'zh' | 'en'>('zh')
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState<TaskProgress | null>(null)
   const [error, setError] = useState('')
@@ -157,6 +158,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
     try {
       const submitResponse = await api.submitReviewTask(topic, {
+        language,
         targetCount: 50,
         recentYearsRatio: 0.5,
         englishRatio: 0.3,
@@ -424,6 +426,29 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               <h2 className="input-section-title">一键生成论文综述</h2>
             </div>
             <p className="input-section-subtitle">输入研究主题，AI 为您生成专业文献综述</p>
+          </div>
+
+          <div className="language-toggle-wrapper">
+            <span className="language-label">生成语言：</span>
+            <div className="language-toggle">
+              <button
+                className={`language-option ${language === 'zh' ? 'active' : ''}`}
+                onClick={() => setLanguage('zh')}
+                disabled={isGenerating}
+              >
+                中文
+              </button>
+              <button
+                className={`language-option ${language === 'en' ? 'active' : ''}`}
+                onClick={() => setLanguage('en')}
+                disabled={isGenerating}
+              >
+                English
+              </button>
+            </div>
+            <span className="language-hint">
+              {language === 'zh' ? '适用于中文期刊投稿' : '适用于英文期刊投稿'}
+            </span>
           </div>
 
           <input

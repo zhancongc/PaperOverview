@@ -75,6 +75,7 @@ export const api = {
     topic: string,
     options: {
       researchDirectionId?: string;
+      language?: string;
       targetCount?: number;
       recentYearsRatio?: number;
       englishRatio?: number;
@@ -88,6 +89,7 @@ export const api = {
     const response = await axios.post(`${API_BASE}/smart-generate`, {
       topic,
       research_direction_id: options.researchDirectionId ?? '',
+      language: options.language ?? 'zh',
       target_count: options.targetCount ?? 50,
       recent_years_ratio: options.recentYearsRatio ?? 0.5,
       english_ratio: options.englishRatio ?? 0.3,

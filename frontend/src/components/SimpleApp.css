@@ -701,6 +701,89 @@
   color: var(--text-gray);
 }
 
+/* ==================== 语言切换器 ==================== */
+
+.language-toggle-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.language-label {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--charcoal);
+}
+
+.language-toggle {
+  display: flex;
+  background: var(--cream-white);
+  border-radius: 10px;
+  padding: 4px;
+  border: 2px solid var(--border-gray);
+  gap: 2px;
+}
+
+.language-option {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-gray);
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.language-option:hover:not(:disabled) {
+  color: var(--charcoal);
+  background: rgba(214, 48, 49, 0.08);
+}
+
+.language-option.active {
+  background: var(--academic-red);
+  color: white;
+  box-shadow: 0 2px 8px rgba(214, 48, 49, 0.25);
+}
+
+.language-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.language-hint {
+  font-family: 'Source Sans Pro', sans-serif;
+  font-size: 0.8rem;
+  color: var(--text-gray);
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .language-toggle-wrapper {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .language-label {
+    align-self: flex-start;
+  }
+
+  .language-hint {
+    align-self: flex-end;
+  }
+
+  .language-option {
+    padding: 0.45rem 1rem;
+    font-size: 0.85rem;
+  }
+}
+
 .home-input {
   width: 100%;
   padding: 1.25rem 1.5rem;

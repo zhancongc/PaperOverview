@@ -155,7 +155,8 @@ class ReviewTaskExecutor:
                 topic=topic,
                 papers=all_papers,
                 model=params.get('review_model', 'deepseek-reasoner'),
-                search_params=search_params
+                search_params=search_params,
+                language=params.get('language', 'zh')
             )
 
             review = result["review"]

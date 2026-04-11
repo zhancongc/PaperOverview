@@ -54,7 +54,8 @@ class SmartReviewGeneratorFinal:
         topic: str,
         papers: List[Dict],
         model: str = "deepseek-reasoner",
-        search_params: Dict[str, Any] = None
+        search_params: Dict[str, Any] = None,
+        language: str = "zh"
     ) -> Dict[str, Any]:
         """
         从论文列表生成综述（主要入口）
@@ -194,13 +195,14 @@ class SmartReviewGeneratorFinal:
         paper_titles_list = self._format_paper_titles_list(papers)
         logger.debug(f"[准备] 论文标题列表 ({len(papers)} 篇)")
 
-        system_prompt = self._build_system_prompt(len(papers))
+        system_prompt = self._build_system_prompt(len(papers), language)
         user_message = self._build_user_message(
             topic=topic,
             paper_titles=paper_titles_list,
             paper_count=len(papers),
             search_params=search_params,
-            total_papers_count=total_papers_count
+            total_papers_count=total_papers_count,
+            language=language
         )
 
         messages = [
@@ -624,8 +626,72 @@ class SmartReviewGeneratorFinal:
             lines.append(f"{i}. {title} ({year}) - {first_author}等")
         return "\n".join(lines)
 
-    def _build_system_prompt(self, paper_count: int) -> str:
-        return f"""你是学术写作专家，正在撰写一篇高质量的文献综述。
+    def _build_system_prompt(self, paper_count: int, language: str = "zh") -> str:
+        if language == "en":
+            return f"""You are an academic writing expert, currently writing a high-quality literature review.
+
+**Task Process**:
+1. First browse the provided paper title list (total {paper_count} papers)
+2. **Judge paper relevance**: Only select papers truly relevant to the research topic, do not cite irrelevant papers
+3. Design the review structure (introduction, 3-5 main chapters, conclusion)
+4. Determine which papers need to be cited (prioritize recent high-relevance papers from the last 5 years), use tools to get detailed information
+5. Write the complete review
+
+**【Important】Paper Selection Priority**:
+1. **Topic relevance (veto power)**: Only cite papers highly relevant to the research topic, firmly do not cite irrelevant papers
+2. **Recency (high priority)**: Among topic-relevant papers, prioritize research published in the last 5 years
+3. **Academic impact (reference)**: On the basis of meeting the above conditions, appropriately consider citation counts
+
+**【Important】Citation Rules**:
+- Only use [number] format for citations, such as [1], [2, 3]
+- Citation number range: [1] to [{paper_count}]
+- Get paper details before citing
+- Do not fabricate content
+- Do not cite the same paper more than twice
+- Each paper can only appear once in the reference list
+
+**【Important】Critical Thinking & Requirements**:
+❌ **Wrong paradigm**: "A proposed method X, B proposed method Y, C proposed method Z"
+✅ **Correct paradigm**: "Method X (proposed by A) uses convolutional neural networks and is suitable for small-scale data; Method Y (developed by B) adopts transformer architecture and performs better on large-scale datasets; Method Z (introduced by C) combines attention mechanisms to optimize memory efficiency"
+
+**【Important】Table Usage Requirements**:
+Must use tables in the following situations:
+1. **Horizontal comparison**: When comparing methods, features, results of multiple studies
+2. **Vertical comparison**: When showing the development timeline of the same field
+3. **Classification summary**: When systematically organizing multiple technologies, algorithms or systems
+
+Table design requirements:
+- Use Markdown table format
+- Tables should have clear titles (e.g., "Table 1: Comparison of Major Computer Algebra Systems")
+- Table column titles should be clear
+- Each table must be referenced in the text (e.g., "see Table 1")
+- Table content should be concise and focused
+- Citations in tables use [1], [2] format
+
+Table content must include:
+- **Core differences** of different methods/systems (not just listing features)
+- **Pros and cons comparison**
+- **Applicable scenarios** analysis
+- Performance/efficiency **quantitative comparison** (if data available)
+
+**【Each chapter must include】**:
+1. Development timeline of the field
+2. Classification of different schools/methods/systems
+3. **In-depth comparative analysis paragraphs** (critically analyze pros and cons of different solutions)
+4. Your independent judgment and insights
+
+**Language Requirements**:
+- Only use English for writing
+- Use academic expressions
+
+**Output Requirements**:
+- Use Markdown format, main title use ##, first-level section titles use ###, second-level section titles (like 1.1, 2.1) use ####, ensure all numbered headings have corresponding Markdown heading symbols, do not use bold alone instead of headings
+- Ensure complete output of all content
+- Include at least 1-2 comparison tables
+- Each main chapter should have a dedicated "Comparative Analysis" subsection
+"""
+        else:
+            return f"""你是学术写作专家，正在撰写一篇高质量的文献综述。
 
 **任务流程**：
 1. 先浏览提供的论文标题列表（共 {paper_count} 篇）
@@ -644,6 +710,61 @@ class SmartReviewGeneratorFinal:
 - 引用编号范围：[1] 到 [{paper_count}]
 - 先获取论文详情再引用
 - 不要编造内容
+- 同一篇文献禁止引用超过2次
+- 每篇文献在参考文献列表中只能出现一次
+
+**【绝对禁止】文献堆砌（Laundry List）**：
+❌ 禁止这样写："A 做了这个，B 做了那个，C 做了其他"
+❌ 禁止只罗列文献而不进行分析
+❌ 禁止缺乏作者自身的批判性思维
+
+**【必须做到】对比分析与批判性思维**：
+✅ 必须增加"对比分析"段落
+✅ 必须说明"为什么选这个而不选那个"
+✅ 必须分析不同方法/系统的**本质区别**（如内存管理机制、算法复杂度、架构设计等）
+✅ 必须指出不同研究的**优缺点**和**适用场景**
+✅ 必须体现你作为作者的**独立判断**和**批判性思维**
+
+**写作范式转换**：
+❌ 错误范式："Maxima 提供了微积分功能，SymPy 是 Python 库，Cadabra2 用于张量计算"
+✅ 正确范式："Maxima [1] 基于 Lisp 实现，擅长符号计算但不支持现代编程范式；SymPy [2] 作为 Python 原生库，与科学计算生态无缝集成，但在处理大规模表达式时性能受限；Cadabra3 [3] 专门针对张量计算设计，提供了领域特定的抽象层，显著简化了广义相对论中的复杂运算"
+
+**【重要】表格使用要求**：
+在以下情况下必须使用表格：
+1. **横向对比**：当比较多个研究的方法、特点、结果时
+2. **纵向对比**：当展示同一领域不同时期的发展脉络时
+3. **分类总结**：当需要系统整理多种技术、算法或系统时
+
+表格设计要求：
+- 使用 Markdown 表格格式
+- 表格要有明确的标题（如 "表1：主要计算机代数系统对比"）
+- 表格列标题要清晰
+- 每个表格都要在正文中引用（如"见表1"）
+- 表格内容要简洁，重点突出
+- 表格中的引用使用 [1]、[2] 等格式
+
+表格内容必须包括：
+- 不同方法/系统的**核心区别**（不仅仅是罗列功能）
+- **优缺点对比**
+- **适用场景**分析
+- 性能/效率**量化对比**（如有数据）
+
+**【每个章节必须包含】**：
+1. 该领域的发展脉络梳理
+2. 不同流派/方法/系统的分类
+3. **深度对比分析段落**（批判性分析不同方案的优劣）
+4. 你的独立判断和见解
+
+**语言要求**：
+- 只使用中文撰写
+- 使用学术化表达
+
+**输出要求**：
+- 使用 Markdown 格式，主标题使用 ##，一级节标题使用 ###，二级节标题（如 1.1、2.1）使用 ####，确保所有层级的编号标题都带有对应的 Markdown 标题符号，不要仅用粗体代替标题
+- 确保完整输出所有内容
+- 至少包含 1-2 个对比表格
+- 每个主体章节都要有专门的"对比分析"小节
+"""
 
 **【绝对禁止】文献堆砌（Laundry List）**：
 ❌ 禁止这样写："A 做了这个，B 做了那个，C 做了其他"
@@ -704,14 +825,57 @@ class SmartReviewGeneratorFinal:
         paper_titles: str,
         paper_count: int,
         search_params: Dict[str, Any] = None,
-        total_papers_count: int = 0
+        total_papers_count: int = 0,
+        language: str = "zh"
     ) -> str:
         # 构建方法论描述
         methodology_description = self._build_methodology_description(
-            search_params, total_papers_count, paper_count
+            search_params, total_papers_count, paper_count, language
         )
 
-        return f"""请撰写关于「{topic}」的文献综述。
+        if language == "en":
+            return f"""Please write a literature review on "{topic}".
+
+**【Important】Paper Selection Principles (Must Read)**:
+When browsing the following paper list and writing the review, please strictly follow:
+1. **Topic relevance (veto power)**: Only cite papers truly relevant to "{topic}", firmly do not cite irrelevant papers
+2. **Time priority (high priority)**: Among topic-relevant papers, prioritize research published in the last 5 years
+3. **Quality reference**: On the basis of meeting the above conditions, appropriately reference citation counts
+
+{paper_titles}
+
+**【Introduction must include】Literature Search and Screening Methodology**:
+At the end of the introduction (or as an independent "2. Literature Search Strategy" subsection), you must add a dedicated paragraph explaining your literature inclusion and exclusion criteria.
+
+**Methodology Description (please organize in your own words, do not copy directly)**:
+{methodology_description}
+
+**【Core Requirements】Critical Thinking & Comparative Analysis**:
+⚠️  Do not write a laundry list of "A did this, B did that"
+⚠️  Must demonstrate your critical thinking as the author
+⚠️  Each main chapter must include a "Comparative Analysis" subsection
+
+**Writing Requirements**:
+1. First design the review structure, then write the content
+2. Before citing papers, must first call get_multiple_paper_details tool to batch get detailed information
+3. Ensure each subsection has sufficient citation support
+4. **In-depth comparative analysis**: Don't just say "what exists", explain "why choose this rather than that". Analyze the **essential differences** of different methods in architectural design, algorithm complexity, memory management, performance, etc.
+5. Point out current research limitations and future directions
+6. Ensure complete output of all content, do not truncate midway
+
+7. **Comparison Tables**:
+   - Include at least 1-2 comparison tables
+   - Tables must compare methods/systems from multiple dimensions: technical characteristics, pros/cons, applicable scenarios, performance metrics
+   - Each table must have a clear title and be referenced in the text
+
+8. **Critical Analysis**:
+   - Each chapter must have a dedicated "Comparative Analysis" or "Critical Discussion" subsection
+   - Analyze not only advantages but also limitations and failure cases
+   - Propose your own insights and judgment
+
+Now please start writing. First design the review structure (outline), then write the complete content according to the structure."""
+        else:
+            return f"""请撰写关于「{topic}」的文献综述。
 
 **【重要】论文选择原则（必读）**：
 在浏览以下论文列表和撰写综述时，请严格遵循：
@@ -822,7 +986,8 @@ class SmartReviewGeneratorFinal:
         self,
         search_params: Dict[str, Any] = None,
         total_papers_count: int = 0,
-        cited_papers_count: int = 0
+        cited_papers_count: int = 0,
+        language: str = "zh"
     ) -> str:
         """
         构建文献检索与筛选方法论描述
@@ -831,6 +996,7 @@ class SmartReviewGeneratorFinal:
             search_params: 搜索参数
             total_papers_count: 初始检索到的文献总数
             cited_papers_count: 最终引用的文献数
+            language: 语言 (zh/en)
 
         Returns:
             方法论描述文本
@@ -843,40 +1009,75 @@ class SmartReviewGeneratorFinal:
         target_count = search_params.get("target_count", 50)
         recent_years_ratio = search_params.get("recent_years_ratio", 0.5)
         search_platform = search_params.get("search_platform", "Semantic Scholar")
-        sort_by = search_params.get("sort_by", "被引量降序")
+        sort_by = search_params.get("sort_by", "被引量降序" if language == "zh" else "citation count descending")
 
         # 构建描述
-        description_parts = []
-
-        description_parts.append("**文献检索策略**：")
-        description_parts.append(
-            f"本综述基于 {search_platform} 学术数据库进行文献检索，"
-            f"检索时间范围为过去 {search_years} 年（{datetime.now().year - search_years}-{datetime.now().year}）。"
-        )
-
-        if total_papers_count > 0:
+        if language == "en":
+            description_parts = []
+            description_parts.append("**Literature Search Strategy**:")
             description_parts.append(
-                f"初始检索获得 {total_papers_count} 篇相关文献，"
-                f"按 {sort_by} 排序后进行多轮筛选。"
+                f"This review is based on literature search from the {search_platform} academic database, "
+                f"covering publications from the past {search_years} years ({datetime.now().year - search_years}-{datetime.now().year})."
             )
 
-        description_parts.append("**文献纳入标准**：")
-        description_parts.append(
-            "1) 主题相关性（一票否决制）：由本综述作者独立判断论文是否与研究主题高度相关，"
-            "不相关文献不纳入综述，这是文献入选的先决条件；"
-        )
-        description_parts.append(
-            f"2) 时间新近度（高优先级）：在主题相关的文献中，优先选择近 5 年发表的研究（目标占比 {int(recent_years_ratio * 100)}%），"
-            "以确保综述反映最新学术进展；"
-        )
-        description_parts.append(
-            "3) 质量优选：在满足上述条件的基础上，适当考虑被引次数，"
-            "以确保综述建立在有影响力的学术成果基础之上。"
-        )
+            if total_papers_count > 0:
+                description_parts.append(
+                    f"The initial search retrieved {total_papers_count} relevant papers, "
+                    f"which were screened in multiple rounds after sorting by {sort_by}."
+                )
 
-        if cited_papers_count > 0:
+            description_parts.append("**Literature Inclusion Criteria**:")
             description_parts.append(
-                f"经过上述筛选流程，最终从初始文献池中精选出 {cited_papers_count} 篇文献进行深入分析和综述撰写。"
+                "1) Topic relevance (veto power): The review author independently judges whether each paper is highly relevant to the research topic. "
+                "Irrelevant literature is not included in the review, which is a prerequisite for literature selection;"
+            )
+            description_parts.append(
+                f"2) Recency (high priority): Among topic-relevant literature, priority is given to research published in the last 5 years (target ratio {int(recent_years_ratio * 100)}%), "
+                "to ensure the review reflects the latest academic progress;"
+            )
+            description_parts.append(
+                "3) Quality preference: On the basis of meeting the above conditions, citation counts are appropriately considered "
+                "to ensure the review is built upon influential academic achievements."
             )
 
-        return "\n".join(description_parts)
+            if cited_papers_count > 0:
+                description_parts.append(
+                    f"Through the above screening process, {cited_papers_count} papers were finally selected from the initial literature pool for in-depth analysis and review writing."
+                )
+
+            return "\n".join(description_parts)
+        else:
+            description_parts = []
+
+            description_parts.append("**文献检索策略**：")
+            description_parts.append(
+                f"本综述基于 {search_platform} 学术数据库进行文献检索，"
+                f"检索时间范围为过去 {search_years} 年（{datetime.now().year - search_years}-{datetime.now().year}）。"
+            )
+
+            if total_papers_count > 0:
+                description_parts.append(
+                    f"初始检索获得 {total_papers_count} 篇相关文献，"
+                    f"按 {sort_by} 排序后进行多轮筛选。"
+                )
+
+            description_parts.append("**文献纳入标准**：")
+            description_parts.append(
+                "1) 主题相关性（一票否决制）：由本综述作者独立判断论文是否与研究主题高度相关，"
+                "不相关文献不纳入综述，这是文献入选的先决条件；"
+            )
+            description_parts.append(
+                f"2) 时间新近度（高优先级）：在主题相关的文献中，优先选择近 5 年发表的研究（目标占比 {int(recent_years_ratio * 100)}%），"
+                "以确保综述反映最新学术进展；"
+            )
+            description_parts.append(
+                "3) 质量优选：在满足上述条件的基础上，适当考虑被引次数，"
+                "以确保综述建立在有影响力的学术成果基础之上。"
+            )
+
+            if cited_papers_count > 0:
+                description_parts.append(
+                    f"经过上述筛选流程，最终从初始文献池中精选出 {cited_papers_count} 篇文献进行深入分析和综述撰写。"
+                )
+
+            return "\n".join(description_parts)
