@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import { isLoggedIn as checkLoggedIn, getLocalUserInfo } from '../authApi'
 import { LoginModal } from './LoginModal'
@@ -12,6 +13,7 @@ interface TaskProgress {
 }
 
 export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [topic, setTopic] = useState('')
   const [language, setLanguage] = useState<'zh' | 'en'>('zh')
@@ -421,12 +423,12 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
       <div className="home-container">
         <div id="generate" className="home-hero-wrapper">
           <div className="home-hero">
-            <span className="hero-accent">深度检索 + 智能综述</span>
+            <span className="hero-accent">{t('home.hero.accent')}</span>
             <h1 className="home-title">
-              5分钟，生成一份<span className="highlight">高水平文献综述</span>
+              <span dangerouslySetInnerHTML={{ __html: t('home.hero.title') }} />
             </h1>
             <p className="home-subtitle">
-              告别彻夜查文献的痛苦。AI 深度检索Web of Science、IEEE等权威数据库，自动梳理逻辑框架，生成自带规范引用的专业综述
+              {t('home.hero.subtitle')}
             </p>
           </div>
 
@@ -435,12 +437,12 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               <div className="visual-icon-large">📊</div>
               <div className="visual-stats">
                 <div className="visual-stat">
-                  <span className="visual-stat-number">2亿+</span>
-                  <span className="visual-stat-label">篇文献检索</span>
+                  <span className="visual-stat-number">200M+</span>
+                  <span className="visual-stat-label">{t('home.stats.papers')}</span>
                 </div>
                 <div className="visual-stat">
                   <span className="visual-stat-number">5min</span>
-                  <span className="visual-stat-label">综述初稿生成</span>
+                  <span className="visual-stat-label">{t('home.stats.time')}</span>
                 </div>
               </div>
             </div>
@@ -448,42 +450,42 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
           <div className="home-input-section">
           {isLoggedIn && <span className={`credits-badge ${prevCredits !== credits ? 'credits-updated' : ''}`}>
-            剩余 <span className="credits-number">{credits}</span> 次
+            {t('input.credits_remaining')} <span className="credits-number">{credits}</span>
           </span>}
           <div className="input-section-header">
             <div className="input-section-title-row">
-              <h2 className="input-section-title">一键生成论文综述</h2>
+              <h2 className="input-section-title">{t('input.title')}</h2>
             </div>
-            <p className="input-section-subtitle">输入研究主题，AI 为您生成专业文献综述</p>
+            <p className="input-section-subtitle">{t('input.subtitle')}</p>
           </div>
 
           <div className="language-toggle-wrapper">
-            <span className="language-label">生成语言：</span>
+            <span className="language-label">{t('input.language')}:</span>
             <div className="language-toggle">
               <button
                 className={`language-option ${language === 'zh' ? 'active' : ''}`}
                 onClick={() => setLanguage('zh')}
                 disabled={isGenerating}
               >
-                中文
+                {t('input.language_zh')}
               </button>
               <button
                 className={`language-option ${language === 'en' ? 'active' : ''}`}
                 onClick={() => setLanguage('en')}
                 disabled={isGenerating}
               >
-                English
+                {t('input.language_en')}
               </button>
             </div>
             <span className="language-hint">
-              {language === 'zh' ? '适用于中文期刊投稿' : '适用于英文期刊投稿'}
+              {language === 'zh' ? t('input.language_hint_zh') : t('input.language_hint_en')}
             </span>
           </div>
 
           <input
             type="text"
             className="home-input"
-            placeholder="请输入您的研究主题，例如：深度学习在图像识别中的应用"
+            placeholder={t('input.placeholder')}
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !isGenerating && handleGenerate()}
@@ -495,13 +497,13 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
             onClick={handleGenerate}
             disabled={isGenerating || !topic.trim()}
           >
-            {isGenerating ? '生成中...' : '立即生成我的综述初稿'}
+            {isGenerating ? t('input.button_generating') : t('input.button')}
           </button>
 
           {error && (
             <div className="home-error">
               <span>{error}</span>
-              <button className="retry-button" onClick={handleGenerate}>重试</button>
+              <button className="retry-button" onClick={handleGenerate}>{t('input.retry')}</button>
             </div>
           )}
 
@@ -524,14 +526,14 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
         <div className="social-proof-bar">
           <span className="social-proof-icon">🏆</span>
-          <span className="social-proof-text">已有 <strong>250+</strong> 位同学通过 AutoOverview 累计节省了 <strong>10,000+</strong> 小时</span>
+          <span className="social-proof-text" dangerouslySetInnerHTML={{ __html: t('home.social_proof.text') }} />
         </div>
         </div>
       </div>
 
       <section id="features" className="landing-section">
         <div className="section-inner">
-          <h2 className="section-title">为什么选择 AutoOverview？</h2>
+          <h2 className="section-title">{t('home.features.title')}</h2>
           <div className="comparison-grid">
             <div className="comparison-card">
               <div className="comparison-card-header">
