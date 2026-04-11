@@ -4,9 +4,13 @@
 
 ## 项目简介
 
-AutoOverview 是一个 AI 驱动的文献综述生成平台。用户输入研究主题，系统自动搜索文献并生成高质量的中文学术综述。
+AutoOverview 是一个 AI 驱动的文献综述生成平台，支持中英文双语。用户输入研究主题，系统自动搜索文献并生成高质量的学术综述。
 
-**技术栈**: FastAPI (Python) + React (TypeScript/Vite) + PostgreSQL
+**产品定位**：
+- **中文版**：面向中国高校和科研机构的学生、研究人员
+- **英文版**：面向国际市场（美国、加拿大、英国、欧盟）的学术用户
+
+**技术栈**: FastAPI (Python) + React (TypeScript/Vite) + PostgreSQL + i18n (react-i18next)
 
 ## 核心流程
 
@@ -33,8 +37,11 @@ AutoOverview 是一个 AI 驱动的文献综述生成平台。用户输入研究
 - **渲染器**: `ReviewViewer.tsx`（Markdown + TOC 侧边栏，标题级别会自动标准化）
 - **数据统计**: `DavidPage.tsx`（访问量、注册量、付费数据统计，URL: `/david`）
 - **认证**: `LoginPage.tsx` + `authApi.ts`（验证码登录，无密码登录）
-- **支付**: `PaymentModal.tsx`（支付宝扫码，开发环境走 mock）
+- **支付**: 
+  - 中文版：`PaymentModal.tsx`（支付宝扫码，CNY 定价）
+  - 英文版：`PaddlePaymentModal.tsx`（Paddle 信用卡支付，USD 定价）
 - **PDF 导出**: `frontend/src/utils/pdfExport.ts`（html2canvas + jsPDF，纯前端）
+- **国际化**: `react-i18next` - 支持中英文动态切换
 - **路由**: hash 路由（`/#/login`, `/#/pricing`, `/#/profile`）
 
 ### 额度与导出逻辑
@@ -42,6 +49,18 @@ AutoOverview 是一个 AI 驱动的文献综述生成平台。用户输入研究
 - 付费额度：可导出无水印 Word（服务端 python-docx）
 - 生成时立即扣额度（`check_and_deduct_credit`），任务失败不退回
 - 导出 Word 时检查 `has_purchased`，未购买弹支付弹窗
+
+### 定价策略
+**中文版（CNY）**：
+- 单次：¥39.8
+- 学期包（10次）：¥119.4
+- 学年包（30次）：¥238.8
+
+**英文版（USD）**：
+- 单次：$5.99
+- 学期包（10次）：$29.99
+- 学年包（30次）：$79.99
+- 单次解锁：$9.99
 
 ### API 路径
 - 前端代理: `localhost:3000` → `localhost:8000`（vite.config.ts 配置）
