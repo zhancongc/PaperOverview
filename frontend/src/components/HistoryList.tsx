@@ -1,6 +1,7 @@
 /**
  * 历史记录列表组件
  */
+import { useTranslation } from 'react-i18next'
 import { ReviewRecord } from '../types'
 
 interface HistoryListProps {
@@ -12,6 +13,7 @@ interface HistoryListProps {
 }
 
 export function HistoryList({ records, loading, onLoadRecord, onDeleteRecord, onExportRecord }: HistoryListProps) {
+  const { i18n } = useTranslation()
   const handleDelete = (id: number, event: React.MouseEvent) => {
     event.stopPropagation()
     if (confirm('确定要删除这条记录吗？')) {
@@ -26,7 +28,8 @@ export function HistoryList({ records, loading, onLoadRecord, onDeleteRecord, on
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleString('zh-CN', {
+    const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
+    return date.toLocaleString(locale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

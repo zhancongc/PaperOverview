@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api'
 import { getLocalUserInfo, isLoggedIn } from '../authApi'
 import { PaymentModal } from './PaymentModal'
@@ -8,6 +9,7 @@ import type { ReviewRecord } from '../types'
 import './ProfilePage.css'
 
 export function ProfilePage() {
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [records, setRecords] = useState<ReviewRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -154,7 +156,8 @@ export function ProfilePage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleString('zh-CN', {
+    const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
+    return date.toLocaleString(locale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
