@@ -661,9 +661,21 @@ class SmartReviewGeneratorFinal:
 - Do not cite the same paper more than twice
 - Each paper can only appear once in the reference list
 
-**【Important】Critical Thinking & Requirements**:
-❌ **Wrong paradigm**: "A proposed method X, B proposed method Y, C proposed method Z"
-✅ **Correct paradigm**: "Method X (proposed by A) uses convolutional neural networks and is suitable for small-scale data; Method Y (developed by B) adopts transformer architecture and performs better on large-scale datasets; Method Z (introduced by C) combines attention mechanisms to optimize memory efficiency"
+**【Absolutely Prohibited】Literature Laundry List**:
+❌ Do not write: "A did this, B did that, C did something else"
+❌ Do not simply list literature without analysis
+❌ Do not lack critical thinking as the author
+
+**【Must Achieve】Comparative Analysis & Critical Thinking**:
+✅ Must add "comparative analysis" paragraphs
+✅ Must explain "why choose this rather than that"
+✅ Must analyze the **essential differences** of different methods/systems (such as memory management mechanisms, algorithm complexity, architectural design, etc.)
+✅ Must point out the **pros and cons** and **applicable scenarios** of different studies
+✅ Must demonstrate your **independent judgment** and **critical thinking** as the author
+
+**Writing Paradigm Shift**:
+❌ Wrong paradigm: "Maxima provides calculus functionality, SymPy is a Python library, Cadabra2 is for tensor computation"
+✅ Correct paradigm: "Although Maxima [1] is implemented based on Lisp and excels at symbolic computation, it does not support modern programming paradigms; SymPy [2], as a Python native library, integrates seamlessly with the scientific computing ecosystem but has limited performance when processing large-scale expressions; Cadabra3 [3] is specifically designed for tensor computation, providing domain-specific abstraction layers that significantly simplify complex operations in general relativity"
 
 **【Important】Table Usage Requirements**:
 Must use tables in the following situations:
@@ -698,7 +710,7 @@ Table content must include:
 **Output Requirements**:
 - Use Markdown format, main title use ##, first-level section titles use ###, second-level section titles (like 1.1, 2.1) use ####, ensure all numbered headings have corresponding Markdown heading symbols, do not use bold alone instead of headings
 - Ensure complete output of all content
-- Include at least 1-2 comparison tables
+- Insert 1-2 comparison tables
 - Each main chapter should have a dedicated "Comparative Analysis" subsection
 """
         else:
@@ -773,7 +785,7 @@ Table content must include:
 **输出要求**：
 - 使用 Markdown 格式，主标题使用 ##，一级节标题使用 ###，二级节标题（如 1.1、2.1）使用 ####，确保所有层级的编号标题都带有对应的 Markdown 标题符号，不要仅用粗体代替标题
 - 确保完整输出所有内容
-- 至少包含 1-2 个对比表格
+- 插入 1-2 个对比表格
 - 每个主体章节都要有专门的"对比分析"小节
 """
 
@@ -818,18 +830,20 @@ At the end of the introduction (or as an independent "2. Literature Search Strat
 2. Before citing papers, must first call get_multiple_paper_details tool to batch get detailed information
 3. Ensure each subsection has sufficient citation support
 4. **In-depth comparative analysis**: Don't just say "what exists", explain "why choose this rather than that". Analyze the **essential differences** of different methods in architectural design, algorithm complexity, memory management, performance, etc.
-5. Point out current research limitations and future directions
+5. Point out current research limitations, failure cases, and future directions
 6. Ensure complete output of all content, do not truncate midway
+7. **Each main chapter must have a dedicated comparative analysis paragraph**
 
-7. **Comparison Tables**:
-   - Include at least 1-2 comparison tables
-   - Tables must compare methods/systems from multiple dimensions: technical characteristics, pros/cons, applicable scenarios, performance metrics
-   - Each table must have a clear title and be referenced in the text
+**【Emphasis】Table Requirements**:
+- Insert 1-2 comparison tables at appropriate positions
+- Table types can be: system comparison, algorithm comparison, method comparison, timeline comparison, etc.
+- Tables must include: core differences, pros and cons, applicable scenarios, and other in-depth analysis content
+- Each table must have a title and be referenced in the text
+- Tables must also mark corresponding literature citations [1], [2], etc.
 
-8. **Critical Analysis**:
-   - Each chapter must have a dedicated "Comparative Analysis" or "Critical Discussion" subsection
-   - Analyze not only advantages but also limitations and failure cases
-   - Propose your own insights and judgment
+**【Writing Examples】**:
+❌ Do not write: "Maxima provides calculus functionality, SymPy is a Python library, Cadabra2 is used for tensor computation."
+✅ Should write: "Although Maxima [5], SymPy [8], and Cadabra2 [6] are all computer algebra systems, their design philosophies and applicable scenarios have essential differences. Maxima is implemented based on Lisp, inheriting the tradition of MACSYMA, and performs excellently in symbolic integration and simplification; SymPy, as a pure Python implementation, although slightly inferior in performance, has become popular in engineering applications due to its seamless integration with modern data science ecosystems; while Cadabra2 adopts domain-specific design and is several times more efficient than general-purpose systems in tensor field theory expression. In high-concurrency scenarios, SymPy's memory management mechanism is more flexible, which explains why it is gradually gaining dominance in industrial applications [8, 23]."
 
 Now please start writing. First design the review structure (outline), then write the complete content according to the structure."""
         else:
@@ -859,12 +873,12 @@ Now please start writing. First design the review structure (outline), then writ
 2. 引用论文前，必须先调用 get_multiple_paper_details 工具批量获取详细信息
 3. 确保每个小节都有充分的引用支持
 4. **深度对比分析**：不要只说"有什么"，要说"为什么选这个而不选那个"。分析不同方法在架构设计、算法复杂度、内存管理、性能表现等方面的**本质区别**
-5. 指出当前研究的不足和未来方向
+5. 指出当前研究的不足、失败案例和未来方向
 6. 确保完整输出所有内容，不要中途截断
 7. **每个主体章节都要有专门的对比分析段落**
 
 **【强调】表格要求**：
-- 在适当的位置插入 1-3 个对比表格
+- 在适当的位置插入 1-2 个对比表格
 - 表格类型可以是：系统对比、算法对比、方法对比、时期对比等
 - 表格必须包含：核心区别、优缺点、适用场景等深度分析内容
 - 每个表格都要有标题，并在正文中引用
