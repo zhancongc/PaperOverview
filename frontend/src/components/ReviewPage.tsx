@@ -170,11 +170,6 @@ export function ReviewPage() {
               <span className="btn-icon">🏠</span>
               <span className="btn-text">返回首页</span>
             </button>
-
-            <button className="error-option-btn" onClick={() => navigate('/', { state: { scrollToCases: true } })}>
-              <span className="btn-icon">📄</span>
-              <span className="btn-text">查看案例</span>
-            </button>
           </div>
 
           <div className="error-hint">
@@ -325,11 +320,6 @@ export function ReviewPage() {
               <button className="error-option-btn" onClick={() => navigate('/')}>
                 <span className="btn-icon">🏠</span>
                 <span className="btn-text">返回首页</span>
-              </button>
-
-              <button className="error-option-btn" onClick={() => navigate('/', { state: { scrollToCases: true } })}>
-                <span className="btn-icon">📄</span>
-                <span className="btn-text">查看案例</span>
               </button>
             </div>
 
