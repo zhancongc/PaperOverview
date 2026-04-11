@@ -21,6 +21,8 @@ AutoOverview 是一个 AI 驱动的文献综述生成平台。用户输入研究
 - **综述生成核心**: `backend/services/smart_review_generator_final.py`
 - **异步任务**: `backend/services/review_task_executor.py`，通过 TaskManager 管理轮询
 - **认证模块**: `backend/authkit/` — 独立可复用的认证 & 支付模块
+- **统计模块**: `backend/authkit/services/stats_service.py` — 访问量、注册量统计
+- **统计中间件**: `backend/authkit/middleware/stats_middleware.py` — 自动统计访问量（DDoS 防护）
 - **JWT**: token 中用户 ID 存储在 `sub` 字段，不是 `user_id`
 - **额度体系**: 注册送 1 篇，按次扣费（体验包/基础包/进阶包），字段 `review_credits`
 - **环境变量**: `backend/.env` 配置 DeepSeek API Key、数据库等
@@ -29,10 +31,11 @@ AutoOverview 是一个 AI 驱动的文献综述生成平台。用户输入研究
 - **主页**: `SimpleApp.tsx`（输入框 + 定价卡片 + 功能介绍）
 - **综述页**: `ReviewPage.tsx`（正文/参考文献分 Tab，URL: `/review?task_id=xxx`）
 - **渲染器**: `ReviewViewer.tsx`（Markdown + TOC 侧边栏，标题级别会自动标准化）
+- **数据统计**: `DavidPage.tsx`（访问量、注册量、付费数据统计，URL: `/david`）
 - **认证**: `LoginPage.tsx` + `authApi.ts`（验证码登录，无密码登录）
 - **支付**: `PaymentModal.tsx`（支付宝扫码，开发环境走 mock）
 - **PDF 导出**: `frontend/src/utils/pdfExport.ts`（html2canvas + jsPDF，纯前端）
-- **路由**: hash 路由（`/#/login`, `/#pricing`, `/#profile`）
+- **路由**: hash 路由（`/#/login`, `/#/pricing`, `/#/profile`）
 
 ### 额度与导出逻辑
 - 免费额度：注册送 1 篇，可导出带水印 PDF
@@ -45,7 +48,13 @@ AutoOverview 是一个 AI 驱动的文献综述生成平台。用户输入研究
 - API 前缀: `/api/...`
 - 认证头: `Authorization: Bearer <token>`
 
+### 白名单配置
+- **案例展示**: `DEMO_TASK_IDS=81fac90d,59c01cc4,2a90e24d`（.env 配置）
+- **David 页面**: `DAVID_WHITELIST=zhancongc@icloud.com`（.env 配置）
+- **Jade 页面**: `JADE_WHITELIST=`（.env 配置）
+
 ## 文档
 
 - **[docs/INDEX.md](docs/INDEX.md)** — 文档首页，渐进式披露文档（推荐从这里开始）
 - **[docs/MAP.md](docs/MAP.md)** — 完整文档目录，包含所有文档的列表
+- **[docs/STATS.md](docs/STATS.md)** — 统计功能文档（访问量、注册量、付费数据）
