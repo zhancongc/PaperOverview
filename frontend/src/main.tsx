@@ -5,6 +5,7 @@ import App from './App'
 import { SimpleApp } from './components/SimpleApp'
 import { ReviewPage } from './components/ReviewPage'
 import { ProfilePage } from './components/ProfilePage'
+import { DavidPage } from './components/DavidPage'
 import ErrorBoundary from './ErrorBoundary'
 import { api } from './api'
 import './index.css'
@@ -46,6 +47,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <ReviewRoute>
             <ReviewPage />
           </ReviewRoute>
+        } />
+        <Route path="/david" element={
+          <DavidRoute>
+            <DavidPage />
+          </DavidRoute>
         } />
         <Route path="/jade" element={
           <JadeRoute>
@@ -117,5 +123,29 @@ function JadeRoute({ children }: { children: React.ReactElement }) {
 
   if (checking) return null
   if (!allowed) return <Navigate to="/" replace />
+  return children
+}
+
+// David 路由守卫（只有管理员才能访问）
+function DavidRoute({ children }: { children: React.ReactElement }) {
+  const [checking, setChecking] = useState(true)
+  const [allowed, setAllowed] = useState(false)
+
+  useEffect(() => {
+    // 检查用户是否有权限访问
+    const token = localStorage.getItem('auth_token')
+    if (!token) {
+      setChecking(false)
+      return
+    }
+
+    // 这里可以添加权限检查逻辑
+    // 暂时只检查是否登录
+    setAllowed(true)
+    setChecking(false)
+  }, [])
+
+  if (checking) return null
+  if (!allowed) return <Navigate to="/login" replace />
   return children
 }
