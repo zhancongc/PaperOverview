@@ -109,7 +109,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         }
 
         setProgress({ step: taskInfo.progress?.step || 'processing', message: taskInfo.progress?.message || '正在处理...' })
-        setTimeout(doPoll, 5000)
+        setTimeout(doPoll, 8000) // 每8秒轮询一次
       } catch {
         sessionStorage.removeItem('active_task_id')
         sessionStorage.removeItem('active_task_topic')
@@ -117,7 +117,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         setActiveTaskId(null)
       }
     }
-    setTimeout(doPoll, 1000)
+    setTimeout(doPoll, 3000) // 初始延迟3秒
   }
 
   useEffect(() => {
@@ -228,7 +228,21 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
           pollCount++
           const elapsed = Date.now() - startTime
-          const nextInterval = elapsed < 2 * 60 * 1000 ? 15000 : 5000
+          const elapsedMinutes = elapsed / (60 * 1000)
+
+          // 优化轮询间隔，减少服务端压力
+          let nextInterval: number
+          if (elapsedMinutes < 1) {
+            // 前1分钟：每10秒轮询一次
+            nextInterval = 10000
+          } else if (elapsedMinutes < 3) {
+            // 1-3分钟：每8秒轮询一次
+            nextInterval = 8000
+          } else {
+            // 3分钟后：每5秒轮询一次
+            nextInterval = 5000
+          }
+
           setTimeout(doPoll, nextInterval)
         } catch (err) {
           setError('\u67E5\u8BE2\u4EFB\u52A1\u72B6\u6001\u51FA\u9519')
@@ -237,7 +251,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         }
       }
 
-      setTimeout(doPoll, 1000)
+      setTimeout(doPoll, 3000) // 初始延迟3秒，减少服务端压力
     } catch (err) {
       setError('\u63D0\u4EA4\u4EFB\u52A1\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u540E\u7AEF\u670D\u52A1\u662F\u5426\u6B63\u5E38\u8FD0\u884C')
       setIsGenerating(false)
