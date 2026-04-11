@@ -82,6 +82,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
   }, [])
 
   const pollTask = (taskId: string) => {
+    const startTime = Date.now()
     const doPoll = async () => {
       try {
         const statusResponse = await api.getTaskStatus(taskId)
@@ -109,7 +110,19 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         }
 
         setProgress({ step: taskInfo.progress?.step || 'processing', message: taskInfo.progress?.message || '正在处理...' })
-        setTimeout(doPoll, 8000) // 每8秒轮询一次
+
+        // 根据已用时间调整轮询间隔
+        const elapsed = Date.now() - startTime
+        const elapsedMinutes = elapsed / (60 * 1000)
+        let nextInterval: number
+        if (elapsedMinutes < 1) {
+          nextInterval = 20000
+        } else if (elapsedMinutes < 3) {
+          nextInterval = 15000
+        } else {
+          nextInterval = 10000
+        }
+        setTimeout(doPoll, nextInterval)
       } catch {
         sessionStorage.removeItem('active_task_id')
         sessionStorage.removeItem('active_task_topic')
@@ -117,7 +130,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         setActiveTaskId(null)
       }
     }
-    setTimeout(doPoll, 3000) // 初始延迟3秒
+    setTimeout(doPoll, 5000) // 初始延迟5秒
   }
 
   useEffect(() => {
@@ -233,14 +246,17 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
           // 优化轮询间隔，减少服务端压力
           let nextInterval: number
           if (elapsedMinutes < 1) {
-            // 前1分钟：每10秒轮询一次
-            nextInterval = 10000
+            // 前1分钟：每20秒轮询一次
+            nextInterval = 20000
           } else if (elapsedMinutes < 3) {
-            // 1-3分钟：每8秒轮询一次
-            nextInterval = 8000
+            // 1-3分钟：每15秒轮询一次
+            nextInterval = 15000
+          } else if (elapsedMinutes < 5) {
+            // 3-5分钟：每10秒轮询一次
+            nextInterval = 10000
           } else {
-            // 3分钟后：每5秒轮询一次
-            nextInterval = 5000
+            // 5分钟后：每8秒轮询一次
+            nextInterval = 8000
           }
 
           setTimeout(doPoll, nextInterval)
