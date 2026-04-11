@@ -9,7 +9,29 @@ import type {
   ResearchDirectionsResponse
 } from './types';
 
-const API_BASE = '/api';
+// API 基础地址配置
+// 开发环境：使用本地代理
+// 生产环境：指向上海服务器（统一后端）
+const getApiBase = () => {
+  if (import.meta.env.DEV) {
+    return '/api';  // 开发环境使用 Vite 代理
+  }
+
+  // 生产环境：根据部署位置判断
+  // 如果部署在纽约服务器（plainkit.top），则指向上海服务器
+  // 如果部署在上海服务器（snappicker.com），则使用相对路径
+  const hostname = window.location.hostname;
+
+  if (hostname.includes('plainkit.top')) {
+    // 纽约前端：指向上海后端
+    return 'https://autooverview.snappicker.com/api';
+  }
+
+  // 上海前端：使用相对路径（同服务器）
+  return '/api';
+};
+
+const API_BASE = getApiBase();
 
 // 异步任务类型
 export interface TaskSubmitResponse {
