@@ -113,19 +113,17 @@ export function ReviewViewer({ content, papers = [], hasPurchased = false, onToc
         // 如果是多个引用 [1,2,3]，分别渲染
         return (
           <span key={index}>
-            [
             {indices.map((idx, i) => {
               const citationIndex = idx - 1
               const paper = papers[citationIndex]
               console.log(`[ReviewViewer] Multi citation [${idx}]`, { citationIndex, paper, papersLength: papers.length })
               return (
-                <span key={`${index}-${i}-${idx}`}>
+                <Fragment key={`${index}-${i}-${idx}`}>
                   {i > 0 && ', '}
                   <CitationMarker index={idx} paper={paper} />
-                </span>
+                </Fragment>
               )
             })}
-            ]
           </span>
         )
       }
