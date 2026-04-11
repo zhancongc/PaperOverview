@@ -61,11 +61,42 @@
         "con3": "❌ Academic compliance risks"
       },
       "manual": {
-        "title": "CNKI Research / Write Yourself",
+        "title": "Write It Yourself",
         "con1": "❌ Takes weeks to months",
         "con2": "❌ Low paper search efficiency",
         "con3": "❌ Difficult to comprehensively cover cutting-edge research"
-      }
+      },
+      "title": "Still Writing Reviews the Hard Way?",
+      "traditional_label": "Traditional Method",
+      "traditional_step1": "Day 1-3",
+      "traditional_step1_desc": "Repeatedly search databases, trying keywords again and again",
+      "traditional_step2": "Day 4-7",
+      "traditional_step2_desc": "Screen and download papers one by one, manually format citations",
+      "traditional_step3": "Day 8-12",
+      "traditional_step3_desc": "Piece together logical framework, frequent content gaps",
+      "traditional_step4": "Day 13-14",
+      "traditional_step4_desc": "Proofread citations, reduce plagiarism, revise until breakdown",
+      "traditional_result_time": "≈ 14 days",
+      "traditional_result_mood": "😵 Painful ordeal",
+      "auto_label": "AutoOverview",
+      "auto_step1": "Step 1",
+      "auto_step1_desc": "Enter your research topic",
+      "auto_step2": "Step 2",
+      "auto_step2_desc": "AI automatically searches authoritative databases, organizes logical framework",
+      "auto_step3": "Step 3",
+      "auto_step3_desc": "Generate citation format with one click, plagiarism-friendly",
+      "auto_result_time": "≈ 5 minutes",
+      "auto_result_mood": "🎉 Easy and done"
+    },
+    "process": {
+      "title": "How It Works",
+      "subtitle": "Complete a professional literature review in three steps",
+      "step1_title": "Enter Topic",
+      "step1_desc": "Enter your research topic - it can be a brief description or detailed research direction requirements.",
+      "step2_title": "AI Generation",
+      "step2_desc": "AI automatically searches literature, analyzes and filters, organizes structure, and writes the review - fully automated.",
+      "step3_title": "View & Export",
+      "step3_desc": "Preview review content online, export to Word documents, ready for academic writing."
     },
     "pricing": {
       "title": "Flexible Pricing, Pay As You Go",
@@ -111,14 +142,55 @@
       },
       "buy_single": "Buy Now",
       "choose_semester": "Choose Semester",
-      "choose_yearly": "Choose Yearly"
+      "choose_yearly": "Choose Yearly",
+      "recommended": "Recommended"
     },
     "demo": {
       "title": "Sample Reviews",
-      "subtitle": "See the quality before you commit"
+      "subtitle": "See the quality before you commit",
+      "loading": "Loading...",
+      "empty": "No samples available",
+      "ai_generated": "AI-generated academic review",
+      "view_details": "View Details →"
+    },
+    "testimonials": {
+      "text1": "\"Recommended by my lab senior. The 5-minute review framework is more comprehensive than my week of literature searching, and all citations are real papers.\"",
+      "name1": "Graduate Student",
+      "role1": "Master's Student",
+      "text2": "\"Lifesaver before thesis proposal! The literature review section was done directly, with proper formatting that my advisor couldn't fault.\"",
+      "name2": "Successful PhD Candidate",
+      "role2": "Engineering",
+      "text3": "\"Everyone in the PhD supervisor group is sharing this tool. Finally can save time to focus on experiments.\"",
+      "name3": "PhD Researcher",
+      "role3": "Materials Science"
     },
     "footer": {
       "copyright": "© 2026 AutoOverview. All rights reserved."
+    },
+    "nav": {
+      "generate": "Generate",
+      "features": "Features",
+      "process": "How It Works",
+      "cases": "Samples",
+      "pricing": "Pricing",
+      "profile": "My Reviews",
+      "login_register": "Login / Register",
+      "logout": "Logout"
+    },
+    "progress": {
+      "hint": "You can leave this page. The review will continue generating in the background.",
+      "view_profile": "Go to My Reviews →",
+      "restoring": "Restoring task status...",
+      "processing": "Processing..."
+    },
+    "errors": {
+      "task_failed": "Task execution failed",
+      "credits_fetch_failed": "Failed to fetch credits",
+      "active_task_fetch_failed": "Failed to fetch active task",
+      "plans_fetch_failed": "Failed to fetch plans",
+      "cases_fetch_failed": "Failed to fetch cases",
+      "credits_refresh_failed": "Failed to refresh credits",
+      "no_credits": "No credits remaining"
     }
   },
   "review": {
@@ -194,6 +266,7 @@
     "back": "Back",
     "next": "Next",
     "previous": "Previous",
-    "done": "Done"
+    "done": "Done",
+    "payment_success": "🎉 Payment successful! Credits added to your account"
   }
 }

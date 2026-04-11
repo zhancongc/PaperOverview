@@ -52,7 +52,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
           setActiveTaskId(data.task_id)
           setTopic(data.topic || '')
           setIsGenerating(true)
-          setProgress({ step: 'processing', message: '正在恢复任务状态...' })
+          setProgress({ step: 'processing', message: language === 'en' ? t('home.progress.restoring') : '正在恢复任务状态...' })
           sessionStorage.setItem('active_task_id', data.task_id)
           sessionStorage.setItem('active_task_topic', data.topic || '')
           pollTask(data.task_id)
@@ -106,13 +106,13 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
         } else if (taskInfo.status === 'failed') {
           sessionStorage.removeItem('active_task_id')
           sessionStorage.removeItem('active_task_topic')
-          setError(taskInfo.error || '任务执行失败')
+          setError(taskInfo.error || (language === 'en' ? t('home.errors.task_failed') : '任务执行失败'))
           setIsGenerating(false)
           setActiveTaskId(null)
           return
         }
 
-        setProgress({ step: taskInfo.progress?.step || 'processing', message: taskInfo.progress?.message || '正在处理...' })
+        setProgress({ step: taskInfo.progress?.step || 'processing', message: taskInfo.progress?.message || (language === 'en' ? t('home.progress.processing') : '正在处理...') })
 
         // 根据已用时间调整轮询间隔
         const elapsed = Date.now() - startTime
@@ -298,7 +298,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
       setCredits(data.credits)
 
       // 显示成功提示
-      setToastMessage('🎉 支付成功！额度已到账')
+      setToastMessage(t('common.payment_success'))
       setShowToast(true)
       setTimeout(() => setShowToast(false), 3000)
 
@@ -347,21 +347,21 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
           <span className="logo-text">AutoOverview</span>
         </div>
         <div className="nav-links">
-          <a href="#generate">综述生成</a>
-          <a href="#features">产品特色</a>
-          <a href="#process">使用流程</a>
-          <a href="#cases">案例展示</a>
-          <a href="#pricing">价格方案</a>
+          <a href="#generate">{t('home.nav.generate')}</a>
+          <a href="#features">{t('home.nav.features')}</a>
+          <a href="#process">{t('home.nav.process')}</a>
+          <a href="#cases">{t('home.nav.cases')}</a>
+          <a href="#pricing">{t('home.nav.pricing')}</a>
         </div>
         <div className="nav-actions">
           {isLoggedIn ? (
             <div className="user-menu">
               <button className="user-info" onClick={() => navigate('/profile')}>
                 <span className="user-avatar">👤</span>
-                <span className="user-name">个人中心</span>
+                <span className="user-name">{t('home.nav.profile')}</span>
               </button>
               <button className="nav-btn nav-btn-logout" onClick={handleLogout}>
-                退出
+                {t('home.nav.logout')}
               </button>
             </div>
           ) : (
@@ -370,7 +370,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
                 className="nav-btn nav-btn-register"
                 onClick={() => setShowLoginModal(true)}
               >
-                登录 / 注册
+                {t('home.nav.login_register')}
               </button>
             </div>
           )}
@@ -393,21 +393,21 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
           <button className="sidebar-close" onClick={() => setMobileMenuOpen(false)}>&times;</button>
         </div>
         <nav className="sidebar-links">
-          <a href="#generate" onClick={() => setMobileMenuOpen(false)}>综述生成</a>
-          <a href="#features" onClick={() => setMobileMenuOpen(false)}>产品特色</a>
-          <a href="#process" onClick={() => setMobileMenuOpen(false)}>使用流程</a>
-          <a href="#cases" onClick={() => setMobileMenuOpen(false)}>案例展示</a>
-          <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>价格方案</a>
+          <a href="#generate" onClick={() => setMobileMenuOpen(false)}>{t('home.nav.generate')}</a>
+          <a href="#features" onClick={() => setMobileMenuOpen(false)}>{t('home.nav.features')}</a>
+          <a href="#process" onClick={() => setMobileMenuOpen(false)}>{t('home.nav.process')}</a>
+          <a href="#cases" onClick={() => setMobileMenuOpen(false)}>{t('home.nav.cases')}</a>
+          <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>{t('home.nav.pricing')}</a>
         </nav>
         <div className="sidebar-bottom">
           {isLoggedIn ? (
             <>
               <button className="sidebar-user-btn" onClick={() => { setMobileMenuOpen(false); navigate('/profile') }}>
                 <span className="user-avatar">👤</span>
-                <span className="user-name">个人中心</span>
+                <span className="user-name">{t('home.nav.profile')}</span>
               </button>
               <button className="nav-btn nav-btn-logout" onClick={() => { setMobileMenuOpen(false); handleLogout() }}>
-                退出
+                {t('home.nav.logout')}
               </button>
             </>
           ) : (
@@ -415,7 +415,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               className="nav-btn nav-btn-register"
               onClick={() => { setMobileMenuOpen(false); setShowLoginModal(true) }}
             >
-              登录 / 注册
+              {t('home.nav.login_register')}
             </button>
           )}
         </div>
@@ -518,8 +518,8 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
               </div>
               <div className="progress-message">{progress.message}</div>
               <div className="progress-hint">
-                您可以离开此页面，综述会在后台继续生成。
-                <span className="progress-hint-link" onClick={() => navigate('/profile')}>前往个人中心查看 &rarr;</span>
+                {t('home.progress.hint')}
+                <span className="progress-hint-link" onClick={() => navigate('/profile')}>{t('home.progress.view_profile')}</span>
               </div>
             </div>
           )}
@@ -539,56 +539,56 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
             <div className="comparison-card">
               <div className="comparison-card-header">
                 <span className="comparison-icon">🤖</span>
-                <h3 className="comparison-card-title">免费大模型</h3>
+                <h3 className="comparison-card-title">{t('home.comparison.free_llm.title')}</h3>
               </div>
               <ul className="comparison-list">
-                <li className="comparison-item negative">❌ 缺乏真实论文数据支撑</li>
-                <li className="comparison-item negative">❌ 无法获取最新研究进展</li>
-                <li className="comparison-item negative">❌ 可能编造引用文献</li>
+                <li className="comparison-item negative">{t('home.comparison.free_llm.con1')}</li>
+                <li className="comparison-item negative">{t('home.comparison.free_llm.con2')}</li>
+                <li className="comparison-item negative">{t('home.comparison.free_llm.con3')}</li>
               </ul>
             </div>
             <div className="comparison-card">
               <div className="comparison-card-header">
                 <span className="comparison-icon">🔧</span>
-                <h3 className="comparison-card-title">Elicit / Scite / Paperpal</h3>
+                <h3 className="comparison-card-title">{t('home.comparison.tools.title')}</h3>
               </div>
               <ul className="comparison-list">
-                <li className="comparison-item negative">❌ 功能单一，仅辅助工具</li>
-                <li className="comparison-item negative">❌ 无法生成完整综述</li>
-                <li className="comparison-item negative">❌ 使用门槛高</li>
+                <li className="comparison-item negative">{t('home.comparison.tools.con1')}</li>
+                <li className="comparison-item negative">{t('home.comparison.tools.con2')}</li>
+                <li className="comparison-item negative">{t('home.comparison.tools.con3')}</li>
               </ul>
             </div>
             <div className="comparison-card highlight">
               <div className="comparison-card-header">
                 <span className="comparison-icon">📄</span>
-                <h3 className="comparison-card-title">AutoOverview</h3>
+                <h3 className="comparison-card-title">{t('home.comparison.autooverview.title')}</h3>
               </div>
               <ul className="comparison-list">
-                <li className="comparison-item positive">✅ 海量真实学术期刊数据源</li>
-                <li className="comparison-item positive">✅ 2分钟遍历文献，5分钟生成综述</li>
-                <li className="comparison-item positive">✅ 学术规范，精准引用</li>
+                <li className="comparison-item positive">{t('home.comparison.autooverview.pro1')}</li>
+                <li className="comparison-item positive">{t('home.comparison.autooverview.pro2')}</li>
+                <li className="comparison-item positive">{t('home.comparison.autooverview.pro3')}</li>
               </ul>
             </div>
             <div className="comparison-card">
               <div className="comparison-card-header">
                 <span className="comparison-icon">👤</span>
-                <h3 className="comparison-card-title">第三方人工服务</h3>
+                <h3 className="comparison-card-title">{t('home.comparison.services.title')}</h3>
               </div>
               <ul className="comparison-list">
-                <li className="comparison-item negative">❌ 价格昂贵，质量参差不齐</li>
-                <li className="comparison-item negative">❌ 耗时数天至数周</li>
-                <li className="comparison-item negative">❌ 存在学术合规风险</li>
+                <li className="comparison-item negative">{t('home.comparison.services.con1')}</li>
+                <li className="comparison-item negative">{t('home.comparison.services.con2')}</li>
+                <li className="comparison-item negative">{t('home.comparison.services.con3')}</li>
               </ul>
             </div>
             <div className="comparison-card">
               <div className="comparison-card-header">
                 <span className="comparison-icon">📖</span>
-                <h3 className="comparison-card-title">知网研学 / 自己写</h3>
+                <h3 className="comparison-card-title">{t('home.comparison.manual.title')}</h3>
               </div>
               <ul className="comparison-list">
-                <li className="comparison-item negative">❌ 耗时数周甚至数月</li>
-                <li className="comparison-item negative">❌ 查找文献效率低</li>
-                <li className="comparison-item negative">❌ 难以全面覆盖前沿</li>
+                <li className="comparison-item negative">{t('home.comparison.manual.con1')}</li>
+                <li className="comparison-item negative">{t('home.comparison.manual.con2')}</li>
+                <li className="comparison-item negative">{t('home.comparison.manual.con3')}</li>
               </ul>
             </div>
           </div>
@@ -596,22 +596,22 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
             <div className="feature-item">
               <span className="feature-icon">📚</span>
               <div>
-                <h3 className="feature-title">检索 2亿+ 真实论文，非 AI 编造</h3>
-                <p className="feature-desc">每篇综述引用的真实文献均可溯源，拒绝幻觉</p>
+                <h3 className="feature-title">{t('home.features.papers')}</h3>
+                <p className="feature-desc">{t('home.features.papers_desc')}</p>
               </div>
             </div>
             <div className="feature-item">
               <span className="feature-icon">⚡</span>
               <div>
-                <h3 className="feature-title">5 分钟拿到初稿，无需两周苦熬</h3>
-                <p className="feature-desc">从选题到成稿，全自动完成，省下时间做更重要的事</p>
+                <h3 className="feature-title">{t('home.features.time')}</h3>
+                <p className="feature-desc">{t('home.features.time_desc')}</p>
               </div>
             </div>
             <div className="feature-item">
               <span className="feature-icon">🎯</span>
               <div>
-                <h3 className="feature-title">学术规范排版，可直接提交</h3>
-                <p className="feature-desc">自动生成引用编号、参考文献列表，支持 Word 导出</p>
+                <h3 className="feature-title">{t('home.features.format')}</h3>
+                <p className="feature-desc">{t('home.features.format_desc')}</p>
               </div>
             </div>
           </div>
@@ -620,32 +620,32 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
       <section className="landing-section comparison-section">
         <div className="section-inner">
-          <h2 className="section-title">写综述，你还在用"笨办法"？</h2>
+          <h2 className="section-title">{t('home.comparison.title')}</h2>
           <div className="comparison-flow">
             <div className="comparison-flow-card comparison-flow-manual">
-              <div className="comparison-flow-label">传统方式</div>
+              <div className="comparison-flow-label">{t('home.comparison.traditional_label')}</div>
               <ul className="comparison-flow-steps">
-                <li><span className="comparison-flow-step-num">Day 1-3</span> 反复检索数据库，关键词试了又试</li>
-                <li><span className="comparison-flow-step-num">Day 4-7</span> 逐篇筛选、下载，手动排版引用格式</li>
-                <li><span className="comparison-flow-step-num">Day 8-12</span> 拼凑逻辑框架，频繁出现内容断层</li>
-                <li><span className="comparison-flow-step-num">Day 13-14</span> 校对引用、降重、反复修改到崩溃</li>
+                <li><span className="comparison-flow-step-num">{t('home.comparison.traditional_step1')}</span> {t('home.comparison.traditional_step1_desc')}</li>
+                <li><span className="comparison-flow-step-num">{t('home.comparison.traditional_step2')}</span> {t('home.comparison.traditional_step2_desc')}</li>
+                <li><span className="comparison-flow-step-num">{t('home.comparison.traditional_step3')}</span> {t('home.comparison.traditional_step3_desc')}</li>
+                <li><span className="comparison-flow-step-num">{t('home.comparison.traditional_step4')}</span> {t('home.comparison.traditional_step4_desc')}</li>
               </ul>
               <div className="comparison-flow-result">
-                <span className="comparison-flow-time">≈ 14 天</span>
-                <span className="comparison-flow-mood">😵 痛苦煎熬</span>
+                <span className="comparison-flow-time">{t('home.comparison.traditional_result_time')}</span>
+                <span className="comparison-flow-mood">{t('home.comparison.traditional_result_mood')}</span>
               </div>
             </div>
             <div className="comparison-flow-vs">VS</div>
             <div className="comparison-flow-card comparison-flow-auto">
-              <div className="comparison-flow-label">AutoOverview</div>
+              <div className="comparison-flow-label">{t('home.comparison.auto_label')}</div>
               <ul className="comparison-flow-steps">
-                <li><span className="comparison-flow-step-num">Step 1</span> 输入研究主题</li>
-                <li><span className="comparison-flow-step-num">Step 2</span> AI 自动检索权威数据库，梳理逻辑框架</li>
-                <li><span className="comparison-flow-step-num">Step 3</span> 一键生成引用格式，查重率友好</li>
+                <li><span className="comparison-flow-step-num">{t('home.comparison.auto_step1')}</span> {t('home.comparison.auto_step1_desc')}</li>
+                <li><span className="comparison-flow-step-num">{t('home.comparison.auto_step2')}</span> {t('home.comparison.auto_step2_desc')}</li>
+                <li><span className="comparison-flow-step-num">{t('home.comparison.auto_step3')}</span> {t('home.comparison.auto_step3_desc')}</li>
               </ul>
               <div className="comparison-flow-result">
-                <span className="comparison-flow-time">≈ 5 分钟</span>
-                <span className="comparison-flow-mood">🎉 轻松搞定</span>
+                <span className="comparison-flow-time">{t('home.comparison.auto_result_time')}</span>
+                <span className="comparison-flow-mood">{t('home.comparison.auto_result_mood')}</span>
               </div>
             </div>
           </div>
@@ -654,28 +654,28 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
       <section id="process" className="landing-section section-alt">
         <div className="section-inner">
-          <h2 className="section-title">使用流程</h2>
-          <p className="section-subtitle">三步完成专业文献综述</p>
+          <h2 className="section-title">{t('home.process.title')}</h2>
+          <p className="section-subtitle">{t('home.process.subtitle')}</p>
           <div className="process-steps">
             <div className="process-step">
               <div className="step-number">01</div>
               <div className="step-icon">✏️</div>
-              <h3 className="step-title">输入主题</h3>
-              <p className="step-desc">输入您的研究主题，可以是一句话描述，也可以是详细的研究方向要求。</p>
+              <h3 className="step-title">{t('home.process.step1_title')}</h3>
+              <p className="step-desc">{t('home.process.step1_desc')}</p>
             </div>
             <div className="process-arrow">→</div>
             <div className="process-step">
               <div className="step-number">02</div>
               <div className="step-icon">✨</div>
-              <h3 className="step-title">AI 智能生成</h3>
-              <p className="step-desc">AI 自动搜索文献、分析筛选、组织结构、撰写综述，全程自动化处理。</p>
+              <h3 className="step-title">{t('home.process.step2_title')}</h3>
+              <p className="step-desc">{t('home.process.step2_desc')}</p>
             </div>
             <div className="process-arrow">→</div>
             <div className="process-step">
               <div className="step-number">03</div>
               <div className="step-icon">📄</div>
-              <h3 className="step-title">查看与导出</h3>
-              <p className="step-desc">在线预览综述内容，支持导出 Word 文档，可直接用于学术写作。</p>
+              <h3 className="step-title">{t('home.process.step3_title')}</h3>
+              <p className="step-desc">{t('home.process.step3_desc')}</p>
             </div>
           </div>
         </div>
@@ -683,13 +683,13 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
       <section id="cases" className="landing-section">
         <div className="section-inner">
-          <h2 className="section-title">案例展示</h2>
-          <p className="section-subtitle">看看 AI 生成的综述效果</p>
+          <h2 className="section-title">{t('home.demo.title')}</h2>
+          <p className="section-subtitle">{t('home.demo.subtitle')}</p>
           <div className="cases-grid">
             {casesLoading ? (
-              <div className="cases-loading">加载中...</div>
+              <div className="cases-loading">{t('home.demo.loading')}</div>
             ) : demoCases.length === 0 ? (
-              <div className="cases-empty">暂无案例</div>
+              <div className="cases-empty">{t('home.demo.empty')}</div>
             ) : (
               demoCases.map((case_item) => (
                 <div
@@ -701,7 +701,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
                 >
                   <div className="case-icon">{case_item.icon}</div>
                   <h3 className="case-title">{case_item.title}</h3>
-                  <p className="case-desc">{case_item.description || 'AI 生成的学术综述'}</p>
+                  <p className="case-desc">{case_item.description || t('home.demo.ai_generated')}</p>
                   {case_item.tags && case_item.tags.length > 0 && (
                     <div className="case-tags">
                       {case_item.tags.map((tag: string, idx: number) => (
@@ -709,7 +709,7 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
                       ))}
                     </div>
                   )}
-                  <div className="case-action">查看详情 &rarr;</div>
+                  <div className="case-action">{t('home.demo.view_details')}</div>
                 </div>
               ))
             )}
@@ -778,32 +778,32 @@ export function SimpleApp({ autoShowLogin }: { autoShowLogin?: boolean } = {}) {
 
           <div className="testimonials">
             <div className="testimonial-card">
-              <p className="testimonial-text">"课题组师兄推荐来的，5 分钟出的综述框架比我查一周文献还全面，引用全是真实论文。"</p>
+              <p className="testimonial-text">{t('home.testimonials.text1')}</p>
               <div className="testimonial-author">
                 <span className="testimonial-avatar">🎓</span>
                 <div>
-                  <span className="testimonial-name">某 985 高校研究生</span>
-                  <span className="testimonial-role">硕士在读</span>
+                  <span className="testimonial-name">{t('home.testimonials.name1')}</span>
+                  <span className="testimonial-role">{t('home.testimonials.role1')}</span>
                 </div>
               </div>
             </div>
             <div className="testimonial-card">
-              <p className="testimonial-text">"考研前夜救命神器！开题报告的文献综述部分直接搞定，格式规范，导师挑不出毛病。"</p>
+              <p className="testimonial-text">{t('home.testimonials.text2')}</p>
               <div className="testimonial-author">
                 <span className="testimonial-avatar">📚</span>
                 <div>
-                  <span className="testimonial-name">考研上岸学长</span>
-                  <span className="testimonial-role">工科方向</span>
+                  <span className="testimonial-name">{t('home.testimonials.name2')}</span>
+                  <span className="testimonial-role">{t('home.testimonials.role2')}</span>
                 </div>
               </div>
             </div>
             <div className="testimonial-card">
-              <p className="testimonial-text">"博导群里都在传这个工具，省下来的时间终于可以好好做实验了。"</p>
+              <p className="testimonial-text">{t('home.testimonials.text3')}</p>
               <div className="testimonial-author">
                 <span className="testimonial-avatar">🔬</span>
                 <div>
-                  <span className="testimonial-name">博士研究员</span>
-                  <span className="testimonial-role">材料科学方向</span>
+                  <span className="testimonial-name">{t('home.testimonials.name3')}</span>
+                  <span className="testimonial-role">{t('home.testimonials.role3')}</span>
                 </div>
               </div>
             </div>
